@@ -1,18 +1,31 @@
-function App() {
-  return (
-    <div className="min-h-screen bg-gray-100 p-8 flex justify-center">
-      {/* A4 简历画布 */}
-      <div className="w-[794px] min-h-[1123px] bg-white shadow-lg p-10 flex flex-col gap-6">
-        {/* 控件1：教育经历 */}
-        <div className="border border-gray-200 rounded p-4" contentEditable suppressContentEditableWarning>
-          <h2 className="text-lg font-bold mb-2">教育经历</h2>
-          <p>2020 - 2024 某某大学 计算机科学与技术 本科</p>
-        </div>
+import { useState } from 'react';
+import Toolbar from './components/Toolbar/Toolbar';
+import ModulePanel from './components/Module/ModulePanel';
+import CanvasArea from './components/Canvas/CanvasArea';
+import StylePanel from './components/Toolbar/StylePanel';
 
-        {/* 控件2：工作经历 */}
-        <div className="border border-gray-200 rounded p-4" contentEditable suppressContentEditableWarning>
-          <h2 className="text-lg font-bold mb-2">工作经历</h2>
-          <p>2024 - 至今 某公司 前端开发实习</p>
+function App() {
+  // 当前选中的控件类型：'header' | 'module' | null
+  const [selectedControl, setSelectedControl] = useState<string | null>(null);
+
+  return (
+    <div className="h-screen flex flex-col bg-white overflow-hidden">
+      {/* 顶部工具栏 */}
+      <div className="bg-white border-b border-gray-200 flex justify-center">
+        <div style={{ width: '1184px' }}>
+          <Toolbar />
+        </div>
+      </div>
+
+      {/* 主体区域 */}
+      <div className="flex-1 flex justify-center overflow-hidden">
+        <div className="flex h-full" style={{ width: '1184px' }}>
+          <ModulePanel
+            selectedControl={selectedControl}
+            onSelectControl={setSelectedControl}
+          />
+          <CanvasArea />
+          <StylePanel selectedType={selectedControl} />
         </div>
       </div>
     </div>
