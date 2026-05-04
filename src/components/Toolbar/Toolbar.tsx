@@ -3,7 +3,6 @@ import { useState } from 'react';
 function Toolbar() {
   const [activeTool, setActiveTool] = useState<'edit' | 'insert'>('edit');
 
-  // 键帽风格按钮样式（小尺寸版）
   const keycapStyle =
     'px-3 py-1.5 text-sm font-medium text-gray-700 ' +
     'bg-gradient-to-b from-white to-gray-100 ' +
@@ -14,7 +13,6 @@ function Toolbar() {
     'active:translate-y-[2px] ' +
     'transition-all duration-75';
 
-  // 激活状态下的键帽样式（按下效果）
   const keycapActiveStyle =
     'px-3 py-1.5 text-sm font-medium text-gray-700 ' +
     'bg-gradient-to-b from-blue-50 to-blue-100 ' +
@@ -24,16 +22,27 @@ function Toolbar() {
     'translate-y-[2px] ' +
     'transition-all duration-75';
 
+  // 通用的富文本操作命令，防止焦点丢失
+  const execCmd = (command: string, value?: string) => {
+    document.execCommand(command, false, value);
+  };
+
+  // 处理字号变化
+  const handleFontSize = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    execCmd('fontSize', e.target.value);
+  };
+
+  // 处理颜色变化
+  const handleColor = (e: React.ChangeEvent<HTMLInputElement>) => {
+    execCmd('foreColor', e.target.value);
+  };
+
   return (
     <div className="w-full bg-white flex items-center h-10 px-4 gap-2">
       {/* 左侧按钮组 */}
       <div className="flex items-center gap-2">
-        {/* 保存按钮 */}
-        <button className={keycapStyle}>
-          保存
-        </button>
+        <button className={keycapStyle}>保存</button>
 
-        {/* 插入按钮 */}
         <button
           onClick={() => setActiveTool('insert')}
           className={activeTool === 'insert' ? keycapActiveStyle : keycapStyle}
@@ -41,7 +50,6 @@ function Toolbar() {
           插入
         </button>
 
-        {/* 编辑按钮 */}
         <button
           onClick={() => setActiveTool('edit')}
           className={activeTool === 'edit' ? keycapActiveStyle : keycapStyle}
@@ -50,16 +58,67 @@ function Toolbar() {
         </button>
       </div>
 
-      {/* 右侧操作容器 */}
+      {/* 右侧操作容器（根据激活工具显示不同操作） */}
       <div className="flex-1 h-full flex items-center bg-gray-50 border-l border-gray-200 px-3 gap-2">
         {activeTool === 'edit' && (
           <>
-            <button className="px-2 py-1 text-xs hover:bg-gray-100 rounded">加粗</button>
-            <button className="px-2 py-1 text-xs hover:bg-gray-100 rounded">斜体</button>
-            <button className="px-2 py-1 text-xs hover:bg-gray-100 rounded">字号</button>
-            <button className="px-2 py-1 text-xs hover:bg-gray-100 rounded">颜色</button>
+            {/* 加粗 */}
+            <button
+              onMouseDown={(e) => {
+                e.preventDefault();
+                execCmd('bold');
+              }}
+              className="px-2 py-1 text-xs font-bold hover:bg-gray-200 rounded"
+            >
+              B
+            </button>
+            {/* 斜体 */}
+            <button
+              onMouseDown={(e) => {
+                e.preventDefault();
+                execCmd('italic');
+              }}
+              className="px-2 py-1 text-xs italic hover:bg-gray-200 rounded"
+            >
+              I
+            </button>
+            {/* 下划线 */}
+            <button
+              onMouseDown={(e) => {
+                e.preventDefault();
+                execCmd('underline');
+              }}
+              className="px-2 py-1 text-xs underline hover:bg-gray-200 rounded"
+            >
+              U
+            </button>
+
+            {/* 字号下拉 */}
+            <select
+              onChange={handleFontSize}
+              className="text-xs border border-gray-300 rounded px-1 py-0.5 bg-white"
+              defaultValue=""
+            >
+              <option value="" disabled>字号</option>
+              <option value="1">极小</option>
+              <option value="2">小</option>
+              <option value="3">正常</option>
+              <option value="4">大</option>
+              <option value="5">特大</option>
+              <option value="6">极大</option>
+              <option value="7">巨大</option>
+            </select>
+
+            {/* 颜色选择器 */}
+            <input
+              type="color"
+              onChange={handleColor}
+              className="w-6 h-6 border border-gray-300 rounded cursor-pointer"
+              title="文字颜色"
+            />
           </>
         )}
+
         {activeTool === 'insert' && (
           <>
             <button className="px-2 py-1 text-xs hover:bg-gray-100 rounded">图片</button>
