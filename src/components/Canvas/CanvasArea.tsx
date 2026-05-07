@@ -46,6 +46,7 @@ function CanvasArea({ deleteMode, onExitDeleteMode }: CanvasAreaProps) {
     <div className="relative bg-gray-100 h-full" style={{ width: '842px' }}>
       <div className="h-full overflow-y-auto p-6 flex justify-center">
         <div
+          id="resume-preview"
           className="bg-white shadow-lg p-10 flex flex-col gap-4"
           style={{
             width: '794px',
