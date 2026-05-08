@@ -1,26 +1,26 @@
 import { create } from 'zustand';
+import { getStyleConfig } from './styleRegistry';
 
-// 单个模块的数据结构
 export interface ResumeModule {
   id: string;
   type: 'header' | 'module';
-  // 简历头专用字段
+  style?: string;
   name?: string;
   jobTitle?: string;
   birth?: string;
   phone?: string;
   email?: string;
-  photo?: string; // 照片URL，暂时为空
-  // 通用模块字段
+  photo?: string;
   title?: string;
   content?: string;
 }
 
 interface ResumeStore {
   modules: ResumeModule[];
-  addModule: (type: 'header' | 'module') => void;
+  addModule: (type: 'header' | 'module', style?: string) => void;
   updateModule: (id: string, data: Partial<ResumeModule>) => void;
   removeModule: (id: string) => void;
+  importModules: (newModules: ResumeModule[]) => void; // 新增
 }
 
 let nextId = 1;
@@ -29,26 +29,19 @@ const generateId = () => `m${nextId++}`;
 export const useResumeStore = create<ResumeStore>((set) => ({
   modules: [],
 
-  addModule: (type) =>
+  addModule: (type, style) =>
     set((state) => {
-      const newModule: ResumeModule =
-        type === 'header'
-          ? {
-              id: generateId(),
-              type: 'header',
-              name: '姓名',
-              jobTitle: '求职意向',
-              birth: '出生年月',
-              phone: '电话',
-              email: '邮箱',
-              photo: '',
-            }
-          : {
-              id: generateId(),
-              type: 'module',
-              title: '模块标题',
-              content: '点击此处编辑内容...',
-            };
+      // 查找样式的默认内容
+      const config = getStyleConfig(type, style);
+      const base: Partial<ResumeModule> = config?.defaultContent || {};
+
+      const newModule: ResumeModule = {
+        id: generateId(),
+        type,
+        style,
+        ...base, // 用默认值填充
+      } as ResumeModule;
+
       return { modules: [...state.modules, newModule] };
     }),
 
@@ -62,5 +55,14 @@ export const useResumeStore = create<ResumeStore>((set) => ({
   removeModule: (id) =>
     set((state) => ({
       modules: state.modules.filter((mod) => mod.id !== id),
+    })),
+
+  // 大模型批量导入接口：直接替换整个 modules，每个元素可带 style 标识
+  importModules: (newModules) =>
+    set(() => ({
+      modules: newModules.map((mod) => ({
+        ...mod,
+        id: mod.id || generateId(), // 如果没有 id，自动生成
+      })),
     })),
 }));

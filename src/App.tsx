@@ -3,7 +3,9 @@ import Toolbar from './components/Toolbar/Toolbar';
 import ModulePanel from './components/Module/ModulePanel';
 import CanvasArea from './components/Canvas/CanvasArea';
 import StylePanel from './components/Toolbar/StylePanel';
+import { initStyles } from './styleInit';
 
+initStyles();
 function App() {
   const [selectedControl, setSelectedControl] = useState<string | null>(null);
   const [rightWidth, setRightWidth] = useState(256);

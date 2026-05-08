@@ -1,45 +1,18 @@
-import { useEffect, useRef } from 'react';
-import { useResumeStore } from '../../store/useResumeStore';
+// EditableModule.tsx
+import { getStyleConfig } from '../../store/styleRegistry';
 import type { ResumeModule } from '../../store/useResumeStore';
-
 function EditableModule({ module }: { module: ResumeModule }) {
-  const updateModule = useResumeStore((s) => s.updateModule);
-  const editableRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (editableRef.current) {
-      editableRef.current.innerHTML = module.content || '点击此处编辑内容...';
+  const config = getStyleConfig('module', module.style);
+  const Component = config?.component;
+  if (!Component) {
+    const fallback = getStyleConfig('module');
+    if (fallback?.component) {
+      const FallbackComponent = fallback.component;
+      return <FallbackComponent module={module} />;
     }
-  }, [module.id]);
-
-  const handleBlur = () => {
-    if (editableRef.current) {
-      const html = editableRef.current.innerHTML;
-      updateModule(module.id, { content: html });
-    }
-  };
-
-  return (
-    <div className="border border-gray-200 rounded p-4 bg-white">
-      <h3
-        className="font-bold text-lg mb-2"
-        contentEditable
-        suppressContentEditableWarning
-        onBlur={(e) =>
-          updateModule(module.id, { title: e.currentTarget.innerText })
-        }
-      >
-        {module.title}
-      </h3>
-      <div
-        ref={editableRef}
-        className="text-sm text-gray-700 min-h-[40px]"
-        contentEditable
-        suppressContentEditableWarning
-        onBlur={handleBlur}
-      />
-    </div>
-  );
+    return <div className="text-red-500">未找到模块样式</div>;
+  }
+  return <Component module={module} />;
 }
 
 export default EditableModule;

@@ -97,6 +97,10 @@ export function exportPDF() {
               size: ${widthMM}mm ${heightMM}mm;
               margin: 0;
             }
+            * {
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
           }
         </style>
       </head>
