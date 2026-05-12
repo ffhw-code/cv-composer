@@ -31,7 +31,6 @@ function StylePanel({ selectedType, width, onResize }: StylePanelProps) {
     };
   }, [isDragging, onResize]);
 
-  // 获取当前类型的所有样式
   const availableStyles =
     selectedType === 'header'
       ? getStylesByType('header')
@@ -61,17 +60,15 @@ function StylePanel({ selectedType, width, onResize }: StylePanelProps) {
               请先选择控件类型
             </p>
           )}
-
           {selectedType && availableStyles.length === 0 && (
             <p className="text-xs text-gray-400 mt-4 text-center">暂无可用样式</p>
           )}
-
           {selectedType && (
             <div className="flex flex-col gap-2">
               {availableStyles.map((item) => (
                 <div
                   key={item.style}
-                  onClick={() => addModule(item.type, item.style)}
+                  onClick={() => addModule(null, item.type, item.style)}  // 关键：加入第一个参数 null
                   className="w-full bg-white border border-gray-200 rounded overflow-hidden cursor-pointer hover:border-blue-300 hover:shadow-md transition-shadow"
                 >
                   <img src={item.thumb} alt={item.label} className="w-full h-auto" />

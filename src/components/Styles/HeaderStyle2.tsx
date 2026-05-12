@@ -1,6 +1,7 @@
 import { useRef } from 'react';
 import { useResumeStore } from '../../store/useResumeStore';
 import type { StyleComponentProps } from '../../store/styleRegistry';
+import InlineEditor from './InlineEditor';
 
 export default function HeaderStyle2({ module }: StyleComponentProps) {
   const updateModule = useResumeStore((s) => s.updateModule);
@@ -22,21 +23,32 @@ export default function HeaderStyle2({ module }: StyleComponentProps) {
   };
 
   return (
-    <div className="flex items-center gap-6 p-4 bg-gradient-to-r from-blue-50 to-white rounded">
+    <div style={{ ...module.style }} className="flex items-center gap-6 p-4 bg-gradient-to-r from-blue-50 to-white rounded">
       <div className="flex-1 space-y-3">
-        <div
-          className="text-2xl font-bold text-gray-800"
-          contentEditable
-          suppressContentEditableWarning
-          onBlur={(e) => updateModule(module.id, { name: e.currentTarget.innerText })}
-        >
-          {module.name}
+        <div className="text-2xl font-bold text-gray-800">
+          <InlineEditor
+            content={module.name || '姓名'}
+            onUpdate={(html) => updateModule(module.id, { name: html })}
+            className="text-2xl font-bold text-gray-800"
+          />
         </div>
         <div className="flex flex-wrap gap-3 text-sm text-gray-600">
-          <span contentEditable suppressContentEditableWarning onBlur={(e) => updateModule(module.id, { jobTitle: e.currentTarget.innerText })}>{module.jobTitle}</span>
-          <span contentEditable suppressContentEditableWarning onBlur={(e) => updateModule(module.id, { birth: e.currentTarget.innerText })}>{module.birth}</span>
-          <span contentEditable suppressContentEditableWarning onBlur={(e) => updateModule(module.id, { phone: e.currentTarget.innerText })}>{module.phone}</span>
-          <span contentEditable suppressContentEditableWarning onBlur={(e) => updateModule(module.id, { email: e.currentTarget.innerText })}>{module.email}</span>
+          <InlineEditor
+            content={module.jobTitle || '职位'}
+            onUpdate={(html) => updateModule(module.id, { jobTitle: html })}
+          />
+          <InlineEditor
+            content={module.birth || '出生年月'}
+            onUpdate={(html) => updateModule(module.id, { birth: html })}
+          />
+          <InlineEditor
+            content={module.phone || '电话'}
+            onUpdate={(html) => updateModule(module.id, { phone: html })}
+          />
+          <InlineEditor
+            content={module.email || '邮箱'}
+            onUpdate={(html) => updateModule(module.id, { email: html })}
+          />
         </div>
       </div>
       <div

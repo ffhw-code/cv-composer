@@ -1,7 +1,7 @@
-// src/components/HeaderStyle1.tsx
 import { useRef } from 'react';
 import { useResumeStore } from '../../store/useResumeStore';
 import type { StyleComponentProps } from '../../store/styleRegistry';
+import InlineEditor from './InlineEditor';
 
 export default function HeaderStyle1({ module }: StyleComponentProps) {
   const updateModule = useResumeStore((s) => s.updateModule);
@@ -30,14 +30,8 @@ export default function HeaderStyle1({ module }: StyleComponentProps) {
   };
 
   return (
-    <div className="border border-gray-200 rounded p-4 bg-white">
-      <input
-        type="file"
-        ref={fileInputRef}
-        onChange={handleFileChange}
-        accept="image/*"
-        style={{ display: 'none' }}
-      />
+    <div style={{ ...module.style }} className="border border-gray-200 rounded p-4 bg-white">
+      <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" style={{ display: 'none' }} />
       <div className="flex gap-4">
         <div
           onClick={handlePhotoClick}
@@ -50,21 +44,32 @@ export default function HeaderStyle1({ module }: StyleComponentProps) {
           )}
         </div>
         <div className="flex-1 space-y-2 text-sm">
-          <div
-            className="font-bold text-lg"
-            contentEditable
-            suppressContentEditableWarning
-            onBlur={(e) => updateModule(module.id, { name: e.currentTarget.innerText })}
-          >
-            {module.name}
+          <div className="font-bold text-lg">
+            <InlineEditor
+              content={module.name || '姓名'}
+              onUpdate={(html) => updateModule(module.id, { name: html })}
+              className="font-bold text-lg"
+            />
           </div>
           <div className="grid grid-cols-2 gap-4">
-            <span contentEditable suppressContentEditableWarning onBlur={(e) => updateModule(module.id, { jobTitle: e.currentTarget.innerText })}>{module.jobTitle}</span>
-            <span contentEditable suppressContentEditableWarning onBlur={(e) => updateModule(module.id, { birth: e.currentTarget.innerText })}>{module.birth}</span>
+            <InlineEditor
+              content={module.jobTitle || '职位'}
+              onUpdate={(html) => updateModule(module.id, { jobTitle: html })}
+            />
+            <InlineEditor
+              content={module.birth || '出生年月'}
+              onUpdate={(html) => updateModule(module.id, { birth: html })}
+            />
           </div>
           <div className="grid grid-cols-2 gap-4">
-            <span contentEditable suppressContentEditableWarning onBlur={(e) => updateModule(module.id, { phone: e.currentTarget.innerText })}>{module.phone}</span>
-            <span contentEditable suppressContentEditableWarning onBlur={(e) => updateModule(module.id, { email: e.currentTarget.innerText })}>{module.email}</span>
+            <InlineEditor
+              content={module.phone || '电话'}
+              onUpdate={(html) => updateModule(module.id, { phone: html })}
+            />
+            <InlineEditor
+              content={module.email || '邮箱'}
+              onUpdate={(html) => updateModule(module.id, { email: html })}
+            />
           </div>
         </div>
       </div>

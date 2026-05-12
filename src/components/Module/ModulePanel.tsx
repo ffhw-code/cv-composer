@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { exportPDF } from '../../utils/export';
+import { useResumeStore } from '../../store/useResumeStore';
 
 interface ModulePanelProps {
   selectedControl: string | null;
@@ -14,8 +15,10 @@ function ModulePanel({
   deleteMode,
   onEnterDeleteMode,
 }: ModulePanelProps) {
-  const [isOpen, setIsOpen] = useState(false);          // 添加控件展开
-  const [exportOpen, setExportOpen] = useState(false);  // 导出菜单展开
+  const addModule = useResumeStore((s) => s.addModule);
+  const [componentOpen, setComponentOpen] = useState(false);  // 组件下拉
+  const [controlOpen, setControlOpen] = useState(false);      // 控件下拉
+  const [exportOpen, setExportOpen] = useState(false);
 
   const keycapStyle =
     'w-full h-[60px] px-2 py-1.5 text-sm font-medium text-gray-700 ' +
@@ -36,20 +39,29 @@ function ModulePanel({
     'translate-y-[2px] ' +
     'transition-all duration-75';
 
-  // 导出 PDF 并关闭菜单
   const handleExportPDF = () => {
     exportPDF();
     setExportOpen(false);
   };
 
+  const toggleComponent = () => {
+    setComponentOpen(!componentOpen);
+    setControlOpen(false); // 关闭控件下拉
+  };
+
+  const toggleControl = () => {
+    setControlOpen(!controlOpen);
+    setComponentOpen(false); // 关闭组件下拉
+  };
+
   return (
     <div className="w-[150px] bg-gray-100 border border-gray-300 rounded-lg shadow-[inset_0_2px_4px_rgba(0,0,0,0.06)] p-2 flex flex-col gap-1">
-      {/* 添加控件按钮 */}
-      <button onClick={() => setIsOpen(!isOpen)} className={keycapStyle}>
-        添加控件
+      {/* 添加组件 */}
+      <button onClick={toggleComponent} className={keycapStyle}>
+        添加组件
       </button>
 
-      {isOpen && (
+      {componentOpen && (
         <div className="flex flex-col gap-1 w-full">
           <button
             onClick={() => onSelectControl('header')}
@@ -74,6 +86,41 @@ function ModulePanel({
         </div>
       )}
 
+      {/* 添加控件 */}
+      <button onClick={toggleControl} className={keycapStyle}>
+        添加控件
+      </button>
+
+      {controlOpen && (
+        <div className="flex flex-col gap-1 w-full">
+          <button
+            onClick={() => addModule(null, 'text', 'text-default')}
+            className="w-full h-[60px] px-2 py-1.5 text-sm bg-white border border-gray-300 rounded hover:bg-gray-50"
+          >
+            文本框
+          </button>
+          <button
+            onClick={() => addModule(null, 'heading', 'heading-default')}
+            className="w-full h-[60px] px-2 py-1.5 text-sm bg-white border border-gray-300 rounded hover:bg-gray-50"
+          >
+            标题
+          </button>
+          <button
+            onClick={() => addModule(null, 'list', 'list-default')}
+            className="w-full h-[60px] px-2 py-1.5 text-sm bg-white border border-gray-300 rounded hover:bg-gray-50"
+          >
+            列表
+          </button>
+          {/* ===== 新增弹性容器按钮 ===== */}
+          <button
+            onClick={() => addModule(null, 'flex', 'flex-default')}
+            className="w-full h-[60px] px-2 py-1.5 text-sm bg-white border border-gray-300 rounded hover:bg-gray-50"
+          >
+            弹性容器
+          </button>
+        </div>
+      )}
+
       {/* 删除控件按钮 */}
       <button
         onClick={onEnterDeleteMode}
@@ -82,11 +129,8 @@ function ModulePanel({
         删除控件
       </button>
 
-      {/* 导出按钮（带下拉） */}
-      <button
-        onClick={() => setExportOpen(!exportOpen)}
-        className={keycapStyle}
-      >
+      {/* 导出按钮 */}
+      <button onClick={() => setExportOpen(!exportOpen)} className={keycapStyle}>
         导出
       </button>
 

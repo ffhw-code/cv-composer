@@ -1,6 +1,7 @@
 import { useRef } from 'react';
 import { useResumeStore } from '../../store/useResumeStore';
 import type { StyleComponentProps } from '../../store/styleRegistry';
+import InlineEditor from './InlineEditor';
 
 export default function HeaderStyle3({ module }: StyleComponentProps) {
   const updateModule = useResumeStore((s) => s.updateModule);
@@ -22,28 +23,37 @@ export default function HeaderStyle3({ module }: StyleComponentProps) {
   };
 
   return (
-    <div className="bg-gray-50 border border-gray-200 rounded-lg p-5 flex items-center gap-6 shadow-sm">
+    <div style={{ ...module.style }} className="bg-gray-50 border border-gray-200 rounded-lg p-5 flex items-center gap-6 shadow-sm">
       <div className="flex-1">
-        <div
-          className="text-2xl font-bold text-gray-800"
-          contentEditable
-          suppressContentEditableWarning
-          onBlur={(e) => updateModule(module.id, { name: e.currentTarget.innerText })}
-        >
-          {module.name}
+        <div className="text-2xl font-bold text-gray-800">
+          <InlineEditor
+            content={module.name || '姓名'}
+            onUpdate={(html) => updateModule(module.id, { name: html })}
+            className="text-2xl font-bold text-gray-800"
+          />
         </div>
-        <div
-          className="text-sm text-blue-600 mt-1"
-          contentEditable
-          suppressContentEditableWarning
-          onBlur={(e) => updateModule(module.id, { jobTitle: e.currentTarget.innerText })}
-        >
-          {module.jobTitle}
+        <div className="text-sm text-blue-600 mt-1">
+          <InlineEditor
+            content={module.jobTitle || '职位'}
+            onUpdate={(html) => updateModule(module.id, { jobTitle: html })}
+            className="text-sm text-blue-600"
+          />
         </div>
         <div className="mt-3 grid grid-cols-2 gap-2 text-sm text-gray-500">
-          <span contentEditable suppressContentEditableWarning onBlur={(e) => updateModule(module.id, { birth: e.currentTarget.innerText })}>{module.birth}</span>
-          <span contentEditable suppressContentEditableWarning onBlur={(e) => updateModule(module.id, { phone: e.currentTarget.innerText })}>{module.phone}</span>
-          <span contentEditable suppressContentEditableWarning onBlur={(e) => updateModule(module.id, { email: e.currentTarget.innerText })} className="col-span-2">{module.email}</span>
+          <InlineEditor
+            content={module.birth || '出生年月'}
+            onUpdate={(html) => updateModule(module.id, { birth: html })}
+          />
+          <InlineEditor
+            content={module.phone || '电话'}
+            onUpdate={(html) => updateModule(module.id, { phone: html })}
+          />
+          <div className="col-span-2">
+            <InlineEditor
+              content={module.email || '邮箱'}
+              onUpdate={(html) => updateModule(module.id, { email: html })}
+            />
+          </div>
         </div>
       </div>
       <div
