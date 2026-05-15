@@ -3,20 +3,20 @@ import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { ModuleRenderContext } from '../Canvas/ModuleRenderContext';
 import type { ResumeModule } from '../../store/useResumeStore';
 
-function FlexContainer({ module }: { module: ResumeModule }) {
+function GridContainer({ module }: { module: ResumeModule }) {
   const renderModule = useContext(ModuleRenderContext);
-  const direction = (module.style?.flexDirection as 'row' | 'column') || 'column';
+  const childIds = module.children?.map(c => c.id) || [];
+  const columns = module.style?.gridTemplateColumns || '1fr 1fr';
+  const rows = module.style?.gridTemplateRows || 'auto';
   const gap = module.style?.gap || '16px';
 
   const containerStyle: React.CSSProperties = {
-    display: 'flex',
-    flexDirection: direction,
+    display: 'grid',
+    gridTemplateColumns: columns,
+    gridTemplateRows: rows,
     gap,
     ...module.style,
   };
-
-  // 获取子模块的 ID 列表用于 SortableContext
-  const childIds = module.children?.map(c => c.id) || [];
 
   return (
     <div
@@ -29,10 +29,10 @@ function FlexContainer({ module }: { module: ResumeModule }) {
           {module.children?.map(child => renderModule(child))}
         </SortableContext>
       ) : (
-        <p className="text-gray-400 text-sm">拖入模块或控件</p>
+        <p className="text-gray-400 text-sm">拖入模块或控件到网格</p>
       )}
     </div>
   );
 }
 
-export default FlexContainer;
+export default GridContainer;

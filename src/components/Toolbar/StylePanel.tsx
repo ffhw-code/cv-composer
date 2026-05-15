@@ -1,3 +1,4 @@
+// src/components/Toolbar/StylePanel.tsx
 import { useRef, useEffect, useState } from 'react';
 import { useResumeStore } from '../../store/useResumeStore';
 import { getStylesByType } from '../../store/styleRegistry';
@@ -9,7 +10,7 @@ interface StylePanelProps {
 }
 
 function StylePanel({ selectedType, width, onResize }: StylePanelProps) {
-  const addModule = useResumeStore((s) => s.addModule);
+  const addModuleFromTemplate = useResumeStore((s) => s.addModuleFromTemplate);
   const panelRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
 
@@ -68,7 +69,7 @@ function StylePanel({ selectedType, width, onResize }: StylePanelProps) {
               {availableStyles.map((item) => (
                 <div
                   key={item.style}
-                  onClick={() => addModule(null, item.type, item.style)}  // 关键：加入第一个参数 null
+                  onClick={() => addModuleFromTemplate(null, item.type, item.style)}
                   className="w-full bg-white border border-gray-200 rounded overflow-hidden cursor-pointer hover:border-blue-300 hover:shadow-md transition-shadow"
                 >
                   <img src={item.thumb} alt={item.label} className="w-full h-auto" />

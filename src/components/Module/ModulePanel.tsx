@@ -16,8 +16,8 @@ function ModulePanel({
   onEnterDeleteMode,
 }: ModulePanelProps) {
   const addModule = useResumeStore((s) => s.addModule);
-  const [componentOpen, setComponentOpen] = useState(false);  // 组件下拉
-  const [controlOpen, setControlOpen] = useState(false);      // 控件下拉
+  const [componentOpen, setComponentOpen] = useState(false);
+  const [controlOpen, setControlOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
 
   const keycapStyle =
@@ -46,12 +46,12 @@ function ModulePanel({
 
   const toggleComponent = () => {
     setComponentOpen(!componentOpen);
-    setControlOpen(false); // 关闭控件下拉
+    setControlOpen(false);
   };
 
   const toggleControl = () => {
     setControlOpen(!controlOpen);
-    setComponentOpen(false); // 关闭组件下拉
+    setComponentOpen(false);
   };
 
   return (
@@ -111,7 +111,12 @@ function ModulePanel({
           >
             列表
           </button>
-          {/* ===== 新增弹性容器按钮 ===== */}
+          <button
+            onClick={() => addModule(null, 'image', 'image-default')}
+            className="w-full h-[60px] px-2 py-1.5 text-sm bg-white border border-gray-300 rounded hover:bg-gray-50"
+          >
+            图片
+          </button>
           <button
             onClick={() => addModule(null, 'flex', 'flex-default')}
             className="w-full h-[60px] px-2 py-1.5 text-sm bg-white border border-gray-300 rounded hover:bg-gray-50"

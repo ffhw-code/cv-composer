@@ -19,8 +19,8 @@ function StyleInputWithUnit({
 }) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
-  const parsedValue = value.replace(unit, '').trim();
-  const displayValue = parsedValue || '';
+  const parsedValue = value?.replace(unit, '').trim() || '';
+  const displayValue = parsedValue;
 
   useEffect(() => {
     if (!open) return;
@@ -44,7 +44,14 @@ function StyleInputWithUnit({
       <input
         type="text"
         value={displayValue}
-        onChange={(e) => onChange(e.target.value ? e.target.value + unit : '')}
+        onChange={(e) => {
+          const raw = e.target.value;
+          if (raw === '') {
+            onChange('');
+          } else {
+            onChange(raw + unit);
+          }
+        }}
         className="w-12 border border-gray-300 rounded px-1 py-0.5 text-xs"
       />
       <span className="text-gray-400 text-xs">{unit}</span>
@@ -84,7 +91,25 @@ function SelectInput({ label, value, onChange, options }: { label: string; value
   );
 }
 
-// 预设字号列表
+function ImageSizeInputs({
+  width,
+  height,
+  onWidthChange,
+  onHeightChange,
+}: {
+  width: string;
+  height: string;
+  onWidthChange: (v: string) => void;
+  onHeightChange: (v: string) => void;
+}) {
+  return (
+    <>
+      <StyleInputWithUnit label="图片宽" value={width} onChange={onWidthChange} unit="px" />
+      <StyleInputWithUnit label="图片高" value={height} onChange={onHeightChange} unit="px" />
+    </>
+  );
+}
+
 const FONT_SIZE_PRESETS = ['12', '14', '16', '18', '20', '24', '32', '48'];
 
 function Toolbar() {
@@ -92,6 +117,7 @@ function Toolbar() {
   const [textColor, setTextColor] = useState('#000000');
   const [highlightColor, setHighlightColor] = useState('#ffff00');
   const [customFontSize, setCustomFontSize] = useState('16');
+  const [imageActive, setImageActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const loadFileRef = useRef<HTMLInputElement>(null);
 
@@ -106,7 +132,29 @@ function Toolbar() {
   const keycapActiveStyle =
     'px-3 py-1.5 text-sm font-medium text-gray-700 bg-gradient-to-b from-blue-50 to-blue-100 border border-blue-300 rounded-lg shadow-[inset_0_1px_3px_rgba(0,0,0,0.1)] translate-y-[2px] transition-all duration-75';
 
-  // ---------- 保存 / 加载 ----------
+  // 监听 TipTap 图片选中
+  useEffect(() => {
+    if (!activeEditor) return;
+    const checkImage = () => {
+      const { selection } = activeEditor.state;
+      if (selection.empty) {
+        setImageActive(false);
+        return;
+      }
+      let found = false;
+      activeEditor.state.doc.nodesBetween(selection.from, selection.to, (node) => {
+        if (node.type.name === 'resizableImage') found = true;
+      });
+      setImageActive(found);
+    };
+    activeEditor.on('selectionUpdate', checkImage);
+    activeEditor.on('transaction', checkImage);
+    return () => {
+      activeEditor.off('selectionUpdate', checkImage);
+      activeEditor.off('transaction', checkImage);
+    };
+  }, [activeEditor]);
+
   const handleSave = () => {
     const currentModules = useResumeStore.getState().modules;
     const json = JSON.stringify(currentModules, null, 2);
@@ -129,17 +177,16 @@ function Toolbar() {
         if (Array.isArray(data) && data.every((item: any) => item && typeof item.id === 'string' && typeof item.type === 'string')) {
           useResumeStore.getState().importModules(data);
         } else {
-          alert('JSON 格式错误：需要包含模块数组，且每个模块必须有 id 和 type 字段');
+          alert('JSON 格式错误');
         }
       } catch {
-        alert('文件解析失败，请确认是有效的 JSON 文件');
+        alert('文件解析失败');
       }
       e.target.value = '';
     };
     reader.readAsText(file);
   };
 
-  // ---------- 属性编辑 ----------
   const updateStyle = useCallback(
     (prop: string, value: string) => {
       if (!selectedId || !selectedModule) return;
@@ -158,21 +205,14 @@ function Toolbar() {
 
   const selectedStyle = selectedModule?.style || {};
 
-  // ---------- TipTap 命令辅助 ----------
   const exec = (fn: () => void) => (e: React.MouseEvent) => {
     e.preventDefault();
-    console.log('activeEditor:', activeEditor);  // 调试
-    if (activeEditor) {
-      fn();
-    }
+    if (activeEditor) fn();
   };
 
   const chain = () => activeEditor?.chain().focus();
 
-  // ---------- 图片 / 链接 ----------
-  const insertImage = () => {
-    fileInputRef.current?.click();
-  };
+  const insertImage = () => fileInputRef.current?.click();
 
   const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -182,39 +222,45 @@ function Toolbar() {
     const reader = new FileReader();
     reader.onload = (ev) => {
       const dataUrl = ev.target?.result as string;
-      if (dataUrl) {
-        chain()?.setImage({ src: dataUrl }).run();
-      }
+      if (dataUrl) chain()?.setImage({ src: dataUrl }).run();
       e.target.value = '';
     };
     reader.readAsDataURL(file);
   };
 
   const insertLink = () => {
-    const url = window.prompt('请输入链接地址（例如 https://...）：');
+    const url = window.prompt('请输入链接地址');
     if (!url) return;
     if (!activeEditor) return;
-    // 获取选中文本
     const { state } = activeEditor;
     const { from, to, empty } = state.selection;
     const selectedText = empty ? '' : state.doc.textBetween(from, to);
     if (selectedText) {
       chain()?.setLink({ href: url }).run();
     } else {
-      const text = window.prompt('请输入链接显示文字：', '链接文字');
-      if (text) {
-        chain()?.insertContent(`<a href="${url}" target="_blank">${text}</a>`).run();
-      }
+      const text = window.prompt('请输入链接显示文字', '链接文字');
+      if (text) chain()?.insertContent(`<a href="${url}" target="_blank">${text}</a>`).run();
     }
   };
 
   const fontFamilyOptions = ['Arial', 'Times New Roman', 'Georgia', 'Verdana', '微软雅黑', '宋体'];
-
   const widthOptions = ['100%', '200', '300', '400', 'auto'];
   const heightOptions = ['auto', '100', '200', '300'];
   const marginOptions = ['0', '4', '8', '16', '24', '32'];
   const fontSizeOptions = ['12', '14', '16', '18', '20', '24', '32'];
   const textAlignOptions = ['left', 'center', 'right', 'justify'];
+
+  // Flex 布局选项
+  const flexDirectionOptions = ['row', 'column', 'row-reverse', 'column-reverse'];
+  const justifyContentOptions = ['flex-start', 'center', 'space-between', 'space-around', 'space-evenly'];
+  const alignItemsOptions = ['stretch', 'center', 'flex-start', 'flex-end', 'baseline'];
+  const flexWrapOptions = ['nowrap', 'wrap'];
+  // Grid 对齐选项（兼容 CSS Grid 的 justify-items / align-items）
+  const gridJustifyItemsOptions = ['start', 'end', 'center', 'stretch'];
+  const gridAlignItemsOptions = ['start', 'end', 'center', 'stretch'];
+
+  // 判断是否为容器（有 children 的模块）
+  const isContainer = selectedModule && (selectedModule.children && selectedModule.children.length > 0);
 
   return (
     <div className="w-full bg-white flex items-start min-h-[64px] px-4 gap-2">
@@ -223,8 +269,8 @@ function Toolbar() {
 
       {/* 左侧按钮组 */}
       <div className="flex items-center gap-2 pt-1">
-        <button onClick={handleSave} className={keycapStyle} title="本地保存，通过加载恢复">保存</button>
-        <button onClick={() => loadFileRef.current?.click()} className={keycapStyle} title="恢复保存内容">加载</button>
+        <button onClick={handleSave} className={keycapStyle} title="保存">保存</button>
+        <button onClick={() => loadFileRef.current?.click()} className={keycapStyle} title="加载">加载</button>
         <button onClick={() => setActiveTool('insert')} className={activeTool === 'insert' ? keycapActiveStyle : keycapStyle}>插入</button>
         <button onClick={() => setActiveTool('edit')} className={activeTool === 'edit' ? keycapActiveStyle : keycapStyle}>编辑</button>
       </div>
@@ -232,20 +278,118 @@ function Toolbar() {
       {/* 右侧工具容器 */}
       <div className="flex-1 min-h-full flex items-center bg-gray-50 border-l border-gray-200 px-3 gap-2 justify-between overflow-x-auto flex-wrap">
         {selectedId && selectedModule ? (
-          /* ---------- 属性编辑模式 ---------- */
           <div className="flex items-center gap-2 text-xs flex-wrap py-1">
             <span className="text-gray-700 font-bold mr-1">
-              {selectedModule.type === 'header' ? '简历头' : selectedModule.type}
+              {selectedModule.type === 'header' ? '简历头' : selectedModule.type === 'module' ? '模块' : selectedModule.type}
             </span>
+
+            {/* 通用属性 */}
             <StyleInputWithUnit label="宽度" value={selectedStyle.width || ''} onChange={(v) => updateStyle('width', v)} unit="px" options={widthOptions} />
             <StyleInputWithUnit label="高度" value={selectedStyle.height || ''} onChange={(v) => updateStyle('height', v)} unit="px" options={heightOptions} />
             <StyleInputWithUnit label="外边距" value={selectedStyle.margin || ''} onChange={(v) => updateStyle('margin', v)} unit="px" options={marginOptions} />
             <StyleInputWithUnit label="内边距" value={selectedStyle.padding || ''} onChange={(v) => updateStyle('padding', v)} unit="px" options={marginOptions} />
-            <StyleInputWithUnit label="字号" value={selectedStyle.fontSize || ''} onChange={(v) => updateStyle('fontSize', v)} unit="px" options={fontSizeOptions} />
-            <ColorInput label="文字色" value={selectedStyle.color || '#000000'} onChange={(v) => updateStyle('color', v)} />
             <ColorInput label="背景色" value={selectedStyle.backgroundColor || '#ffffff'} onChange={(v) => updateStyle('backgroundColor', v)} />
+            <ColorInput label="文字色" value={selectedStyle.color || '#000000'} onChange={(v) => updateStyle('color', v)} />
             <SelectInput label="对齐" value={selectedStyle.textAlign || 'left'} onChange={(v) => updateStyle('textAlign', v)} options={textAlignOptions} />
             <SelectInput label="字体" value={selectedStyle.fontFamily || 'Arial'} onChange={(v) => updateStyle('fontFamily', v)} options={fontFamilyOptions} />
+            <StyleInputWithUnit label="字号" value={selectedStyle.fontSize || ''} onChange={(v) => updateStyle('fontSize', v)} unit="px" options={fontSizeOptions} />
+
+            {/* 图片尺寸（image 模块） */}
+            {selectedModule.type === 'image' && (
+              <ImageSizeInputs
+                width={selectedStyle.width || ''}
+                height={selectedStyle.height || ''}
+                onWidthChange={(v) => updateStyle('width', v)}
+                onHeightChange={(v) => updateStyle('height', v)}
+              />
+            )}
+
+            {/* ---------- 容器布局属性（Flex 和 Grid） ---------- */}
+            {isContainer && (
+              <>
+                <span className="text-gray-300 mx-1">|</span>
+                <span className="text-gray-500 text-xs">布局</span>
+
+                {/* Flex 专用控件（当容器为 flex 类型时显示，或者默认也显示，因为 header/module 也是 flex） */}
+                {(selectedModule.type === 'flex' || selectedModule.type === 'header' || selectedModule.type === 'module') && (
+                  <>
+                    <SelectInput
+                      label="方向"
+                      value={selectedStyle.flexDirection || 'column'}
+                      onChange={(v) => updateStyle('flexDirection', v)}
+                      options={flexDirectionOptions}
+                    />
+                    <SelectInput
+                      label="主轴对齐"
+                      value={selectedStyle.justifyContent || 'flex-start'}
+                      onChange={(v) => updateStyle('justifyContent', v)}
+                      options={justifyContentOptions}
+                    />
+                    <SelectInput
+                      label="交叉轴对齐"
+                      value={selectedStyle.alignItems || 'stretch'}
+                      onChange={(v) => updateStyle('alignItems', v)}
+                      options={alignItemsOptions}
+                    />
+                    <SelectInput
+                      label="换行"
+                      value={selectedStyle.flexWrap || 'nowrap'}
+                      onChange={(v) => updateStyle('flexWrap', v)}
+                      options={flexWrapOptions}
+                    />
+                    <StyleInputWithUnit
+                      label="间距"
+                      value={selectedStyle.gap || ''}
+                      onChange={(v) => updateStyle('gap', v)}
+                      unit="px"
+                    />
+                  </>
+                )}
+
+                {/* Grid 专用控件 */}
+                {selectedModule.type === 'grid' && (
+                  <>
+                    <div className="flex items-center gap-1">
+                      <span className="text-gray-500 text-xs">列模板</span>
+                      <input
+                        type="text"
+                        value={selectedStyle.gridTemplateColumns || '1fr 1fr'}
+                        onChange={(e) => updateStyle('gridTemplateColumns', e.target.value)}
+                        className="w-24 border border-gray-300 rounded px-1 py-0.5 text-xs"
+                      />
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span className="text-gray-500 text-xs">行模板</span>
+                      <input
+                        type="text"
+                        value={selectedStyle.gridTemplateRows || 'auto'}
+                        onChange={(e) => updateStyle('gridTemplateRows', e.target.value)}
+                        className="w-24 border border-gray-300 rounded px-1 py-0.5 text-xs"
+                      />
+                    </div>
+                    <SelectInput
+                      label="水平对齐"
+                      value={selectedStyle.justifyItems || 'stretch'}
+                      onChange={(v) => updateStyle('justifyItems', v)}
+                      options={gridJustifyItemsOptions}
+                    />
+                    <SelectInput
+                      label="垂直对齐"
+                      value={selectedStyle.alignItems || 'stretch'}
+                      onChange={(v) => updateStyle('alignItems', v)}
+                      options={gridAlignItemsOptions}
+                    />
+                    <StyleInputWithUnit
+                      label="间距"
+                      value={selectedStyle.gap || ''}
+                      onChange={(v) => updateStyle('gap', v)}
+                      unit="px"
+                    />
+                  </>
+                )}
+              </>
+            )}
+
             <button onClick={() => useResumeStore.getState().select(null)} className="ml-2 text-xs text-gray-400 hover:text-gray-600">✕</button>
           </div>
         ) : (
@@ -253,7 +397,6 @@ function Toolbar() {
           <div className="flex items-center gap-2 flex-wrap">
             {activeTool === 'edit' && (
               <>
-                {/* 内联样式 */}
                 <button onMouseDown={exec(() => chain()?.toggleBold().run())} className="px-2 py-1 text-xs font-bold hover:bg-gray-200 rounded" title="加粗">B</button>
                 <button onMouseDown={exec(() => chain()?.toggleItalic().run())} className="px-2 py-1 text-xs italic hover:bg-gray-200 rounded" title="斜体">I</button>
                 <button onMouseDown={exec(() => chain()?.toggleUnderline().run())} className="px-2 py-1 text-xs underline hover:bg-gray-200 rounded" title="下划线">U</button>
@@ -261,22 +404,16 @@ function Toolbar() {
 
                 <span className="text-gray-300 text-xs">|</span>
 
-                {/* 字体选择 */}
-                <select
-                  className="text-xs border border-gray-300 rounded py-0.5 px-1"
+                <select className="text-xs border border-gray-300 rounded py-0.5 px-1"
                   onChange={(e) => activeEditor?.chain().focus().setFontFamily(e.target.value).run()}
                   value={activeEditor?.getAttributes('textStyle').fontFamily || ''}
                 >
                   <option value="" disabled>字体</option>
-                  {fontFamilyOptions.map((font) => (
-                    <option key={font} value={font}>{font}</option>
-                  ))}
+                  {fontFamilyOptions.map((font) => <option key={font} value={font}>{font}</option>)}
                 </select>
 
-                {/* 字号：下拉预设 + 自定义输入 */}
                 <span className="flex items-center gap-1">
-                  <select
-                    className="text-xs border border-gray-300 rounded py-0.5 px-1"
+                  <select className="text-xs border border-gray-300 rounded py-0.5 px-1"
                     onChange={(e) => {
                       const val = e.target.value;
                       if (val) {
@@ -287,56 +424,28 @@ function Toolbar() {
                     value=""
                   >
                     <option value="" disabled>字号</option>
-                    {FONT_SIZE_PRESETS.map((size) => (
-                      <option key={size} value={size}>{size}</option>
-                    ))}
+                    {FONT_SIZE_PRESETS.map((size) => <option key={size} value={size}>{size}</option>)}
                   </select>
-                  <input
-                    type="number"
-                    min="1"
-                    className="w-12 text-xs border border-gray-300 rounded py-0.5 px-1"
-                    placeholder="自定义"
+                  <input type="number" min="1" className="w-12 text-xs border border-gray-300 rounded py-0.5 px-1" placeholder="自定义"
                     value={customFontSize}
                     onChange={(e) => {
                       const val = e.target.value;
                       setCustomFontSize(val);
                       const num = parseInt(val, 10);
-                      if (!isNaN(num) && num > 0) {
-                        activeEditor?.chain().focus().setFontSize(num + 'px').run();
-                      }
+                      if (!isNaN(num) && num > 0) activeEditor?.chain().focus().setFontSize(num + 'px').run();
                     }}
                   />
                 </span>
 
                 <span className="text-gray-300 text-xs">|</span>
 
-                {/* 文字颜色 & 背景高亮：选择即生效 */}
                 <div className="flex items-center gap-1">
-                  <input
-                    type="color"
-                    value={textColor}
-                    onChange={(e) => {
-                      setTextColor(e.target.value);
-                      activeEditor?.chain().focus().setColor(e.target.value).run();
-                    }}
-                    className="w-5 h-5 border border-gray-300 rounded cursor-pointer p-0"
-                    title="文字颜色"
-                  />
-                  <input
-                    type="color"
-                    value={highlightColor}
-                    onChange={(e) => {
-                      setHighlightColor(e.target.value);
-                      activeEditor?.chain().focus().toggleHighlight({ color: e.target.value }).run();
-                    }}
-                    className="w-5 h-5 border border-gray-300 rounded cursor-pointer p-0"
-                    title="背景高亮"
-                  />
+                  <input type="color" value={textColor} onChange={(e) => { setTextColor(e.target.value); activeEditor?.chain().focus().setColor(e.target.value).run(); }} className="w-5 h-5 border border-gray-300 rounded cursor-pointer p-0" title="文字颜色" />
+                  <input type="color" value={highlightColor} onChange={(e) => { setHighlightColor(e.target.value); activeEditor?.chain().focus().toggleHighlight({ color: e.target.value }).run(); }} className="w-5 h-5 border border-gray-300 rounded cursor-pointer p-0" title="背景高亮" />
                 </div>
 
                 <span className="text-gray-300 text-xs">|</span>
 
-                {/* 对齐方式 */}
                 <button onMouseDown={exec(() => chain()?.setTextAlign('left').run())} className="px-1.5 py-0.5 text-xs hover:bg-gray-200 rounded" title="左对齐">⫷</button>
                 <button onMouseDown={exec(() => chain()?.setTextAlign('center').run())} className="px-1.5 py-0.5 text-xs hover:bg-gray-200 rounded" title="居中">⫸</button>
                 <button onMouseDown={exec(() => chain()?.setTextAlign('right').run())} className="px-1.5 py-0.5 text-xs hover:bg-gray-200 rounded" title="右对齐">⫹</button>
@@ -344,9 +453,26 @@ function Toolbar() {
 
                 <span className="text-gray-300 text-xs">|</span>
 
-                {/* 列表 */}
                 <button onMouseDown={exec(() => chain()?.toggleBulletList().run())} className="px-1.5 py-0.5 text-xs hover:bg-gray-200 rounded" title="无序列表">•</button>
                 <button onMouseDown={exec(() => chain()?.toggleOrderedList().run())} className="px-1.5 py-0.5 text-xs hover:bg-gray-200 rounded" title="有序列表">1.</button>
+
+                {imageActive && (
+                  <>
+                    <span className="text-gray-300 text-xs">|</span>
+                    <ImageSizeInputs
+                      width={activeEditor?.getAttributes('resizableImage').width || ''}
+                      height={activeEditor?.getAttributes('resizableImage').height || ''}
+                      onWidthChange={(val) => {
+                        if (val === '') activeEditor?.chain().focus().updateAttributes('resizableImage', { width: null }).run();
+                        else activeEditor?.chain().focus().updateAttributes('resizableImage', { width: val }).run();
+                      }}
+                      onHeightChange={(val) => {
+                        if (val === '') activeEditor?.chain().focus().updateAttributes('resizableImage', { height: null }).run();
+                        else activeEditor?.chain().focus().updateAttributes('resizableImage', { height: val }).run();
+                      }}
+                    />
+                  </>
+                )}
               </>
             )}
 
@@ -359,10 +485,9 @@ function Toolbar() {
           </div>
         )}
 
-        {/* 撤销/重做 */}
         <div className="flex items-center gap-1 ml-auto">
-          <button onClick={() => useResumeStore.getState().undo()} className={keycapStyle} title="撤销 (Ctrl+Z)">↩</button>
-          <button onClick={() => useResumeStore.getState().redo()} className={keycapStyle} title="重做 (Ctrl+Y)">↪</button>
+          <button onClick={() => useResumeStore.getState().undo()} className={keycapStyle} title="撤销">↩</button>
+          <button onClick={() => useResumeStore.getState().redo()} className={keycapStyle} title="重做">↪</button>
         </div>
       </div>
     </div>

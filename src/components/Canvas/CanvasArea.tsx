@@ -1,6 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useResumeStore, type ResumeModule } from '../../store/useResumeStore';
-import ResumeHeader from '../Module/ResumeHeader';
 import EditableModule from '../Module/EditableModule';
 import SortableModule from './SortableModule';
 import ContextMenu from './ContextMenu';
@@ -12,6 +11,8 @@ import {
   useSensors,
   type DragEndEvent,
 } from '@dnd-kit/core';
+import type { DragOverEvent } from '@dnd-kit/core'; 
+
 import {
   SortableContext,
   verticalListSortingStrategy,
@@ -24,23 +25,11 @@ interface CanvasAreaProps {
   onExitDeleteMode: () => void;
 }
 
-// 辅助函数：递归查找模块
 function findModuleRecursive(modules: ResumeModule[], id: string): ResumeModule | null {
   for (const mod of modules) {
     if (mod.id === id) return mod;
     if (mod.children) {
       const found = findModuleRecursive(mod.children, id);
-      if (found) return found;
-    }
-  }
-  return null;
-}
-
-function findParentModule(modules: ResumeModule[], id: string): ResumeModule | null {
-  for (const mod of modules) {
-    if (mod.children && mod.children.some((c) => c.id === id)) return mod;
-    if (mod.children) {
-      const found = findParentModule(mod.children, id);
       if (found) return found;
     }
   }
@@ -66,10 +55,14 @@ function CanvasArea({ deleteMode, onExitDeleteMode }: CanvasAreaProps) {
   const [scale, setScale] = useState(1);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [contextMenu, setContextMenu] = useState<{ module: ResumeModule; x: number; y: number } | null>(null);
+  const [dropTargetId, setDropTargetId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!deleteMode) setSelectedIds(new Set());
-  }, [deleteMode]);
+    if (!deleteMode) {
+      setSelectedIds(new Set());
+      select(null);
+    }
+  }, [deleteMode, select]);
 
   const zoomIn = () => setScale((s) => Math.min(s + 0.1, 2));
   const zoomOut = () => setScale((s) => Math.max(s - 0.1, 0.5));
@@ -88,16 +81,32 @@ function CanvasArea({ deleteMode, onExitDeleteMode }: CanvasAreaProps) {
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
-      activationConstraint: {
-        delay: 200,          // 长按 200ms 启动拖拽
-        tolerance: 5,        // 移动 5px 后才触发
-      },
+      activationConstraint: { delay: 200, tolerance: 5 },
     })
   );
 
-  // 拖拽结束：使用 active.rect 和 over.rect 精确计算插入位置
+  // 拖拽悬停时高亮嵌套容器
+  const handleDragOver = (event: DragOverEvent) => {
+    const { over } = event;
+    if (!over) {
+      setDropTargetId(null);
+      return;
+    }
+    const overModule = findModuleRecursive(modules, over.id as string);
+    if (
+      overModule &&
+      (overModule.type === 'flex' || overModule.type === 'grid') &&
+      overModule.children.length > 0
+    ) {
+      setDropTargetId(over.id as string);
+    } else {
+      setDropTargetId(null);
+    }
+  };
+
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
+    setDropTargetId(null);
     if (!over || active.id === over.id) return;
 
     const activeIdStr = active.id as string;
@@ -106,50 +115,38 @@ function CanvasArea({ deleteMode, onExitDeleteMode }: CanvasAreaProps) {
     const overModule = findModuleRecursive(modules, overIdStr);
     if (!activeModule || !overModule) return;
 
-    // 获取实时矩形，用于判断鼠标相对位置
     const activeRect = active.rect.current.translated;
     const overRect = over.rect;
 
     let newParentId: string | null = null;
     let newIndex = 0;
 
-    if (overModule.type === 'flex' || overModule.type === 'grid') {
-      // 拖入容器：根据鼠标在容器内的位置决定插入位置
+    const isContainer =
+      overModule.type === 'flex' ||
+      overModule.type === 'grid' ||
+      (overModule.children && overModule.children.length > 0);
+
+    if (isContainer) {
       newParentId = overIdStr;
-      const containerDom = document.querySelector(`[data-id="${overIdStr}"]`);
-      if (containerDom && activeRect) {
-        const containerRect = containerDom.getBoundingClientRect();
-        const mouseYInContainer = activeRect.top + activeRect.height / 2 - containerRect.top;
-
-        // 获取容器内直接子元素（排除当前拖拽元素自身）
-        const allChildDoms = Array.from(containerDom.querySelectorAll(':scope > [data-id]'));
-        const otherDoms = allChildDoms.filter(el => el.getAttribute('data-id') !== activeIdStr);
-
-        let insertIndex = otherDoms.length;
-        for (let i = 0; i < otherDoms.length; i++) {
-          const child = otherDoms[i] as HTMLElement;
-          const childRect = child.getBoundingClientRect();
-          const childMiddle = childRect.top + childRect.height / 2 - containerRect.top;
-          if (mouseYInContainer < childMiddle) {
-            insertIndex = i;
-            break;
-          }
-        }
-        newIndex = insertIndex;
+      const childrenCount = overModule.children?.length || 0;
+      if (activeRect && overRect) {
+        const activeCenterY = activeRect.top + activeRect.height / 2;
+        const overTop = overRect.top;
+        const overHeight = overRect.height;
+        const relativeY = (activeCenterY - overTop) / overHeight;
+        newIndex = Math.round(relativeY * childrenCount);
+        if (newIndex < 0) newIndex = 0;
+        if (newIndex > childrenCount) newIndex = childrenCount;
       } else {
-        newIndex = overModule.children?.length || 0;
+        newIndex = childrenCount;
       }
     } else {
-      // 普通模块排序：计算在父列表中的新位置
-      const parent = findParentModule(modules, overIdStr);
+      const parent = findParentInModules(modules, overIdStr);
       const parentList: ResumeModule[] = parent ? parent.children! : modules;
-
-      // 移除 active 后的列表
       const listWithoutActive = parentList.filter(item => item.id !== activeIdStr);
       const overIndexInNewList = listWithoutActive.findIndex(item => item.id === overIdStr);
       if (overIndexInNewList === -1) return;
 
-      // 根据鼠标中心与 over 中心的位置决定放在前还是后
       if (activeRect && overRect) {
         const activeCenterY = activeRect.top + activeRect.height / 2;
         const overCenterY = overRect.top + overRect.height / 2;
@@ -161,14 +158,23 @@ function CanvasArea({ deleteMode, onExitDeleteMode }: CanvasAreaProps) {
       } else {
         newIndex = overIndexInNewList;
       }
-
       newParentId = parent ? parent.id : null;
     }
 
     moveModule(activeIdStr, newParentId, newIndex);
   };
 
-  // 右键菜单
+  function findParentInModules(modules: ResumeModule[], id: string): ResumeModule | null {
+    for (const mod of modules) {
+      if (mod.children && mod.children.some(c => c.id === id)) return mod;
+      if (mod.children) {
+        const found = findParentInModules(mod.children, id);
+        if (found) return found;
+      }
+    }
+    return null;
+  }
+
   const handleContextMenu = (e: React.MouseEvent, modId: string) => {
     e.preventDefault();
     e.stopPropagation();
@@ -178,22 +184,82 @@ function CanvasArea({ deleteMode, onExitDeleteMode }: CanvasAreaProps) {
       setContextMenu({ module: mod, x: e.clientX, y: e.clientY });
     }
   };
-
   const closeContextMenu = () => setContextMenu(null);
 
-  // 递归渲染模块
-  const renderModuleRecursive = (mod: ResumeModule) => {
-    const isSelected = selectedId === mod.id;
+  const renderModuleRecursive = useCallback(
+    (mod: ResumeModule): React.ReactNode => {
+      const isSelected = selectedId === mod.id;
+      const isDropHighlight = mod.id === dropTargetId;
 
-    if (mod.type === 'flex' || mod.type === 'grid') {
-      const direction = (mod.style?.flexDirection as 'row' | 'column') || 'column';
-      const containerStyle = {
-        display: mod.type === 'flex' ? 'flex' : 'grid',
-        flexDirection: direction,
-        gap: mod.style?.gap || '16px',
-        ...mod.style,
-      };
+      const isContainer =
+        mod.type === 'flex' ||
+        mod.type === 'grid' ||
+        (mod.children && mod.children.length > 0);
 
+      if (isContainer) {
+        const direction = (mod.style?.flexDirection as 'row' | 'column') || 'column';
+        const gap = mod.style?.gap || '16px';
+        const containerStyle: React.CSSProperties = {
+          display: mod.type === 'grid' ? 'grid' : 'flex',
+          flexDirection: mod.type === 'grid' ? undefined : direction,
+          gap,
+          ...mod.style,
+        };
+
+        // 拖拽悬停高亮样式
+        const highlightClass = isDropHighlight
+          ? 'ring-2 ring-blue-400 ring-offset-2'
+          : '';
+
+        return (
+          <SortableModule
+            key={mod.id}
+            id={mod.id}
+            module={mod}
+            isSelected={isSelected}
+            onSelect={() => select(mod.id)}
+            onEditFocus={() => select(null)}
+            disableDrag={deleteMode}
+            data-id={mod.id}
+            onContextMenu={(e) => handleContextMenu(e, mod.id)}
+          >
+            {deleteMode && (
+              <div className="absolute -left-8 top-1/2 -translate-y-1/2 z-10">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedIds((prev) => {
+                      const next = new Set(prev);
+                      next.has(mod.id) ? next.delete(mod.id) : next.add(mod.id);
+                      return next;
+                    });
+                  }}
+                  className={`w-6 h-6 p-0 border-2 rounded-full transition-all duration-75 flex items-center justify-center
+                    ${selectedIds.has(mod.id) ? 'bg-blue-500 border-blue-600 shadow-[inset_0_1px_3px_rgba(0,0,0,0.2)] translate-y-[1px]' : 'bg-white border-gray-300 hover:border-blue-400 shadow-[0_2px_4px_rgba(0,0,0,0.1)]'}
+                    active:scale-95`}
+                >
+                  {selectedIds.has(mod.id) && <span className="text-white text-xs font-bold">✓</span>}
+                </button>
+              </div>
+            )}
+            <div
+              className={`border border-dashed border-gray-300 min-h-[60px] p-2 ${highlightClass}`}
+              style={containerStyle}
+              data-id={mod.id}
+            >
+              {mod.children && mod.children.length > 0 ? (
+                <SortableContext items={mod.children.map((c) => c.id)} strategy={verticalListSortingStrategy}>
+                  {mod.children.map((child) => renderModuleRecursive(child))}
+                </SortableContext>
+              ) : (
+                <p className="text-gray-400 text-sm">拖入模块或控件</p>
+              )}
+            </div>
+          </SortableModule>
+        );
+      }
+
+      // 叶子模块
       return (
         <SortableModule
           key={mod.id}
@@ -206,135 +272,99 @@ function CanvasArea({ deleteMode, onExitDeleteMode }: CanvasAreaProps) {
           data-id={mod.id}
           onContextMenu={(e) => handleContextMenu(e, mod.id)}
         >
-          <div
-            className="border border-dashed border-gray-300 min-h-[60px] p-2"
-            style={containerStyle}
-            data-id={mod.id}
-          >
-            {mod.children && mod.children.length > 0 ? (
-              <SortableContext items={mod.children.map((c) => c.id)} strategy={verticalListSortingStrategy}>
-                {mod.children.map((child) => renderModuleRecursive(child))}
-              </SortableContext>
-            ) : (
-              <p className="text-gray-400 text-sm">拖入模块或控件</p>
-            )}
-          </div>
+          {deleteMode && (
+            <div className="absolute -left-8 top-1/2 -translate-y-1/2 z-10">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedIds((prev) => {
+                    const next = new Set(prev);
+                    next.has(mod.id) ? next.delete(mod.id) : next.add(mod.id);
+                    return next;
+                  });
+                }}
+                className={`w-6 h-6 p-0 border-2 rounded-full transition-all duration-75 flex items-center justify-center
+                  ${selectedIds.has(mod.id) ? 'bg-blue-500 border-blue-600 shadow-[inset_0_1px_3px_rgba(0,0,0,0.2)] translate-y-[1px]' : 'bg-white border-gray-300 hover:border-blue-400 shadow-[0_2px_4px_rgba(0,0,0,0.1)]'}
+                  active:scale-95`}
+              >
+                {selectedIds.has(mod.id) && <span className="text-white text-xs font-bold">✓</span>}
+              </button>
+            </div>
+          )}
+          <EditableModule module={mod} />
         </SortableModule>
       );
-    }
-
-    return (
-      <SortableModule
-        key={mod.id}
-        id={mod.id}
-        module={mod}
-        isSelected={isSelected}
-        onSelect={() => select(mod.id)}
-        onEditFocus={() => select(null)}
-        disableDrag={deleteMode}
-        data-id={mod.id}
-        onContextMenu={(e) => handleContextMenu(e, mod.id)}
-      >
-        {deleteMode && (
-          <div className="absolute -left-8 top-1/2 -translate-y-1/2 z-10">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setSelectedIds((prev) => {
-                  const next = new Set(prev);
-                  next.has(mod.id) ? next.delete(mod.id) : next.add(mod.id);
-                  return next;
-                });
-              }}
-              className={`w-6 h-6 p-0 border-2 rounded-full transition-all duration-75 flex items-center justify-center
-                ${selectedIds.has(mod.id)
-                  ? 'bg-blue-500 border-blue-600 shadow-[inset_0_1px_3px_rgba(0,0,0,0.2)] translate-y-[1px]'
-                  : 'bg-white border-gray-300 hover:border-blue-400 shadow-[0_2px_4px_rgba(0,0,0,0.1)]'
-                }
-                active:scale-95`}
-            >
-              {selectedIds.has(mod.id) && <span className="text-white text-xs font-bold">✓</span>}
-            </button>
-          </div>
-        )}
-        {mod.type === 'header' ? <ResumeHeader module={mod} /> : <EditableModule module={mod} />}
-      </SortableModule>
-    );
-  };
+    },
+    [selectedId, deleteMode, selectedIds, select, handleContextMenu, dropTargetId]
+  );
 
   const allIds = getAllSortableIds(modules);
 
   return (
-      <div
-        className="relative bg-gray-100 h-full"
-        style={{ width: '842px' }}
-        onClick={(e) => {
-          closeContextMenu();
-          // 点击画布空白处取消选中
-          if (e.target === e.currentTarget || !(e.target as HTMLElement).closest('[data-id]')) {
-            select(null);
-          }
-        }}
-      >
-        <div className="h-full overflow-y-auto p-6 flex justify-center">
-          <div
-            id="resume-preview"
-            className="bg-white shadow-lg p-10 flex flex-col gap-4"
-            style={{
-              width: '794px',
-              minHeight: `${PAGE_HEIGHT}px`,
-              transform: `scale(${scale})`,
-              transformOrigin: 'top center',
-              marginBottom: scale > 1 ? `${(scale - 1) * PAGE_HEIGHT}px` : '0',
-            }}
-          >
-            {modules.length === 0 && (
-              <p className="text-gray-300 text-center mt-20">从左侧选择控件添加到画布</p>
-            )}
-            <DndContext
-              sensors={sensors}
-              collisionDetection={closestCenter}
-              onDragEnd={handleDragEnd}
-            >
-              <SortableContext items={allIds} strategy={verticalListSortingStrategy}>
-                {modules.map((mod) => renderModuleRecursive(mod))}
-              </SortableContext>
-            </DndContext>
-          </div>
-        </div>
-
-        {contextMenu && (
-          <ContextMenu
-            x={contextMenu.x}
-            y={contextMenu.y}
-            module={contextMenu.module}
-            onClose={closeContextMenu}
-          />
-        )}
-
-        {/* 右下角缩放与删除控制 */}
-        <div className="absolute bottom-4 right-4 flex flex-col gap-2 items-end">
-          {deleteMode && (
-            <button
-              onClick={selectedIds.size > 0 ? handleDelete : handleExit}
-              className={`w-32 h-[60px] px-2 py-1.5 text-sm font-medium rounded-lg transition-all duration-75
-                ${selectedIds.size > 0
-                  ? 'text-gray-700 bg-gradient-to-b from-red-50 to-red-100 border border-red-300 shadow-[inset_0_1px_0_#fff,0_2px_0_#fca5a5,0_3px_6px_rgba(0,0,0,0.1)] active:shadow-[inset_0_1px_3px_rgba(0,0,0,0.1)] active:translate-y-[2px]'
-                  : 'text-gray-700 bg-gradient-to-b from-green-50 to-green-100 border border-green-300 shadow-[inset_0_1px_0_#fff,0_2px_0_#86efac,0_3px_6px_rgba(0,0,0,0.1)] active:shadow-[inset_0_1px_3px_rgba(0,0,0,0.1)] active:translate-y-[2px]'
-                }
-              `}
-            >
-              {selectedIds.size > 0 ? '删除' : '退出'}
-            </button>
+    <div
+      className="relative bg-gray-100 h-full"
+      style={{ width: '842px' }}
+      onClick={(e) => {
+        closeContextMenu();
+        if (e.target === e.currentTarget || !(e.target as HTMLElement).closest('[data-id]')) {
+          select(null);
+        }
+      }}
+    >
+      <div className="h-full overflow-y-auto p-6 flex justify-center">
+        <div
+          id="resume-preview"
+          className="bg-white shadow-lg p-10 flex flex-col gap-4"
+          style={{
+            width: '794px',
+            minHeight: `${PAGE_HEIGHT}px`,
+            transform: `scale(${scale})`,
+            transformOrigin: 'top center',
+            marginBottom: scale > 1 ? `${(scale - 1) * PAGE_HEIGHT}px` : '0',
+          }}
+        >
+          {modules.length === 0 && (
+            <p className="text-gray-300 text-center mt-20">从左侧选择控件添加到画布</p>
           )}
-          <div className="flex items-center gap-1 bg-white border border-gray-200 rounded shadow-md px-2 py-1">
-            <button onClick={zoomOut} className="w-5 h-5 flex items-center justify-center text-xs border border-gray-300 rounded hover:bg-gray-100">−</button>
-            <span className="text-xs text-gray-600 w-10 text-center">{Math.round(scale * 100)}%</span>
-            <button onClick={zoomIn} className="w-5 h-5 flex items-center justify-center text-xs border border-gray-300 rounded hover:bg-gray-100">+</button>
-            <button onClick={zoomReset} className="ml-1 px-1.5 py-0.5 text-xs border border-gray-300 rounded hover:bg-gray-100">重置</button>
-          </div>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragStart={() => setDropTargetId(null)}
+            onDragOver={handleDragOver}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext items={allIds} strategy={verticalListSortingStrategy}>
+              {modules.map((mod) => renderModuleRecursive(mod))}
+            </SortableContext>
+          </DndContext>
         </div>
       </div>
+
+      {contextMenu && (
+        <ContextMenu x={contextMenu.x} y={contextMenu.y} module={contextMenu.module} onClose={closeContextMenu} />
+      )}
+
+      <div className="absolute bottom-4 right-4 flex flex-col gap-2 items-end">
+        {deleteMode && (
+          <button
+            onClick={selectedIds.size > 0 ? handleDelete : handleExit}
+            className={`w-32 h-[60px] px-2 py-1.5 text-sm font-medium rounded-lg transition-all duration-75
+              ${selectedIds.size > 0
+                ? 'text-gray-700 bg-gradient-to-b from-red-50 to-red-100 border border-red-300 shadow-[inset_0_1px_0_#fff,0_2px_0_#fca5a5,0_3px_6px_rgba(0,0,0,0.1)] active:shadow-[inset_0_1px_3px_rgba(0,0,0,0.1)] active:translate-y-[2px]'
+                : 'text-gray-700 bg-gradient-to-b from-green-50 to-green-100 border border-green-300 shadow-[inset_0_1px_0_#fff,0_2px_0_#86efac,0_3px_6px_rgba(0,0,0,0.1)] active:shadow-[inset_0_1px_3px_rgba(0,0,0,0.1)] active:translate-y-[2px]'
+              }`}
+          >
+            {selectedIds.size > 0 ? '删除' : '退出'}
+          </button>
+        )}
+        <div className="flex items-center gap-1 bg-white border border-gray-200 rounded shadow-md px-2 py-1">
+          <button onClick={zoomOut} className="w-5 h-5 flex items-center justify-center text-xs border border-gray-300 rounded hover:bg-gray-100">−</button>
+          <span className="text-xs text-gray-600 w-10 text-center">{Math.round(scale * 100)}%</span>
+          <button onClick={zoomIn} className="w-5 h-5 flex items-center justify-center text-xs border border-gray-300 rounded hover:bg-gray-100">+</button>
+          <button onClick={zoomReset} className="ml-1 px-1.5 py-0.5 text-xs border border-gray-300 rounded hover:bg-gray-100">重置</button>
+        </div>
+      </div>
+    </div>
   );
 }
 

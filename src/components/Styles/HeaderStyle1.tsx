@@ -2,6 +2,7 @@ import { useRef } from 'react';
 import { useResumeStore } from '../../store/useResumeStore';
 import type { StyleComponentProps } from '../../store/styleRegistry';
 import InlineEditor from './InlineEditor';
+import ResizablePhoto from './ResizablePhoto';
 
 export default function HeaderStyle1({ module }: StyleComponentProps) {
   const updateModule = useResumeStore((s) => s.updateModule);
@@ -29,16 +30,32 @@ export default function HeaderStyle1({ module }: StyleComponentProps) {
     reader.readAsDataURL(file);
   };
 
+  const photoWidth = module.style?.photoWidth;
+  const photoHeight = module.style?.photoHeight;
+
+  // 容器默认尺寸（当未设置自定义尺寸时使用）
+  const defaultContainerClass = 'w-24 h-32';
+  const containerStyle: React.CSSProperties = {};
+  if (photoWidth && photoWidth !== 'auto') containerStyle.width = photoWidth;
+  if (photoHeight && photoHeight !== 'auto') containerStyle.height = photoHeight;
+
   return (
     <div style={{ ...module.style }} className="border border-gray-200 rounded p-4 bg-white">
       <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" style={{ display: 'none' }} />
       <div className="flex gap-4">
         <div
           onClick={handlePhotoClick}
-          className="w-24 h-32 bg-gray-100 border border-dashed border-gray-300 flex items-center justify-center text-xs text-gray-400 rounded cursor-pointer hover:border-blue-400 overflow-hidden"
+          className={`bg-gray-100 border border-dashed border-gray-300 flex items-center justify-center text-xs text-gray-400 rounded cursor-pointer hover:border-blue-400 overflow-hidden ${!photoWidth && !photoHeight ? defaultContainerClass : ''}`}
+          style={containerStyle}
         >
           {module.photo ? (
-            <img src={module.photo} alt="照片" className="w-full h-full object-cover" />
+            <ResizablePhoto
+              src={module.photo}
+              width={photoWidth || 'auto'}
+              height={photoHeight || 'auto'}
+              moduleId={module.id}
+              className="rounded"
+            />
           ) : (
             '照片'
           )}

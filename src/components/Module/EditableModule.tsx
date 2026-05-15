@@ -2,10 +2,7 @@ import { getStyleConfig } from '../../store/styleRegistry';
 import type { ResumeModule } from '../../store/useResumeStore';
 
 function EditableModule({ module }: { module: ResumeModule }) {
-  if (module.type === 'flex' || module.type === 'grid') {
-    return null; // 由 CanvasArea 处理
-  }
-
+  // 不再对 flex/grid 返回 null，统一通过注册表获取组件
   const config = getStyleConfig(module.type, module.styleId);
   const Component = config?.component;
 

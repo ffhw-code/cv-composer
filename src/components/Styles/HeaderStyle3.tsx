@@ -2,6 +2,7 @@ import { useRef } from 'react';
 import { useResumeStore } from '../../store/useResumeStore';
 import type { StyleComponentProps } from '../../store/styleRegistry';
 import InlineEditor from './InlineEditor';
+import ResizablePhoto from './ResizablePhoto';
 
 export default function HeaderStyle3({ module }: StyleComponentProps) {
   const updateModule = useResumeStore((s) => s.updateModule);
@@ -22,6 +23,14 @@ export default function HeaderStyle3({ module }: StyleComponentProps) {
     reader.readAsDataURL(file);
   };
 
+  const photoWidth = module.style?.photoWidth;
+  const photoHeight = module.style?.photoHeight;
+
+  const defaultContainerClass = 'w-20 h-20';
+  const containerStyle: React.CSSProperties = {};
+  if (photoWidth && photoWidth !== 'auto') containerStyle.width = photoWidth;
+  if (photoHeight && photoHeight !== 'auto') containerStyle.height = photoHeight;
+
   return (
     <div style={{ ...module.style }} className="bg-gray-50 border border-gray-200 rounded-lg p-5 flex items-center gap-6 shadow-sm">
       <div className="flex-1">
@@ -40,27 +49,29 @@ export default function HeaderStyle3({ module }: StyleComponentProps) {
           />
         </div>
         <div className="mt-3 grid grid-cols-2 gap-2 text-sm text-gray-500">
-          <InlineEditor
-            content={module.birth || '出生年月'}
-            onUpdate={(html) => updateModule(module.id, { birth: html })}
-          />
-          <InlineEditor
-            content={module.phone || '电话'}
-            onUpdate={(html) => updateModule(module.id, { phone: html })}
-          />
+          <InlineEditor content={module.birth || '出生年月'} onUpdate={(html) => updateModule(module.id, { birth: html })} />
+          <InlineEditor content={module.phone || '电话'} onUpdate={(html) => updateModule(module.id, { phone: html })} />
           <div className="col-span-2">
-            <InlineEditor
-              content={module.email || '邮箱'}
-              onUpdate={(html) => updateModule(module.id, { email: html })}
-            />
+            <InlineEditor content={module.email || '邮箱'} onUpdate={(html) => updateModule(module.id, { email: html })} />
           </div>
         </div>
       </div>
       <div
         onClick={handlePhotoClick}
-        className="w-20 h-20 rounded-full bg-gray-200 border-2 border-dashed border-gray-300 flex items-center justify-center text-xs text-gray-400 cursor-pointer hover:border-blue-400 overflow-hidden"
+        className={`rounded-full bg-gray-200 border-2 border-dashed border-gray-300 flex items-center justify-center text-xs text-gray-400 cursor-pointer hover:border-blue-400 overflow-hidden ${!photoWidth && !photoHeight ? defaultContainerClass : ''}`}
+        style={containerStyle}
       >
-        {module.photo ? <img src={module.photo} alt="照片" className="w-full h-full object-cover" /> : '照片'}
+        {module.photo ? (
+          <ResizablePhoto
+            src={module.photo}
+            width={photoWidth || 'auto'}
+            height={photoHeight || 'auto'}
+            moduleId={module.id}
+            className="rounded-full"
+          />
+        ) : (
+          '照片'
+        )}
       </div>
       <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" style={{ display: 'none' }} />
     </div>

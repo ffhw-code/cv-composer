@@ -6,8 +6,8 @@ import TextAlign from '@tiptap/extension-text-align';
 import FontFamily from '@tiptap/extension-font-family';
 import { TextStyle } from '@tiptap/extension-text-style';
 import Color from '@tiptap/extension-color';
-import Image from '@tiptap/extension-image';
-import FontSize from '../../tiptap/fontSize'; // 导入自定义扩展
+import FontSize from '../../tiptap/fontSize';
+import { ResizableImage } from '../../tiptap/ResizableImage';
 import { useResumeStore } from '../../store/useResumeStore';
 import { useActiveEditor } from '../../hooks/useActiveEditor';
 import type { ResumeModule } from '../../store/useResumeStore';
@@ -21,14 +21,13 @@ function HeadingControl({ module }: { module: ResumeModule }) {
       StarterKit.configure({
         heading: { levels: [1, 2] },
       }),
-      // Underline 已包含在 StarterKit 中，移除可消除重复警告（若仍需要可保留，但会有警告）
       Highlight.configure({ multicolor: true }),
       TextAlign.configure({ types: ['heading', 'paragraph'] }),
       FontFamily,
       TextStyle,
       Color,
-      Image,
-      FontSize, // 使用自定义字号扩展
+      ResizableImage,
+      FontSize,
     ],
     content: module.content || '<h2>标题</h2>',
     editorProps: {

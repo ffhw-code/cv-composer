@@ -1,3 +1,4 @@
+// src/components/Canvas/ContextMenu.tsx
 import { useResumeStore } from '../../store/useResumeStore';
 import type { ResumeModule } from '../../store/useResumeStore';
 
@@ -11,18 +12,20 @@ interface ContextMenuProps {
 function ContextMenu({ x, y, module, onClose }: ContextMenuProps) {
   const removeModule = useResumeStore((s) => s.removeModule);
   const updateModule = useResumeStore((s) => s.updateModule);
-  const store = useResumeStore;
+  const decomposeModule = useResumeStore((s) => s.decomposeModule);
 
   const handleDelete = () => { removeModule(module.id); onClose(); };
+
   const handleDuplicate = () => {
-    const newMod: ResumeModule = {
-      ...module,
-      id: `m${Date.now()}`,
-      children: module.children ? module.children.map((child) => ({ ...child, id: `m${Date.now()}_${Math.random().toString(36).substr(2,5)}` })) : [],
-    };
-    store.getState().addModule(null, newMod.type, newMod.styleId);
+    useResumeStore.getState().duplicateModule(module.id);
     onClose();
   };
+
+  const handleDecompose = () => {
+    decomposeModule(module.id);
+    onClose();
+  };
+
   const handleSetColor = () => {
     const color = prompt('输入颜色值（如 red 或 #ff0000）', module.style?.color || '');
     if (color) {
@@ -30,6 +33,7 @@ function ContextMenu({ x, y, module, onClose }: ContextMenuProps) {
     }
     onClose();
   };
+
   const handleSetBg = () => {
     const bg = prompt('输入背景色', module.style?.backgroundColor || '');
     if (bg) {
@@ -39,6 +43,8 @@ function ContextMenu({ x, y, module, onClose }: ContextMenuProps) {
   };
 
   const textActions = module.type === 'text' || module.type === 'heading' || module.type === 'list';
+  // 可分解：header 或 module 且没有 children
+  const canDecompose = (module.type === 'header' || module.type === 'module') && (!module.children || module.children.length === 0);
 
   return (
     <div
@@ -48,6 +54,9 @@ function ContextMenu({ x, y, module, onClose }: ContextMenuProps) {
     >
       <button onClick={handleDelete} className="block w-full text-left px-3 py-1 hover:bg-gray-100">删除</button>
       <button onClick={handleDuplicate} className="block w-full text-left px-3 py-1 hover:bg-gray-100">复制</button>
+      {canDecompose && (
+        <button onClick={handleDecompose} className="block w-full text-left px-3 py-1 hover:bg-gray-100">分解组件</button>
+      )}
       {textActions && (
         <>
           <button onClick={handleSetColor} className="block w-full text-left px-3 py-1 hover:bg-gray-100">修改文字颜色</button>
