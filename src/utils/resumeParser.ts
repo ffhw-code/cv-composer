@@ -1,0 +1,193 @@
+interface ApiConfig {
+  provider: 'openai' | 'aliyun' | 'custom';
+  apiKey: string;
+  model: string;
+  baseUrl?: string;
+}
+
+interface ParsedResume {
+  name?: string;
+  jobTitle?: string;
+  birth?: string;
+  phone?: string;
+  email?: string;
+  photo?: string;
+  modules?: {
+    title: string;
+    content: string;
+  }[];
+}
+
+function getApiConfig(): ApiConfig | null {
+  const stored = localStorage.getItem('resume_ai_config');
+  if (!stored) return null;
+  try {
+    return JSON.parse(stored);
+  } catch {
+    return null;
+  }
+}
+
+async function readFileAsBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      const base64 = result.split(',')[1];
+      resolve(base64);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+async function readFileAsText(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsText(file);
+  });
+}
+
+function buildPrompt(): string {
+  return `你是一个专业的简历解析助手。请仔细阅读以下简历文件内容，提取所有关键信息，并按指定的 JSON 格式返回。
+
+请返回一个 JSON 对象，格式如下：
+{
+  "name": "姓名",
+  "jobTitle": "求职意向或职位",
+  "birth": "出生年月或籍贯",
+  "phone": "电话号码",
+  "email": "电子邮箱",
+  "photo": "",
+  "modules": [
+    {
+      "title": "模块标题（如教育背景、工作经历、技能等）",
+      "content": "模块详细内容（HTML 格式，可使用 <ul><li> 等标签）"
+    }
+  ]
+}
+
+注意：
+1. photo 字段永远返回空字符串 ""，不要返回任何 base64 编码。
+2. 如果某项信息不存在，请用空字符串 "" 表示。
+3. 模块内容请尽量保留原文结构，使用 HTML 标签格式化（如 <p>、<ul>、<li>、<strong> 等）。
+4. 只返回 JSON 对象，不要包含任何其他文字或解释。`;
+}
+
+// 稳健的 JSON 提取与修复
+function extractJson(content: string): string {
+  // 去除 markdown 代码块标记
+  let clean = content.replace(/```json\s*|\s*```/g, '').trim();
+  
+  // 找到最外层花括号
+  const startIdx = clean.indexOf('{');
+  const endIdx = clean.lastIndexOf('}');
+  if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+    clean = clean.substring(startIdx, endIdx + 1);
+  }
+
+  // 清理控制字符
+  clean = clean.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '');
+
+  // 尝试修复截断的字符串：查找最后一个引号之后是否还有逗号或冒号但缺少闭合引号
+  // 简单处理：移除未闭合的 photo 字段（避免解析失败），或者补上引号
+  // 这里采用更稳健的方式：尝试解析一次，如果失败则尝试删除 photo 字段。
+  return clean;
+}
+
+async function callApi(baseUrl: string, apiKey: string, model: string, messages: any[]): Promise<ParsedResume> {
+  const response = await fetch(`${baseUrl}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model,
+      messages,
+      max_tokens: 4096,
+      temperature: 0.1,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`API 请求失败: ${response.status} ${errorText}`);
+  }
+
+  const data = await response.json();
+  const content = data.choices?.[0]?.message?.content;
+  if (!content) {
+    throw new Error('API 未返回有效内容');
+  }
+
+  // 提取 JSON 字符串
+  let jsonStr = extractJson(content);
+
+  // 尝试解析，若失败则尝试移除 photo 字段后重试
+  const tryParse = (str: string): ParsedResume => {
+    try {
+      return JSON.parse(str);
+    } catch (e) {
+      // 若失败，尝试移除 photo 字段（可能太长导致截断）
+      const cleaned = str.replace(/"photo"\s*:\s*"[^"]*"/, '"photo": ""');
+      if (cleaned !== str) {
+        return JSON.parse(cleaned);
+      }
+      throw e;
+    }
+  };
+
+  try {
+    return tryParse(jsonStr);
+  } catch (parseError: any) {
+    console.error('JSON 解析失败，原始内容:', content);
+    console.error('清理后的 JSON 字符串:', jsonStr);
+    throw new Error(`JSON 解析失败: ${parseError.message}`);
+  }
+}
+
+export async function parseResumeFile(file: File): Promise<ParsedResume> {
+  const config = getApiConfig();
+  if (!config || !config.apiKey) {
+    throw new Error('请先配置 AI 服务 (API Key)');
+  }
+
+  const baseUrl = config.baseUrl || 'https://api.openai.com/v1';
+  const model = config.model || 'qwen-vl-max';
+
+  let messages: any[];
+  const fileType = file.type;
+
+  if (fileType === 'application/pdf') {
+    throw new Error('PDF 暂不支持直接解析，请将 PDF 转为图片（如 PNG/JPG）后上传');
+  } else if (fileType.startsWith('image/')) {
+    const base64 = await readFileAsBase64(file);
+    messages = [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: buildPrompt() },
+          {
+            type: 'image_url',
+            image_url: { url: `data:${fileType};base64,${base64}` },
+          },
+        ],
+      },
+    ];
+  } else if (
+    fileType === 'text/plain' ||
+    fileType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  ) {
+    const fileContent = await readFileAsText(file);
+    messages = [
+      { role: 'user', content: `${buildPrompt()}\n\n简历文件内容：\n${fileContent}` },
+    ];
+  } else {
+    throw new Error('不支持的文件格式，请上传图片或 Word 文件');
+  }
+
+  return callApi(baseUrl, config.apiKey, model, messages);
+}

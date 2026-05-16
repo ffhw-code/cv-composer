@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Highlight from '@tiptap/extension-highlight';
@@ -15,6 +15,7 @@ import type { ResumeModule } from '../../store/useResumeStore';
 function TextControl({ module }: { module: ResumeModule }) {
   const updateModule = useResumeStore((s) => s.updateModule);
   const { setActiveEditor } = useActiveEditor();
+  const editorRef = useRef<HTMLDivElement>(null);
 
   const editor = useEditor({
     extensions: [
@@ -49,7 +50,33 @@ function TextControl({ module }: { module: ResumeModule }) {
     }
   }, [module.content, editor]);
 
-  return <EditorContent editor={editor} />;
+  // 动态应用模块样式到编辑器根元素
+  useEffect(() => {
+    if (!editor) return;
+    const dom = editor.view.dom;
+    const style = module.style || {};
+    dom.style.fontFamily = style.fontFamily || '';
+    dom.style.fontSize = style.fontSize || '';
+    dom.style.color = style.color || '';
+    dom.style.textAlign = style.textAlign || '';
+    dom.style.backgroundColor = style.backgroundColor || '';
+    // 注意：编辑器内部可能有背景，我们也可以直接在外层 div 设置背景
+  }, [editor, module.style]);
+
+  // 布局属性放到外层容器
+  const containerStyle: React.CSSProperties = {
+    width: module.style?.width || 'auto',
+    height: module.style?.height || 'auto',
+    margin: module.style?.margin || '0',
+    padding: module.style?.padding || '0',
+    backgroundColor: module.style?.backgroundColor || 'transparent',
+  };
+
+  return (
+    <div style={containerStyle}>
+      <EditorContent editor={editor} />
+    </div>
+  );
 }
 
 export default TextControl;

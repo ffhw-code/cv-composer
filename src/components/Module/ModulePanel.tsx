@@ -21,23 +21,23 @@ function ModulePanel({
   const [exportOpen, setExportOpen] = useState(false);
 
   const keycapStyle =
-    'w-full h-[60px] px-2 py-1.5 text-sm font-medium text-gray-700 ' +
+    'w-full h-[45px] px-1 py-1 text-xs font-medium text-gray-700 ' +
     'bg-gradient-to-b from-white to-gray-100 ' +
     'border border-gray-300 ' +
     'rounded-lg ' +
     'shadow-[inset_0_1px_0_#fff,0_2px_0_#d1d5db,0_3px_6px_rgba(0,0,0,0.1)] ' +
     'active:shadow-[inset_0_1px_3px_rgba(0,0,0,0.1)] ' +
     'active:translate-y-[2px] ' +
-    'transition-all duration-75';
+    'transition-all duration-75 truncate';
 
   const keycapActiveStyle =
-    'w-full h-[60px] px-2 py-1.5 text-sm font-medium text-gray-700 ' +
+    'w-full h-[45px] px-1 py-1 text-xs font-medium text-gray-700 ' +
     'bg-gradient-to-b from-blue-50 to-blue-100 ' +
     'border border-blue-300 ' +
     'rounded-lg ' +
     'shadow-[inset_0_1px_3px_rgba(0,0,0,0.1)] ' +
     'translate-y-[2px] ' +
-    'transition-all duration-75';
+    'transition-all duration-75 truncate';
 
   const handleExportPDF = () => {
     exportPDF();
@@ -55,7 +55,7 @@ function ModulePanel({
   };
 
   return (
-    <div className="w-[150px] bg-gray-100 border border-gray-300 rounded-lg shadow-[inset_0_2px_4px_rgba(0,0,0,0.06)] p-2 flex flex-col gap-1">
+    <div className="w-[75px] bg-gray-100 border border-gray-300 rounded-lg shadow-[inset_0_2px_4px_rgba(0,0,0,0.06)] p-1 flex flex-col gap-1">
       {/* 添加组件 */}
       <button onClick={toggleComponent} className={keycapStyle}>
         添加组件
@@ -65,7 +65,7 @@ function ModulePanel({
         <div className="flex flex-col gap-1 w-full">
           <button
             onClick={() => onSelectControl('header')}
-            className={`w-full h-[60px] px-2 py-1.5 text-sm border rounded hover:bg-gray-50 ${
+            className={`w-full h-[45px] px-1 py-1 text-xs border rounded hover:bg-gray-50 truncate ${
               selectedControl === 'header'
                 ? 'bg-blue-50 border-blue-300'
                 : 'bg-white border-gray-300'
@@ -75,7 +75,7 @@ function ModulePanel({
           </button>
           <button
             onClick={() => onSelectControl('module')}
-            className={`w-full h-[60px] px-2 py-1.5 text-sm border rounded hover:bg-gray-50 ${
+            className={`w-full h-[45px] px-1 py-1 text-xs border rounded hover:bg-gray-50 truncate ${
               selectedControl === 'module'
                 ? 'bg-blue-50 border-blue-300'
                 : 'bg-white border-gray-300'
@@ -95,31 +95,31 @@ function ModulePanel({
         <div className="flex flex-col gap-1 w-full">
           <button
             onClick={() => addModule(null, 'text', 'text-default')}
-            className="w-full h-[60px] px-2 py-1.5 text-sm bg-white border border-gray-300 rounded hover:bg-gray-50"
+            className="w-full h-[45px] px-1 py-1 text-xs bg-white border border-gray-300 rounded hover:bg-gray-50 truncate"
           >
             文本框
           </button>
           <button
             onClick={() => addModule(null, 'heading', 'heading-default')}
-            className="w-full h-[60px] px-2 py-1.5 text-sm bg-white border border-gray-300 rounded hover:bg-gray-50"
+            className="w-full h-[45px] px-1 py-1 text-xs bg-white border border-gray-300 rounded hover:bg-gray-50 truncate"
           >
             标题
           </button>
           <button
             onClick={() => addModule(null, 'list', 'list-default')}
-            className="w-full h-[60px] px-2 py-1.5 text-sm bg-white border border-gray-300 rounded hover:bg-gray-50"
+            className="w-full h-[45px] px-1 py-1 text-xs bg-white border border-gray-300 rounded hover:bg-gray-50 truncate"
           >
             列表
           </button>
           <button
             onClick={() => addModule(null, 'image', 'image-default')}
-            className="w-full h-[60px] px-2 py-1.5 text-sm bg-white border border-gray-300 rounded hover:bg-gray-50"
+            className="w-full h-[45px] px-1 py-1 text-xs bg-white border border-gray-300 rounded hover:bg-gray-50 truncate"
           >
             图片
           </button>
           <button
             onClick={() => addModule(null, 'flex', 'flex-default')}
-            className="w-full h-[60px] px-2 py-1.5 text-sm bg-white border border-gray-300 rounded hover:bg-gray-50"
+            className="w-full h-[45px] px-1 py-1 text-xs bg-white border border-gray-300 rounded hover:bg-gray-50 truncate"
           >
             弹性容器
           </button>
@@ -143,7 +143,7 @@ function ModulePanel({
         <div className="flex flex-col gap-1 w-full">
           <button
             onClick={handleExportPDF}
-            className="w-full h-[60px] px-2 py-1.5 text-sm bg-white border border-gray-300 rounded hover:bg-gray-50"
+            className="w-full h-[45px] px-1 py-1 text-xs bg-white border border-gray-300 rounded hover:bg-gray-50 truncate"
           >
             导出 PDF
           </button>

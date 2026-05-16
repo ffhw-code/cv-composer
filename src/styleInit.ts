@@ -6,8 +6,8 @@ import ListControl from './components/Styles/ListControl';
 import FlexContainer from './components/Styles/FlexContainer';
 import GridContainer from './components/Styles/GridContainer';
 import ImageModule from './components/Styles/ImageModule';
+import MinimalContainer from './components/Styles/MinimalContainer';  // 新增
 
-// 缩略图导入（稍后您替换为新截图）
 import headerThumb1 from './assets/images/headerThumb1.png';
 import headerThumb2 from './assets/images/headerThumb2.png';
 import headerThumb3 from './assets/images/headerThumb3.png';
@@ -26,160 +26,126 @@ export function initStyles() {
   registerStyle({ type: 'grid', style: 'grid-default', label: '网格容器', thumb: '', component: GridContainer, defaultStyle: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' } });
 
   // ===================== 新版简历头模板 =====================
+  registerStyle({
+    type: 'header',
+    style: 'header-classic',
+    label: '经典分栏',
+    thumb: headerThumb1,
+    component: MinimalContainer,  // 新增
+    defaultStyle: {
+      display: 'flex', flexDirection: 'row', alignItems: 'flex-start', gap: '20px',
+      padding: '24px', backgroundColor: '#ffffff', borderRadius: '12px',
+      border: '1px solid #e8ecf1', boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+    },
+    defaultChildren: [
+      {
+        type: 'image', styleId: 'image-default',
+        defaultStyle: { width: '100px', height: '130px', borderRadius: '8px', objectFit: 'cover' },
+        defaultProps: { content: '' },
+      },
+      {
+        type: 'flex', styleId: 'flex-default',
+        defaultStyle: { flexDirection: 'column', gap: '12px', flex: '1' },
+        children: [
+          { type: 'text', styleId: 'text-default', defaultStyle: { fontSize: '24px', fontWeight: '700', color: '#1a202c' }, defaultProps: { content: '张三', name: 'name' } },
+          {
+            type: 'grid', styleId: 'grid-default',
+            defaultStyle: { gridTemplateColumns: '1fr 1fr', gap: '12px' },
+            children: [
+              { type: 'text', styleId: 'text-default', defaultStyle: { fontSize: '15px', color: '#4a5568' }, defaultProps: { content: '求职意向：产品经理', jobTitle: 'jobTitle' } },
+              { type: 'text', styleId: 'text-default', defaultStyle: { fontSize: '15px', color: '#4a5568' }, defaultProps: { content: '出生年月：1998.06', birth: 'birth' } },
+              { type: 'text', styleId: 'text-default', defaultStyle: { fontSize: '15px', color: '#4a5568' }, defaultProps: { content: '📞 136-0000-0000', phone: 'phone' } },
+              { type: 'text', styleId: 'text-default', defaultStyle: { fontSize: '15px', color: '#4a5568' }, defaultProps: { content: '📧 zhang@example.com', email: 'email' } },
+            ],
+          },
+        ],
+      },
+    ],
+  });
 
-  // 1. 经典分栏（原 HeaderStyle1 优化）
-registerStyle({
-  type: 'header',
-  style: 'header-classic',
-  label: '经典分栏',
-  thumb: headerThumb1,
-  defaultStyle: {
-    display: 'flex',
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: '20px',
-    padding: '24px',
-    backgroundColor: '#ffffff',
-    borderRadius: '12px',
-    border: '1px solid #e8ecf1',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-  },
-  defaultChildren: [
-    {
-      type: 'image',
-      styleId: 'image-default',
-      defaultStyle: { width: '100px', height: '130px', borderRadius: '8px', objectFit: 'cover' },
-      defaultProps: { content: '' },
+  registerStyle({
+    type: 'header',
+    style: 'header-gradient',
+    label: '蓝色渐变',
+    thumb: headerThumb2,
+    component: MinimalContainer,  // 新增
+    defaultStyle: {
+      display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '24px',
+      padding: '24px', background: 'linear-gradient(135deg, #e0f2fe 0%, #ffffff 100%)',
+      borderRadius: '16px', border: '1px solid #bae6fd',
     },
-    {
-      type: 'flex',
-      styleId: 'flex-default',
-      defaultStyle: { flexDirection: 'column', gap: '12px', flex: '1' },
-      children: [
-        // 姓名行
-        { type: 'text', styleId: 'text-default', defaultStyle: { fontSize: '24px', fontWeight: '700', color: '#1a202c' }, defaultProps: { content: '张三', name: 'name' } },
-        // 两列信息
-        {
-          type: 'grid',
-          styleId: 'grid-default',
-          defaultStyle: { gridTemplateColumns: '1fr 1fr', gap: '12px' },
-          children: [
-            { type: 'text', styleId: 'text-default', defaultStyle: { fontSize: '15px', color: '#4a5568' }, defaultProps: { content: '求职意向：产品经理', jobTitle: 'jobTitle' } },
-            { type: 'text', styleId: 'text-default', defaultStyle: { fontSize: '15px', color: '#4a5568' }, defaultProps: { content: '出生年月：1998.06', birth: 'birth' } },
-            { type: 'text', styleId: 'text-default', defaultStyle: { fontSize: '15px', color: '#4a5568' }, defaultProps: { content: '📞 136-0000-0000', phone: 'phone' } },
-            { type: 'text', styleId: 'text-default', defaultStyle: { fontSize: '15px', color: '#4a5568' }, defaultProps: { content: '📧 zhang@example.com', email: 'email' } },
-          ],
-        },
-      ],
-    },
-  ],
-});
+    defaultChildren: [
+      {
+        type: 'flex', styleId: 'flex-default',
+        defaultStyle: { flexDirection: 'column', gap: '12px', flex: '1' },
+        children: [
+          { type: 'text', styleId: 'text-default', defaultStyle: { fontSize: '26px', fontWeight: '700', color: '#0c4a6e' }, defaultProps: { content: '李四', name: 'name' } },
+          { type: 'text', styleId: 'text-default', defaultStyle: { fontSize: '16px', color: '#0369a1' }, defaultProps: { content: '全栈工程师', jobTitle: 'jobTitle' } },
+          {
+            type: 'flex', styleId: 'flex-default',
+            defaultStyle: { flexDirection: 'row', gap: '20px', flexWrap: 'wrap', marginTop: '8px' },
+            children: [
+              { type: 'text', styleId: 'text-default', defaultStyle: { fontSize: '14px', color: '#334155' }, defaultProps: { content: '📞 139-0000-0000', phone: 'phone' } },
+              { type: 'text', styleId: 'text-default', defaultStyle: { fontSize: '14px', color: '#334155' }, defaultProps: { content: '📧 lisi@dev.com', email: 'email' } },
+              { type: 'text', styleId: 'text-default', defaultStyle: { fontSize: '14px', color: '#334155' }, defaultProps: { content: '📍 杭州市', birth: 'birth' } },
+            ],
+          },
+        ],
+      },
+      {
+        type: 'image', styleId: 'image-default',
+        defaultStyle: { width: '100px', height: '100px', borderRadius: '50%', border: '3px solid #ffffff', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' },
+        defaultProps: { content: '' },
+      },
+    ],
+  });
 
-// 2. 蓝色渐变（原 HeaderStyle2 优化）
-registerStyle({
-  type: 'header',
-  style: 'header-gradient',
-  label: '蓝色渐变',
-  thumb: headerThumb2,
-  defaultStyle: {
-    display: 'flex',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: '24px',
-    padding: '24px',
-    background: 'linear-gradient(135deg, #e0f2fe 0%, #ffffff 100%)',
-    borderRadius: '16px',
-    border: '1px solid #bae6fd',
-  },
-  defaultChildren: [
-    {
-      type: 'flex',
-      styleId: 'flex-default',
-      defaultStyle: { flexDirection: 'column', gap: '12px', flex: '1' },
-      children: [
-        { type: 'text', styleId: 'text-default', defaultStyle: { fontSize: '26px', fontWeight: '700', color: '#0c4a6e' }, defaultProps: { content: '李四', name: 'name' } },
-        { type: 'text', styleId: 'text-default', defaultStyle: { fontSize: '16px', color: '#0369a1' }, defaultProps: { content: '全栈工程师', jobTitle: 'jobTitle' } },
-        {
-          type: 'flex',
-          styleId: 'flex-default',
-          defaultStyle: { flexDirection: 'row', gap: '20px', flexWrap: 'wrap', marginTop: '8px' },
-          children: [
-            { type: 'text', styleId: 'text-default', defaultStyle: { fontSize: '14px', color: '#334155' }, defaultProps: { content: '📞 139-0000-0000', phone: 'phone' } },
-            { type: 'text', styleId: 'text-default', defaultStyle: { fontSize: '14px', color: '#334155' }, defaultProps: { content: '📧 lisi@dev.com', email: 'email' } },
-            { type: 'text', styleId: 'text-default', defaultStyle: { fontSize: '14px', color: '#334155' }, defaultProps: { content: '📍 杭州市', birth: 'birth' } },
-          ],
-        },
-      ],
+  registerStyle({
+    type: 'header',
+    style: 'header-business',
+    label: '名片风格',
+    thumb: headerThumb3,
+    component: MinimalContainer,  // 新增
+    defaultStyle: {
+      display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '20px',
+      padding: '24px', backgroundColor: '#f8fafc', borderRadius: '12px',
+      border: '1px solid #e2e8f0', boxShadow: '0 4px 6px rgba(0,0,0,0.02)',
     },
-    {
-      type: 'image',
-      styleId: 'image-default',
-      defaultStyle: { width: '100px', height: '100px', borderRadius: '50%', border: '3px solid #ffffff', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' },
-      defaultProps: { content: '' },
-    },
-  ],
-});
+    defaultChildren: [
+      {
+        type: 'flex', styleId: 'flex-default',
+        defaultStyle: { flexDirection: 'column', gap: '8px', flex: '1' },
+        children: [
+          { type: 'text', styleId: 'text-default', defaultStyle: { fontSize: '24px', fontWeight: '700', color: '#1e293b' }, defaultProps: { content: '王五', name: 'name' } },
+          { type: 'text', styleId: 'text-default', defaultStyle: { fontSize: '15px', color: '#475569' }, defaultProps: { content: '高级UI设计师 · 10年经验', jobTitle: 'jobTitle' } },
+          {
+            type: 'flex', styleId: 'flex-default',
+            defaultStyle: { flexDirection: 'row', gap: '20px', marginTop: '8px' },
+            children: [
+              { type: 'text', styleId: 'text-default', defaultStyle: { fontSize: '14px', color: '#64748b' }, defaultProps: { content: '📞 137-1234-5678', phone: 'phone' } },
+              { type: 'text', styleId: 'text-default', defaultStyle: { fontSize: '14px', color: '#64748b' }, defaultProps: { content: '📧 wangwu@design.com', email: 'email' } },
+            ],
+          },
+        ],
+      },
+      {
+        type: 'image', styleId: 'image-default',
+        defaultStyle: { width: '80px', height: '80px', borderRadius: '12px', objectFit: 'cover' },
+        defaultProps: { content: '' },
+      },
+    ],
+  });
 
-// 3. 名片风格（原 HeaderStyle3 优化）
-registerStyle({
-  type: 'header',
-  style: 'header-business',
-  label: '名片风格',
-  thumb: headerThumb3,
-  defaultStyle: {
-    display: 'flex',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: '20px',
-    padding: '24px',
-    backgroundColor: '#f8fafc',
-    borderRadius: '12px',
-    border: '1px solid #e2e8f0',
-    boxShadow: '0 4px 6px rgba(0,0,0,0.02)',
-  },
-  defaultChildren: [
-    {
-      type: 'flex',
-      styleId: 'flex-default',
-      defaultStyle: { flexDirection: 'column', gap: '8px', flex: '1' },
-      children: [
-        { type: 'text', styleId: 'text-default', defaultStyle: { fontSize: '24px', fontWeight: '700', color: '#1e293b' }, defaultProps: { content: '王五', name: 'name' } },
-        { type: 'text', styleId: 'text-default', defaultStyle: { fontSize: '15px', color: '#475569' }, defaultProps: { content: '高级UI设计师 · 10年经验', jobTitle: 'jobTitle' } },
-        {
-          type: 'flex',
-          styleId: 'flex-default',
-          defaultStyle: { flexDirection: 'row', gap: '20px', marginTop: '8px' },
-          children: [
-            { type: 'text', styleId: 'text-default', defaultStyle: { fontSize: '14px', color: '#64748b' }, defaultProps: { content: '📞 137-1234-5678', phone: 'phone' } },
-            { type: 'text', styleId: 'text-default', defaultStyle: { fontSize: '14px', color: '#64748b' }, defaultProps: { content: '📧 wangwu@design.com', email: 'email' } },
-          ],
-        },
-      ],
-    },
-    {
-      type: 'image',
-      styleId: 'image-default',
-      defaultStyle: { width: '80px', height: '80px', borderRadius: '12px', objectFit: 'cover' },
-      defaultProps: { content: '' },
-    },
-  ],
-});
   // ===================== 新版模块模板 =====================
-
-  // 1. 卡片模块
   registerStyle({
     type: 'module',
     style: 'module-card',
     label: '卡片样式',
     thumb: moduleThumb1,
+    component: MinimalContainer,  // 新增
     defaultStyle: {
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '12px',
-      padding: '20px',
-      backgroundColor: '#ffffff',
-      borderRadius: '12px',
-      border: '1px solid #e2e8f0',
+      display: 'flex', flexDirection: 'column', gap: '12px', padding: '20px',
+      backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0',
       boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
     },
     defaultChildren: [
@@ -188,18 +154,15 @@ registerStyle({
     ],
   });
 
-  // 2. 时间线条目样式
   registerStyle({
     type: 'module',
     style: 'module-timeline',
     label: '时间线样式',
     thumb: moduleThumb2,
+    component: MinimalContainer,  // 新增
     defaultStyle: {
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '8px',
-      padding: '16px 0 16px 24px',
-      borderLeft: '3px solid #3b82f6',
+      display: 'flex', flexDirection: 'column', gap: '8px',
+      padding: '16px 0 16px 24px', borderLeft: '3px solid #3b82f6',
     },
     defaultChildren: [
       { type: 'text', styleId: 'text-default', defaultStyle: { fontSize: '14px', color: '#64748b', fontWeight: '600', textTransform: 'uppercase' }, defaultProps: { content: '2020 - 至今' } },
@@ -208,17 +171,14 @@ registerStyle({
     ],
   });
 
-  // 3. 简洁列表模块
   registerStyle({
     type: 'module',
     style: 'module-list',
     label: '简洁列表',
     thumb: moduleThumb3,
+    component: MinimalContainer,  // 新增
     defaultStyle: {
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '12px',
-      padding: '8px 0',
+      display: 'flex', flexDirection: 'column', gap: '12px', padding: '8px 0',
     },
     defaultChildren: [
       { type: 'heading', styleId: 'heading-default', defaultStyle: { fontSize: '20px', fontWeight: '700', color: '#0f172a' }, defaultProps: { content: '技能专长', title: '模块标题' } },
@@ -226,17 +186,14 @@ registerStyle({
     ],
   });
 
-  // 4. 简约无边框模块
   registerStyle({
     type: 'module',
     style: 'module-plain',
     label: '简约无边框',
     thumb: moduleThumb4,
+    component: MinimalContainer,  // 新增
     defaultStyle: {
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '4px',
-      padding: '4px 0',
+      display: 'flex', flexDirection: 'column', gap: '4px', padding: '4px 0',
     },
     defaultChildren: [
       { type: 'heading', styleId: 'heading-default', defaultStyle: { fontSize: '16px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '1px' }, defaultProps: { content: '教育背景', title: '模块标题' } },

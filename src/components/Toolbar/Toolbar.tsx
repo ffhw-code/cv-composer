@@ -1,3 +1,4 @@
+// src/components/Toolbar/Toolbar.tsx
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useResumeStore } from '../../store/useResumeStore';
 import type { ResumeModule } from '../../store/useResumeStore';
@@ -118,7 +119,7 @@ function Toolbar() {
   const [highlightColor, setHighlightColor] = useState('#ffff00');
   const [customFontSize, setCustomFontSize] = useState('16');
   const [imageActive, setImageActive] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);  // 用于插入图片
   const loadFileRef = useRef<HTMLInputElement>(null);
 
   const selectedId = useResumeStore((s) => s.selectedId);
@@ -255,11 +256,10 @@ function Toolbar() {
   const justifyContentOptions = ['flex-start', 'center', 'space-between', 'space-around', 'space-evenly'];
   const alignItemsOptions = ['stretch', 'center', 'flex-start', 'flex-end', 'baseline'];
   const flexWrapOptions = ['nowrap', 'wrap'];
-  // Grid 对齐选项（兼容 CSS Grid 的 justify-items / align-items）
+  // Grid 对齐选项
   const gridJustifyItemsOptions = ['start', 'end', 'center', 'stretch'];
   const gridAlignItemsOptions = ['start', 'end', 'center', 'stretch'];
 
-  // 判断是否为容器（有 children 的模块）
   const isContainer = selectedModule && (selectedModule.children && selectedModule.children.length > 0);
 
   return (
@@ -304,13 +304,12 @@ function Toolbar() {
               />
             )}
 
-            {/* ---------- 容器布局属性（Flex 和 Grid） ---------- */}
+            {/* 容器布局属性 */}
             {isContainer && (
               <>
                 <span className="text-gray-300 mx-1">|</span>
                 <span className="text-gray-500 text-xs">布局</span>
 
-                {/* Flex 专用控件（当容器为 flex 类型时显示，或者默认也显示，因为 header/module 也是 flex） */}
                 {(selectedModule.type === 'flex' || selectedModule.type === 'header' || selectedModule.type === 'module') && (
                   <>
                     <SelectInput
@@ -346,7 +345,6 @@ function Toolbar() {
                   </>
                 )}
 
-                {/* Grid 专用控件 */}
                 {selectedModule.type === 'grid' && (
                   <>
                     <div className="flex items-center gap-1">
