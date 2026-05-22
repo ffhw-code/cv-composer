@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect} from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Highlight from '@tiptap/extension-highlight';

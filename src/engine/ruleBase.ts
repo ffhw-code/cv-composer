@@ -109,6 +109,51 @@ const RULE_BASE: Rule[] = [
 3. 创建新模块时使用 tempId，后续指令通过 tempId 引用。
 4. 指令数组只包含 JSON，不要添加解释文本。`,
   },
+
+  // ========== 组合需求（完整模板） ==========
+  {
+    keywords: ['生成简历头', '创建简历头', '添加一个简历头', '帮我生成一个简历头'],
+    content: `当用户要求生成简历头时，请创建一个完整的带子控件的简历头，而不是空容器。
+示例（经典分栏简历头）：
+[{"action":"addModule","tempId":"header","params":{"type":"header","styleId":"header-classic","style":{"display":"flex","flexDirection":"row","alignItems":"flex-start","gap":"20px","padding":"24px","backgroundColor":"#ffffff","borderRadius":"12px","border":"1px solid #e8ecf1","boxShadow":"0 1px 3px rgba(0,0,0,0.04)"},"children":[{"action":"addModule","tempId":"photo","params":{"type":"image","styleId":"image-default","style":{"width":"100px","height":"130px","borderRadius":"8px","objectFit":"cover"}}},{"action":"addModule","tempId":"infoContainer","params":{"type":"flex","styleId":"flex-default","style":{"flexDirection":"column","gap":"12px","flex":"1"},"children":[{"action":"addModule","params":{"type":"text","styleId":"text-default","style":{"fontSize":"24px","fontWeight":"700","color":"#1a202c"},"content":"姓名"}},{"action":"addModule","params":{"type":"grid","styleId":"grid-default","style":{"gridTemplateColumns":"1fr 1fr","gap":"12px"},"children":[{"action":"addModule","params":{"type":"text","styleId":"text-default","style":{"fontSize":"15px","color":"#4a5568"},"content":"求职意向"}},{"action":"addModule","params":{"type":"text","styleId":"text-default","style":{"fontSize":"15px","color":"#4a5568"},"content":"出生年月"}},{"action":"addModule","params":{"type":"text","styleId":"text-default","style":{"fontSize":"15px","color":"#4a5568"},"content":"电话"}},{"action":"addModule","params":{"type":"text","styleId":"text-default","style":{"fontSize":"15px","color":"#4a5568"},"content":"邮箱"}}]}]}}]}}]`,
+  },
+  {
+    keywords: ['生成简约简历', '创建一个简约的简历', '生成一个简历', '简单简历'],
+    content: `当用户要求生成简约简历时，请创建包含简历头（经典分栏）和至少两个模块（卡片样式）的完整结构。确保每个模块都有默认内容。
+示例指令集（先创建 header，再创建两个 module）：
+[
+  {"action":"addModule","tempId":"header","params":{"type":"header","styleId":"header-classic","style":{...},"children":[...]}},
+  {"action":"addModule","params":{"type":"module","styleId":"module-card","style":{},"title":"教育背景","content":"点击此处编辑..."}},
+  {"action":"addModule","params":{"type":"module","styleId":"module-card","style":{},"title":"工作经历","content":"点击此处编辑..."}}
+]
+具体子控件结构请参考“生成简历头”的示例。`,
+  },
+  {
+    keywords: ['添加一个卡片模块', '添加模块', '教育背景', '工作经历', '技能'],
+    content: `创建卡片样式模块的完整指令示例：
+{"action":"addModule","tempId":"mod1","params":{"type":"module","styleId":"module-card","style":{"display":"flex","flexDirection":"column","gap":"12px","padding":"20px","backgroundColor":"#ffffff","borderRadius":"12px","border":"1px solid #e2e8f0","boxShadow":"0 2px 8px rgba(0,0,0,0.04)"},"children":[{"action":"addModule","params":{"type":"heading","styleId":"heading-default","style":{"fontSize":"20px","fontWeight":"700","color":"#0f172a","paddingBottom":"8px","borderBottom":"2px solid #f1f5f9"},"content":"模块标题"}},{"action":"addModule","params":{"type":"text","styleId":"text-default","style":{"fontSize":"15px","color":"#334155","lineHeight":"1.6"},"content":"点击此处编辑详细内容..."}}]}}`,
+  },
+
+  {
+  keywords: ['极简简历', '最简简历', '只有姓名和电话'],
+  content: `当用户要求极简简历时，直接生成原子指令，不要调用模板。示例：
+[{ "action": "addModule", "params": { "type": "text", "styleId": "text-default", "style": { "fontSize": "24px" }, "content": "姓名" } },
+ { "action": "addModule", "params": { "type": "text", "styleId": "text-default", "content": "电话：138-0000-0000" } }]`,
+},
+
+{
+  keywords: ['复杂指令', '生成模块', '构建简历', '丰富简历', '添加模块'],
+  content: `指令生成自查清单（每次生成指令后必须逐条核对）：
+1. 所有 action: "addModule" 且 type 为 "module"、"header"、"flex"、"grid" 的指令，必须包含 children 数组。
+2. children 不能为空数组 []，至少包含一个子 addModule 指令。
+3. 示例：创建卡片模块的正确指令格式：
+{ "action": "addModule", "params": { "type": "module", "styleId": "module-card", "children": [
+  { "action": "addModule", "params": { "type": "heading", "styleId": "heading-default", "content": "标题" } },
+  { "action": "addModule", "params": { "type": "text", "styleId": "text-default", "content": "内容" } }
+] } }
+4. 如果遗漏 children，引擎将拒绝执行并返回错误。`,
+},
+
 ];
 
 export function retrieveRules(userInput: string): string[] {

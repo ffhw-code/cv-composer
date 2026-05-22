@@ -11,8 +11,7 @@ import {
   useSensors,
   type DragEndEvent,
 } from '@dnd-kit/core';
-import type { DragOverEvent } from '@dnd-kit/core'; 
-
+import type { DragOverEvent } from '@dnd-kit/core';
 import {
   SortableContext,
   verticalListSortingStrategy,
@@ -85,7 +84,6 @@ function CanvasArea({ deleteMode, onExitDeleteMode }: CanvasAreaProps) {
     })
   );
 
-  // 拖拽悬停时高亮嵌套容器
   const handleDragOver = (event: DragOverEvent) => {
     const { over } = event;
     if (!over) {
@@ -197,16 +195,28 @@ function CanvasArea({ deleteMode, onExitDeleteMode }: CanvasAreaProps) {
         (mod.children && mod.children.length > 0);
 
       if (isContainer) {
-        const direction = (mod.style?.flexDirection as 'row' | 'column') || 'column';
-        const gap = mod.style?.gap || '16px';
+        // 处理布局方向，断言为正确的类型
+        const style = mod.style || {};
+        const display = style.display || (mod.type === 'grid' ? 'grid' : 'flex');
+        const flexDirection =
+          mod.type === 'grid'
+            ? undefined
+            : ((style.flexDirection as 'row' | 'column' | 'row-reverse' | 'column-reverse') || 'column');
+        const gap = style.gap || '16px';
+
         const containerStyle: React.CSSProperties = {
-          display: mod.type === 'grid' ? 'grid' : 'flex',
-          flexDirection: mod.type === 'grid' ? undefined : direction,
+          display,
+          flexDirection,
           gap,
           ...mod.style,
         };
 
-        // 拖拽悬停高亮样式
+        // 强制 module 容器使用弹性列布局
+        if (mod.type === 'module') {
+          containerStyle.display = 'flex';
+          containerStyle.flexDirection = containerStyle.flexDirection || 'column';
+        }
+
         const highlightClass = isDropHighlight
           ? 'ring-2 ring-blue-400 ring-offset-2'
           : '';
@@ -243,7 +253,7 @@ function CanvasArea({ deleteMode, onExitDeleteMode }: CanvasAreaProps) {
               </div>
             )}
             <div
-              className={`border border-dashed border-gray-300 min-h-[60px] p-2 ${highlightClass}`}
+              className={`border border-dashed border-gray-300 min-h-[60px] p-2 ${highlightClass} ${mod.type === 'module' ? 'flex flex-col' : ''}`}
               style={containerStyle}
               data-id={mod.id}
             >
