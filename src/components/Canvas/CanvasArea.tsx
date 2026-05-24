@@ -47,6 +47,8 @@ function getAllSortableIds(modules: ResumeModule[]): string[] {
 function CanvasArea({ deleteMode, onExitDeleteMode }: CanvasAreaProps) {
   const modules = useResumeStore((s) => s.modules);
   const selectedId = useResumeStore((s) => s.selectedId);
+  const pagePadding = useResumeStore((s) => s.pagePadding);
+  const pageGap = useResumeStore((s) => s.pageGap);
   const select = useResumeStore((s) => s.select);
   const removeModule = useResumeStore((s) => s.removeModule);
   const moveModule = useResumeStore((s) => s.moveModule);
@@ -324,10 +326,12 @@ function CanvasArea({ deleteMode, onExitDeleteMode }: CanvasAreaProps) {
       <div className="h-full overflow-y-auto p-6 flex justify-center">
         <div
           id="resume-preview"
-          className="bg-white shadow-lg p-10 flex flex-col gap-4"
+          className="bg-white shadow-lg flex flex-col"
           style={{
             width: '794px',
             minHeight: `${PAGE_HEIGHT}px`,
+            padding: pagePadding,
+            gap: pageGap,
             transform: `scale(${scale})`,
             transformOrigin: 'top center',
             marginBottom: scale > 1 ? `${(scale - 1) * PAGE_HEIGHT}px` : '0',

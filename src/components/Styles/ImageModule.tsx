@@ -5,7 +5,7 @@ import type { ResumeModule } from '../../store/useResumeStore';
 export default function ImageModule({ module }: { module: ResumeModule }) {
   const updateModule = useResumeStore((s) => s.updateModule);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [dragging, setDragging] = useState(false);
+  const [_dragging, setDragging] = useState(false);
   const startPos = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
 
   const imageData = module.content || '';

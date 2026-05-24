@@ -283,7 +283,7 @@ ${labelList}
 });
 
 // 8. 导入简历文件（AI 动态生成完整简历结构，强化内容填充）
-registerSkill('import-resume', async (params, ctx) => {
+registerSkill('import-resume', async (_params, ctx) => {
   const uploaded = (window as any).__uploadedFile as {
     base64: string;
     fileName: string;

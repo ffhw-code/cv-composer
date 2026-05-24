@@ -119,12 +119,18 @@ function Toolbar() {
   const [highlightColor, setHighlightColor] = useState('#ffff00');
   const [customFontSize, setCustomFontSize] = useState('16');
   const [imageActive, setImageActive] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);  // 用于插入图片
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const loadFileRef = useRef<HTMLInputElement>(null);
 
   const selectedId = useResumeStore((s) => s.selectedId);
   const modules = useResumeStore((s) => s.modules);
   const { activeEditor } = useActiveEditor();
+
+  // 页面设置
+  const pagePadding = useResumeStore((s) => s.pagePadding);
+  const pageGap = useResumeStore((s) => s.pageGap);
+  const setPagePadding = useResumeStore((s) => s.setPagePadding);
+  const setPageGap = useResumeStore((s) => s.setPageGap);
 
   const selectedModule = selectedId ? findModuleById(modules, selectedId) : null;
 
@@ -278,6 +284,7 @@ function Toolbar() {
       {/* 右侧工具容器 */}
       <div className="flex-1 min-h-full flex items-center bg-gray-50 border-l border-gray-200 px-3 gap-2 justify-between overflow-x-auto flex-wrap">
         {selectedId && selectedModule ? (
+          /* ---------- 属性编辑模式 ---------- */
           <div className="flex items-center gap-2 text-xs flex-wrap py-1">
             <span className="text-gray-700 font-bold mr-1">
               {selectedModule.type === 'header' ? '简历头' : selectedModule.type === 'module' ? '模块' : selectedModule.type}
@@ -392,94 +399,103 @@ function Toolbar() {
           </div>
         ) : (
           /* ---------- TipTap 文本编辑 / 插入工具 ---------- */
-          <div className="flex items-center gap-2 flex-wrap">
-            {activeTool === 'edit' && (
-              <>
-                <button onMouseDown={exec(() => chain()?.toggleBold().run())} className="px-2 py-1 text-xs font-bold hover:bg-gray-200 rounded" title="加粗">B</button>
-                <button onMouseDown={exec(() => chain()?.toggleItalic().run())} className="px-2 py-1 text-xs italic hover:bg-gray-200 rounded" title="斜体">I</button>
-                <button onMouseDown={exec(() => chain()?.toggleUnderline().run())} className="px-2 py-1 text-xs underline hover:bg-gray-200 rounded" title="下划线">U</button>
-                <button onMouseDown={exec(() => chain()?.toggleStrike().run())} className="px-2 py-1 text-xs line-through hover:bg-gray-200 rounded" title="删除线">S</button>
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              {activeTool === 'edit' && (
+                <>
+                  <button onMouseDown={exec(() => chain()?.toggleBold().run())} className="px-2 py-1 text-xs font-bold hover:bg-gray-200 rounded" title="加粗">B</button>
+                  <button onMouseDown={exec(() => chain()?.toggleItalic().run())} className="px-2 py-1 text-xs italic hover:bg-gray-200 rounded" title="斜体">I</button>
+                  <button onMouseDown={exec(() => chain()?.toggleUnderline().run())} className="px-2 py-1 text-xs underline hover:bg-gray-200 rounded" title="下划线">U</button>
+                  <button onMouseDown={exec(() => chain()?.toggleStrike().run())} className="px-2 py-1 text-xs line-through hover:bg-gray-200 rounded" title="删除线">S</button>
 
-                <span className="text-gray-300 text-xs">|</span>
+                  <span className="text-gray-300 text-xs">|</span>
 
-                <select className="text-xs border border-gray-300 rounded py-0.5 px-1"
-                  onChange={(e) => activeEditor?.chain().focus().setFontFamily(e.target.value).run()}
-                  value={activeEditor?.getAttributes('textStyle').fontFamily || ''}
-                >
-                  <option value="" disabled>字体</option>
-                  {fontFamilyOptions.map((font) => <option key={font} value={font}>{font}</option>)}
-                </select>
-
-                <span className="flex items-center gap-1">
                   <select className="text-xs border border-gray-300 rounded py-0.5 px-1"
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      if (val) {
-                        setCustomFontSize(val);
-                        activeEditor?.chain().focus().setFontSize(val + 'px').run();
-                      }
-                    }}
-                    value=""
+                    onChange={(e) => activeEditor?.chain().focus().setFontFamily(e.target.value).run()}
+                    value={activeEditor?.getAttributes('textStyle').fontFamily || ''}
                   >
-                    <option value="" disabled>字号</option>
-                    {FONT_SIZE_PRESETS.map((size) => <option key={size} value={size}>{size}</option>)}
+                    <option value="" disabled>字体</option>
+                    {fontFamilyOptions.map((font) => <option key={font} value={font}>{font}</option>)}
                   </select>
-                  <input type="number" min="1" className="w-12 text-xs border border-gray-300 rounded py-0.5 px-1" placeholder="自定义"
-                    value={customFontSize}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setCustomFontSize(val);
-                      const num = parseInt(val, 10);
-                      if (!isNaN(num) && num > 0) activeEditor?.chain().focus().setFontSize(num + 'px').run();
-                    }}
-                  />
-                </span>
 
-                <span className="text-gray-300 text-xs">|</span>
-
-                <div className="flex items-center gap-1">
-                  <input type="color" value={textColor} onChange={(e) => { setTextColor(e.target.value); activeEditor?.chain().focus().setColor(e.target.value).run(); }} className="w-5 h-5 border border-gray-300 rounded cursor-pointer p-0" title="文字颜色" />
-                  <input type="color" value={highlightColor} onChange={(e) => { setHighlightColor(e.target.value); activeEditor?.chain().focus().toggleHighlight({ color: e.target.value }).run(); }} className="w-5 h-5 border border-gray-300 rounded cursor-pointer p-0" title="背景高亮" />
-                </div>
-
-                <span className="text-gray-300 text-xs">|</span>
-
-                <button onMouseDown={exec(() => chain()?.setTextAlign('left').run())} className="px-1.5 py-0.5 text-xs hover:bg-gray-200 rounded" title="左对齐">⫷</button>
-                <button onMouseDown={exec(() => chain()?.setTextAlign('center').run())} className="px-1.5 py-0.5 text-xs hover:bg-gray-200 rounded" title="居中">⫸</button>
-                <button onMouseDown={exec(() => chain()?.setTextAlign('right').run())} className="px-1.5 py-0.5 text-xs hover:bg-gray-200 rounded" title="右对齐">⫹</button>
-                <button onMouseDown={exec(() => chain()?.setTextAlign('justify').run())} className="px-1.5 py-0.5 text-xs hover:bg-gray-200 rounded" title="两端对齐">☰</button>
-
-                <span className="text-gray-300 text-xs">|</span>
-
-                <button onMouseDown={exec(() => chain()?.toggleBulletList().run())} className="px-1.5 py-0.5 text-xs hover:bg-gray-200 rounded" title="无序列表">•</button>
-                <button onMouseDown={exec(() => chain()?.toggleOrderedList().run())} className="px-1.5 py-0.5 text-xs hover:bg-gray-200 rounded" title="有序列表">1.</button>
-
-                {imageActive && (
-                  <>
-                    <span className="text-gray-300 text-xs">|</span>
-                    <ImageSizeInputs
-                      width={activeEditor?.getAttributes('resizableImage').width || ''}
-                      height={activeEditor?.getAttributes('resizableImage').height || ''}
-                      onWidthChange={(val) => {
-                        if (val === '') activeEditor?.chain().focus().updateAttributes('resizableImage', { width: null }).run();
-                        else activeEditor?.chain().focus().updateAttributes('resizableImage', { width: val }).run();
+                  <span className="flex items-center gap-1">
+                    <select className="text-xs border border-gray-300 rounded py-0.5 px-1"
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val) {
+                          setCustomFontSize(val);
+                          activeEditor?.chain().focus().setFontSize(val + 'px').run();
+                        }
                       }}
-                      onHeightChange={(val) => {
-                        if (val === '') activeEditor?.chain().focus().updateAttributes('resizableImage', { height: null }).run();
-                        else activeEditor?.chain().focus().updateAttributes('resizableImage', { height: val }).run();
+                      value=""
+                    >
+                      <option value="" disabled>字号</option>
+                      {FONT_SIZE_PRESETS.map((size) => <option key={size} value={size}>{size}</option>)}
+                    </select>
+                    <input type="number" min="1" className="w-12 text-xs border border-gray-300 rounded py-0.5 px-1" placeholder="自定义"
+                      value={customFontSize}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setCustomFontSize(val);
+                        const num = parseInt(val, 10);
+                        if (!isNaN(num) && num > 0) activeEditor?.chain().focus().setFontSize(num + 'px').run();
                       }}
                     />
-                  </>
-                )}
-              </>
-            )}
+                  </span>
 
-            {activeTool === 'insert' && (
-              <>
-                <button onMouseDown={(e) => { e.preventDefault(); insertImage(); }} className="px-2 py-1 text-xs hover:bg-gray-100 rounded">图片</button>
-                <button onMouseDown={(e) => { e.preventDefault(); insertLink(); }} className="px-2 py-1 text-xs hover:bg-gray-100 rounded">超链接</button>
-              </>
-            )}
+                  <span className="text-gray-300 text-xs">|</span>
+
+                  <div className="flex items-center gap-1">
+                    <input type="color" value={textColor} onChange={(e) => { setTextColor(e.target.value); activeEditor?.chain().focus().setColor(e.target.value).run(); }} className="w-5 h-5 border border-gray-300 rounded cursor-pointer p-0" title="文字颜色" />
+                    <input type="color" value={highlightColor} onChange={(e) => { setHighlightColor(e.target.value); activeEditor?.chain().focus().toggleHighlight({ color: e.target.value }).run(); }} className="w-5 h-5 border border-gray-300 rounded cursor-pointer p-0" title="背景高亮" />
+                  </div>
+
+                  <span className="text-gray-300 text-xs">|</span>
+
+                  <button onMouseDown={exec(() => chain()?.setTextAlign('left').run())} className="px-1.5 py-0.5 text-xs hover:bg-gray-200 rounded" title="左对齐">⫷</button>
+                  <button onMouseDown={exec(() => chain()?.setTextAlign('center').run())} className="px-1.5 py-0.5 text-xs hover:bg-gray-200 rounded" title="居中">⫸</button>
+                  <button onMouseDown={exec(() => chain()?.setTextAlign('right').run())} className="px-1.5 py-0.5 text-xs hover:bg-gray-200 rounded" title="右对齐">⫹</button>
+                  <button onMouseDown={exec(() => chain()?.setTextAlign('justify').run())} className="px-1.5 py-0.5 text-xs hover:bg-gray-200 rounded" title="两端对齐">☰</button>
+
+                  <span className="text-gray-300 text-xs">|</span>
+
+                  <button onMouseDown={exec(() => chain()?.toggleBulletList().run())} className="px-1.5 py-0.5 text-xs hover:bg-gray-200 rounded" title="无序列表">•</button>
+                  <button onMouseDown={exec(() => chain()?.toggleOrderedList().run())} className="px-1.5 py-0.5 text-xs hover:bg-gray-200 rounded" title="有序列表">1.</button>
+
+                  {imageActive && (
+                    <>
+                      <span className="text-gray-300 text-xs">|</span>
+                      <ImageSizeInputs
+                        width={activeEditor?.getAttributes('resizableImage').width || ''}
+                        height={activeEditor?.getAttributes('resizableImage').height || ''}
+                        onWidthChange={(val) => {
+                          if (val === '') activeEditor?.chain().focus().updateAttributes('resizableImage', { width: null }).run();
+                          else activeEditor?.chain().focus().updateAttributes('resizableImage', { width: val }).run();
+                        }}
+                        onHeightChange={(val) => {
+                          if (val === '') activeEditor?.chain().focus().updateAttributes('resizableImage', { height: null }).run();
+                          else activeEditor?.chain().focus().updateAttributes('resizableImage', { height: val }).run();
+                        }}
+                      />
+                    </>
+                  )}
+                </>
+              )}
+
+              {activeTool === 'insert' && (
+                <>
+                  <button onMouseDown={(e) => { e.preventDefault(); insertImage(); }} className="px-2 py-1 text-xs hover:bg-gray-100 rounded">图片</button>
+                  <button onMouseDown={(e) => { e.preventDefault(); insertLink(); }} className="px-2 py-1 text-xs hover:bg-gray-100 rounded">超链接</button>
+                </>
+              )}
+            </div>
+
+            {/* 页面设置：独立一行，放在编辑操作下方 */}
+            <div className="flex items-center gap-2 text-xs flex-wrap">
+              <span className="text-gray-500">页面设置</span>
+              <StyleInputWithUnit label="边距" value={pagePadding} onChange={setPagePadding} unit="px" options={['20', '30', '40', '50', '60']} />
+              <StyleInputWithUnit label="间距" value={pageGap} onChange={setPageGap} unit="px" options={['8', '12', '16', '20', '24']} />
+            </div>
           </div>
         )}
 

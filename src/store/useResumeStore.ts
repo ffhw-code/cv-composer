@@ -25,6 +25,10 @@ interface ResumeStore {
   selectedId: string | null;
   past: ResumeModule[][];
   future: ResumeModule[][];
+  pagePadding: string;
+  pageGap: string;
+  setPagePadding: (value: string) => void;
+  setPageGap: (value: string) => void;
 
   addModule: (parentId: string | null, type: ResumeModule['type'], styleId?: string) => void;
   addModuleFromTemplate: (parentId: string | null, type: ResumeModule['type'], styleId: string) => void;
@@ -180,6 +184,10 @@ export const useResumeStore = create<ResumeStore>((set, get) => {
     selectedId: null,
     past: [],
     future: [],
+    pagePadding: '40px',
+    pageGap: '16px',
+    setPagePadding: (value: string) => set({ pagePadding: value }),
+    setPageGap: (value: string) => set({ pageGap: value }),
 
     // 基础添加（用于叶子控件）
     addModule: (parentId, type, styleId) => {

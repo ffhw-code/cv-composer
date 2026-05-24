@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect} from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Highlight from '@tiptap/extension-highlight';
@@ -15,7 +15,6 @@ import type { ResumeModule } from '../../store/useResumeStore';
 function TextControl({ module }: { module: ResumeModule }) {
   const updateModule = useResumeStore((s) => s.updateModule);
   const { setActiveEditor } = useActiveEditor();
-  const editorRef = useRef<HTMLDivElement>(null);
 
   const editor = useEditor({
     extensions: [
