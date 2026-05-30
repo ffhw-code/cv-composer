@@ -158,7 +158,7 @@ function buildChildren(childrenCmds: Command[], parentId: string, idMap: IdMap):
       const childId = generateId();
       if (childCmd.tempId) idMap.set(childCmd.tempId, childId);
       const resolvedType = correctType(childParams.type);
-      if (!resolvedType) continue;
+      if (!resolvedType) throw new Error(`无效的子模块类型: "${childParams.type}"，无法构建模块树`);
       const resolvedStyleId = childParams.styleId ? matchStyleId(resolvedType, childParams.styleId) : null;
       const childMod: ResumeModule = {
         id: childId,

@@ -1,12 +1,6 @@
 import { useEffect } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
-import StarterKit from '@tiptap/starter-kit';
-import Highlight from '@tiptap/extension-highlight';
-import TextAlign from '@tiptap/extension-text-align';
-import FontFamily from '@tiptap/extension-font-family';
-import { TextStyle } from '@tiptap/extension-text-style';
-import Color from '@tiptap/extension-color';
-import FontSize from '../../tiptap/fontSize'; // 导入自定义扩展
+import { getInlineExtensions } from '../../tiptap/editorExtensions';
 import { useActiveEditor } from '../../hooks/useActiveEditor';
 
 interface InlineEditorProps {
@@ -19,15 +13,7 @@ export default function InlineEditor({ content, onUpdate, className = '' }: Inli
   const { setActiveEditor } = useActiveEditor();
 
   const editor = useEditor({
-    extensions: [
-      StarterKit.configure({ heading: false }),
-      Highlight.configure({ multicolor: true }),
-      TextAlign.configure({ types: ['paragraph'] }),
-      FontFamily,
-      TextStyle,
-      Color,
-      FontSize,
-    ],
+    extensions: getInlineExtensions(),
     content: content || '',
     editorProps: {
       attributes: {

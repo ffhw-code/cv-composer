@@ -1,11 +1,11 @@
-import { useContext } from 'react';
-import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { ModuleRenderContext } from '../Canvas/ModuleRenderContext';
 import type { ResumeModule } from '../../store/useResumeStore';
 
-function GridContainer({ module }: { module: ResumeModule }) {
-  const renderModule = useContext(ModuleRenderContext);
-  const childIds = module.children?.map(c => c.id) || [];
+interface GridContainerProps {
+  module: ResumeModule;
+  children?: React.ReactNode;
+}
+
+function GridContainer({ module, children }: GridContainerProps) {
   const columns = module.style?.gridTemplateColumns || '1fr 1fr';
   const rows = module.style?.gridTemplateRows || 'auto';
   const gap = module.style?.gap || '16px';
@@ -24,10 +24,8 @@ function GridContainer({ module }: { module: ResumeModule }) {
       style={containerStyle}
       data-id={module.id}
     >
-      {childIds.length > 0 ? (
-        <SortableContext items={childIds} strategy={verticalListSortingStrategy}>
-          {module.children?.map(child => renderModule(child))}
-        </SortableContext>
+      {children ? (
+        children
       ) : (
         <p className="text-gray-400 text-sm">拖入模块或控件到网格</p>
       )}

@@ -165,8 +165,9 @@ export async function parseResumeFile(file: File): Promise<ParsedResume> {
   let messages: any[];
   const fileType = file.type;
 
-  if (fileType === 'application/pdf') {
-    throw new Error('PDF 暂不支持直接解析，请将 PDF 转为图片（如 PNG/JPG）后上传');
+  if (fileType === 'application/pdf' ||
+      fileType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+    throw new Error('PDF/Word 文件暂不支持，请先将简历转为 PNG 或 JPG 图片后上传');
   } else if (isImage) {
     const base64 = await readFileAsBase64(file);
     // ★ 核心修复：补全 data URI 前缀，确保视觉模型能识别
@@ -182,13 +183,9 @@ export async function parseResumeFile(file: File): Promise<ParsedResume> {
         ],
       },
     ];
-  } else if (
-    fileType === 'text/plain' ||
-    fileType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-  ) {
+  } else if (fileType === 'text/plain') {
     const fileContent = await readFileAsText(file);
     const fullText = `${buildPrompt()}\n\n简历文件内容：\n${fileContent}`;
-    // 自适应：视觉模型用数组，文本模型用字符串
     messages = [
       {
         role: 'user',
@@ -196,7 +193,7 @@ export async function parseResumeFile(file: File): Promise<ParsedResume> {
       },
     ];
   } else {
-    throw new Error('不支持的文件格式，请上传图片或 Word 文件');
+    throw new Error('不支持的文件格式，请上传 PNG/JPG 图片或 TXT 文本文件');
   }
 
   return callApi(baseUrl, config.apiKey, model, messages);

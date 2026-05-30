@@ -282,7 +282,157 @@ ${labelList}
   return `智能填充完成，已更新 ${commands.length} 个模块。`;
 });
 
-// 8. 导入简历文件（AI 动态生成完整简历结构，强化内容填充）
+// 从 ParsedResume 动态生成指令数组（不依赖模板，有几个字段创建几个控件）
+function buildResumeCommands(parsed: any): Command[] {
+  function esc(str: string): string {
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  const commands: Command[] = [];
+
+  // --- 收集 header 信息字段（仅包含有数据的） ---
+  const infoFields: { label: string; value: string }[] = [];
+  if (parsed.jobTitle) infoFields.push({ label: '求职意向', value: parsed.jobTitle });
+  if (parsed.birth) infoFields.push({ label: '出生年月', value: parsed.birth });
+  if (parsed.phone) infoFields.push({ label: '电话', value: parsed.phone });
+  if (parsed.email) infoFields.push({ label: '邮箱', value: parsed.email });
+
+  // --- 构建 header 的 info grid（仅当有字段时） ---
+  const gridChildren: Command[] = infoFields.map((f, i) => ({
+    action: 'addModule' as const,
+    tempId: `h-field-${i}`,
+    params: {
+      type: 'text',
+      styleId: 'text-default',
+      style: { fontSize: '15px', color: '#4a5568' },
+      content: `<p>${esc(f.label)}：${esc(f.value)}</p>`,
+    },
+  }));
+
+  // --- 构建 header 信息容器子控件 ---
+  const infoFlexChildren: Command[] = [];
+
+  if (parsed.name) {
+    infoFlexChildren.push({
+      action: 'addModule' as const,
+      tempId: 'h-name',
+      params: {
+        type: 'text',
+        styleId: 'text-default',
+        style: { fontSize: '24px', fontWeight: '700', color: '#1a202c' },
+        content: `<p>${esc(parsed.name)}</p>`,
+        name: parsed.name,
+      },
+    });
+  }
+
+  if (gridChildren.length > 0) {
+    const cols = gridChildren.length === 1 ? '1fr' : '1fr 1fr';
+    infoFlexChildren.push({
+      action: 'addModule' as const,
+      tempId: 'h-grid',
+      params: {
+        type: 'grid',
+        styleId: 'grid-default',
+        style: { gridTemplateColumns: cols, gap: '12px' },
+        children: gridChildren,
+      },
+    });
+  }
+
+  // --- header 容器 ---
+  const headerChildren: Command[] = [
+    {
+      action: 'addModule' as const,
+      tempId: 'h-img',
+      params: {
+        type: 'image',
+        styleId: 'image-default',
+        style: { width: '100px', height: '130px', borderRadius: '8px', objectFit: 'cover' },
+        content: '',
+      },
+    },
+  ];
+
+  if (infoFlexChildren.length > 0) {
+    headerChildren.push({
+      action: 'addModule' as const,
+      tempId: 'h-info',
+      params: {
+        type: 'flex',
+        styleId: 'flex-default',
+        style: { flexDirection: 'column', gap: '12px', flex: '1' },
+        children: infoFlexChildren,
+      },
+    });
+  }
+
+  commands.push({
+    action: 'addModule',
+    tempId: 'header',
+    params: {
+      type: 'header',
+      styleId: 'header-classic',
+      style: {
+        display: 'flex', flexDirection: 'row', alignItems: 'flex-start', gap: '20px',
+        padding: '24px', backgroundColor: '#ffffff', borderRadius: '12px',
+        border: '1px solid #e8ecf1', boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+      },
+      children: headerChildren,
+    },
+  });
+
+  // --- 模块容器（每个 parsed.modules 条目一个） ---
+  const moduleStyles = [
+    { id: 'module-card', style: { display: 'flex', flexDirection: 'column', gap: '12px', padding: '20px', backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' } as Record<string, string> },
+    { id: 'module-timeline', style: { display: 'flex', flexDirection: 'column', gap: '10px', padding: '16px 0 16px 24px', borderLeft: '4px solid #3b82f6' } as Record<string, string> },
+  ];
+
+  const modules = parsed.modules || [];
+  for (let i = 0; i < modules.length; i++) {
+    const mod = modules[i];
+    const sty = moduleStyles[i % moduleStyles.length];
+    const raw = (mod.content || '').trim();
+    const isList = raw.startsWith('<ul') || raw.startsWith('<ol') || raw.startsWith('- ') || raw.startsWith('• ');
+
+    const modChildren: Command[] = [
+      {
+        action: 'addModule',
+        tempId: `mod-${i}-h`,
+        params: {
+          type: 'heading',
+          styleId: 'heading-default',
+          style: { fontSize: '20px', fontWeight: '700', color: '#0f172a', paddingBottom: '8px', borderBottom: '2px solid #f1f5f9' },
+          content: `<p>${esc(mod.title)}</p>`,
+        },
+      },
+      {
+        action: 'addModule',
+        tempId: `mod-${i}-t`,
+        params: {
+          type: isList ? 'list' : 'text',
+          styleId: isList ? 'list-default' : 'text-default',
+          style: { fontSize: '15px', color: '#334155', lineHeight: '1.6' },
+          content: mod.content || '<p></p>',
+        },
+      },
+    ];
+
+    commands.push({
+      action: 'addModule',
+      tempId: `mod-${i}`,
+      params: {
+        type: 'module',
+        styleId: sty.id,
+        style: sty.style,
+        children: modChildren,
+      },
+    });
+  }
+
+  return commands;
+}
+
 registerSkill('import-resume', async (_params, ctx) => {
   const uploaded = (window as any).__uploadedFile as {
     base64: string;
@@ -305,8 +455,9 @@ registerSkill('import-resume', async (_params, ctx) => {
     return '文件过大，请压缩到 5MB 以内或转为图片后上传。';
   }
 
-  if (fileType === 'application/pdf') {
-    return '暂不支持直接导入 PDF，请将 PDF 转为图片（PNG/JPG）后上传。';
+  if (fileType === 'application/pdf' ||
+      fileType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+    return 'PDF/Word 文件暂不支持，请先将简历转为 PNG 或 JPG 图片后上传。';
   }
 
   let parseResumeFile: (file: File) => Promise<any>;
@@ -328,112 +479,19 @@ registerSkill('import-resume', async (_params, ctx) => {
   }
 
   if (!parsed) return '解析结果为空。';
-
-  // 获取可用样式
-  const { getStylesByType } = await import('../store/styleRegistry');
-  const availableTypes = ['header', 'module', 'text', 'heading', 'list', 'image', 'flex', 'grid'];
-  const availableStyles: Record<string, string[]> = {};
-  for (const t of availableTypes) {
-    availableStyles[t] = getStylesByType(t as any).map(s => s.style);
-  }
-
-  const systemPrompt = `你是简历生成专家。从文件中提取了以下信息：
-${JSON.stringify(parsed, null, 2)}
-
-你可以使用以下模块类型和样式构建简历：
-${JSON.stringify(availableStyles, null, 2)}
-
-请生成完整的指令数组来构建这份简历。
-
-**严格规则（必须完全遵守）：**
-1. 所有文本/标题的 content 必须使用提取信息中的具体文字，禁止使用任何占位符（如“列表项”、“点击此处编辑...”）。
-2. 如果提取信息中包含 modules 数组，每个 module 必须对应一个 module 容器，其 children 包含 heading（模块标题）和 text 或 list（模块内容）。
-3. 如果 module 内容是列表（如技能、荣誉），使用 list 类型，content 用 HTML 列表格式（<ul><li>...</li></ul>）。
-4. header 必须包含 image（照片，可为空）和 flex 容器，flex 内放置 name、jobTitle、birth、phone、email 等字段，每个字段一个 text。
-5. 只输出 JSON 数组，不要任何解释文字。
-
-**示例（请严格按照此结构生成）：**
-[
-  {
-    "action": "addModule",
-    "params": {
-      "type": "header",
-      "styleId": "header-classic",
-      "style": {
-        "display": "flex",
-        "flexDirection": "row",
-        "alignItems": "flex-start",
-        "gap": "20px",
-        "padding": "24px",
-        "backgroundColor": "#ffffff",
-        "borderRadius": "12px",
-        "border": "1px solid #e8ecf1",
-        "boxShadow": "0 1px 3px rgba(0,0,0,0.04)"
-      },
-      "children": [
-        {
-          "action": "addModule",
-          "params": { "type": "image", "styleId": "image-default", "style": { "width": "100px", "height": "130px", "borderRadius": "8px", "objectFit": "cover" }, "content": "" }
-        },
-        {
-          "action": "addModule",
-          "params": {
-            "type": "flex",
-            "styleId": "flex-default",
-            "style": { "flexDirection": "column", "gap": "12px", "flex": "1" },
-            "children": [
-              { "action": "addModule", "params": { "type": "text", "styleId": "text-default", "style": { "fontSize": "24px", "fontWeight": "700", "color": "#1a202c" }, "content": "<p>张三</p>", "name": "张三" } },
-              { "action": "addModule", "params": { "type": "text", "styleId": "text-default", "style": { "fontSize": "15px", "color": "#4a5568" }, "content": "<p>求职意向：前端工程师</p>", "jobTitle": "前端工程师" } },
-              { "action": "addModule", "params": { "type": "text", "styleId": "text-default", "style": { "fontSize": "15px", "color": "#4a5568" }, "content": "<p>📞 138-0000-0000</p>", "phone": "138-0000-0000" } },
-              { "action": "addModule", "params": { "type": "text", "styleId": "text-default", "style": { "fontSize": "15px", "color": "#4a5568" }, "content": "<p>📧 zhang@example.com</p>", "email": "zhang@example.com" } }
-            ]
-          }
-        }
-      ]
-    }
-  },
-  {
-    "action": "addModule",
-    "params": {
-      "type": "module",
-      "styleId": "module-card",
-      "style": { "display": "flex", "flexDirection": "column", "gap": "12px", "padding": "20px", "backgroundColor": "#ffffff", "borderRadius": "12px", "border": "1px solid #e2e8f0", "boxShadow": "0 2px 8px rgba(0,0,0,0.04)" },
-      "children": [
-        { "action": "addModule", "params": { "type": "heading", "styleId": "heading-default", "style": { "fontSize": "20px", "fontWeight": "700", "color": "#0f172a", "paddingBottom": "8px", "borderBottom": "2px solid #f1f5f9" }, "content": "<p>教育背景</p>" } },
-        { "action": "addModule", "params": { "type": "text", "styleId": "text-default", "style": { "fontSize": "15px", "color": "#334155", "lineHeight": "1.6" }, "content": "<p>清华大学 计算机科学与技术 本科 2020-2024</p>" } }
-      ]
-    }
-  }
-]`;
-
-  const aiReply = await ctx.callAiForSmartFill(systemPrompt, '请生成完整的简历构建指令数组');
-
-  let commands: Command[] | null = null;
-  let cleaned = aiReply.replace(/```json\s*|\s*```/g, '').trim();
-  try {
-    commands = JSON5.parse(cleaned);
-  } catch {
-    try {
-      commands = JSON.parse(cleaned);
-    } catch {
-      const fixed = cleaned.replace(/,\s*([}\]])/g, '$1');
-      try {
-        commands = JSON5.parse(fixed);
-      } catch (e: any) {
-        return `生成指令解析失败：${e.message}`;
-      }
-    }
-  }
-
-  if (!Array.isArray(commands)) return 'AI 返回格式错误，请重试。';
+  // 从解析数据动态生成指令（不依赖模板，有几个字段创建几个控件）
+  const commands = buildResumeCommands(parsed);
+  console.log('[import-resume] 动态生成指令数:', commands.length);
 
   const result = executeCommands(ctx.modules, commands);
+  console.log('[import-resume] 生成的模块数:', result.newModules.length);
   if (result.errors.length > 0) {
     return `构建简历时出错：${result.errors.join('; ')}`;
   }
 
   ctx.importModules(result.newModules);
-  return '简历导入完成，已根据文件内容动态构建。';
+  return `简历导入完成，已导入 ${result.newModules.length} 个模块。`;
+
 });
 
 // 辅助：base64 转 Blob（清理后转换）

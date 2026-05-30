@@ -2,7 +2,7 @@
 import type { FC } from 'react';
 import type { ResumeModule } from './useResumeStore';
 
-export type StyleComponentProps = { module: ResumeModule };
+export type StyleComponentProps = { module: ResumeModule; children?: React.ReactNode };
 export type ModuleType = ResumeModule['type'];
 
 export interface ChildTemplate {
@@ -13,9 +13,6 @@ export interface ChildTemplate {
   children?: ChildTemplate[];
 }
 
-// 分解器：接收父模块 ID，返回子模块数组
-export type Decomposer = (parentId: string) => ResumeModule[];
-
 export interface StyleConfig {
   type: ModuleType;
   style: string;
@@ -24,8 +21,7 @@ export interface StyleConfig {
   component?: FC<StyleComponentProps>;
   defaultContent?: Partial<ResumeModule>;
   defaultStyle?: Record<string, string>;
-  defaultChildren?: ChildTemplate[];          // 保留向后兼容，但新样式将使用 decomposer
-  decomposer?: Decomposer;                   // 新增：精确分解器
+  defaultChildren?: ChildTemplate[];
 }
 
 const styleRegistry: StyleConfig[] = [];

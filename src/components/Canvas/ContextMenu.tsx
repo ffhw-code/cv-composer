@@ -12,7 +12,6 @@ interface ContextMenuProps {
 function ContextMenu({ x, y, module, onClose }: ContextMenuProps) {
   const removeModule = useResumeStore((s) => s.removeModule);
   const updateModule = useResumeStore((s) => s.updateModule);
-  const decomposeModule = useResumeStore((s) => s.decomposeModule);
 
   const handleDelete = () => { removeModule(module.id); onClose(); };
 
@@ -21,10 +20,6 @@ function ContextMenu({ x, y, module, onClose }: ContextMenuProps) {
     onClose();
   };
 
-  const handleDecompose = () => {
-    decomposeModule(module.id);
-    onClose();
-  };
 
   const handleSetColor = () => {
     const color = prompt('输入颜色值（如 red 或 #ff0000）', module.style?.color || '');
@@ -43,8 +38,6 @@ function ContextMenu({ x, y, module, onClose }: ContextMenuProps) {
   };
 
   const textActions = module.type === 'text' || module.type === 'heading' || module.type === 'list';
-  // 可分解：header 或 module 且没有 children
-  const canDecompose = (module.type === 'header' || module.type === 'module') && (!module.children || module.children.length === 0);
 
   return (
     <div
@@ -54,9 +47,6 @@ function ContextMenu({ x, y, module, onClose }: ContextMenuProps) {
     >
       <button onClick={handleDelete} className="block w-full text-left px-3 py-1 hover:bg-gray-100">删除</button>
       <button onClick={handleDuplicate} className="block w-full text-left px-3 py-1 hover:bg-gray-100">复制</button>
-      {canDecompose && (
-        <button onClick={handleDecompose} className="block w-full text-left px-3 py-1 hover:bg-gray-100">分解组件</button>
-      )}
       {textActions && (
         <>
           <button onClick={handleSetColor} className="block w-full text-left px-3 py-1 hover:bg-gray-100">修改文字颜色</button>

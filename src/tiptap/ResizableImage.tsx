@@ -1,8 +1,8 @@
 import Image from '@tiptap/extension-image';
 import { NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react';
-import { useEffect, useRef, useCallback } from 'react';
+import { useRef } from 'react';
 
-function ResizableImageView(props: any) {
+function ResizableImageView(props: { node: { attrs: Record<string, string | null> }; updateAttributes: (attrs: Record<string, string>) => void }) {
   const { node, updateAttributes } = props;
   const imgRef = useRef<HTMLImageElement>(null);
   const startPos = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
@@ -10,7 +10,7 @@ function ResizableImageView(props: any) {
   const width = node.attrs.width || 'auto';
   const height = node.attrs.height || 'auto';
 
-  const onMouseDown = useCallback((e: React.MouseEvent) => {
+  const onMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     const img = imgRef.current;
@@ -21,40 +21,34 @@ function ResizableImageView(props: any) {
       w: img.clientWidth,
       h: img.clientHeight,
     };
-    window.addEventListener('mousemove', onMouseMove);
-    window.addEventListener('mouseup', onMouseUp);
-  }, []);
 
-  const onMouseMove = useCallback((e: MouseEvent) => {
-    if (!startPos.current) return;
-    const deltaX = e.clientX - startPos.current.x;
-    const deltaY = e.clientY - startPos.current.y;
-    const newWidth = Math.max(20, startPos.current.w + deltaX);
-    const newHeight = Math.max(20, startPos.current.h + deltaY);
-    updateAttributes({
-      width: `${newWidth}px`,
-      height: `${newHeight}px`,
-    });
-  }, [updateAttributes]);
-
-  const onMouseUp = useCallback(() => {
-    startPos.current = null;
-    window.removeEventListener('mousemove', onMouseMove);
-    window.removeEventListener('mouseup', onMouseUp);
-  }, [onMouseMove]);
-
-  useEffect(() => {
-    return () => {
-      window.removeEventListener('mousemove', onMouseMove);
-      window.removeEventListener('mouseup', onMouseUp);
+    const handleMove = (moveEvent: MouseEvent) => {
+      if (!startPos.current) return;
+      const deltaX = moveEvent.clientX - startPos.current.x;
+      const deltaY = moveEvent.clientY - startPos.current.y;
+      const newWidth = Math.max(20, startPos.current.w + deltaX);
+      const newHeight = Math.max(20, startPos.current.h + deltaY);
+      updateAttributes({
+        width: `${newWidth}px`,
+        height: `${newHeight}px`,
+      });
     };
-  }, [onMouseMove, onMouseUp]);
+
+    const handleUp = () => {
+      startPos.current = null;
+      window.removeEventListener('mousemove', handleMove);
+      window.removeEventListener('mouseup', handleUp);
+    };
+
+    window.addEventListener('mousemove', handleMove);
+    window.addEventListener('mouseup', handleUp);
+  };
 
   return (
     <NodeViewWrapper className="relative inline-block group">
       <img
         ref={imgRef}
-        src={node.attrs.src}
+        src={node.attrs.src ?? undefined}
         alt={node.attrs.alt || ''}
         title={node.attrs.title || ''}
         style={{
@@ -65,7 +59,6 @@ function ResizableImageView(props: any) {
         }}
         className="rounded"
       />
-      {/* 拖拽手柄 */}
       <div
         className="absolute bottom-0 right-0 w-4 h-4 bg-blue-400 rounded-full cursor-nwse-resize opacity-0 group-hover:opacity-100 transition-opacity"
         onMouseDown={onMouseDown}
@@ -84,7 +77,7 @@ export const ResizableImage = Image.extend({
       width: {
         default: null,
         parseHTML: (el: HTMLElement) => el.getAttribute('width') || el.style.width || null,
-        renderHTML: (attrs: Record<string, any>) => {
+        renderHTML: (attrs: Record<string, string | null>) => {
           if (!attrs.width) return {};
           return { width: attrs.width };
         },
@@ -92,7 +85,7 @@ export const ResizableImage = Image.extend({
       height: {
         default: null,
         parseHTML: (el: HTMLElement) => el.getAttribute('height') || el.style.height || null,
-        renderHTML: (attrs: Record<string, any>) => {
+        renderHTML: (attrs: Record<string, string | null>) => {
           if (!attrs.height) return {};
           return { height: attrs.height };
         },

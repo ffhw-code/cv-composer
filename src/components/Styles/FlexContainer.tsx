@@ -1,10 +1,11 @@
-import { useContext } from 'react';
-import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { ModuleRenderContext } from '../Canvas/ModuleRenderContext';
 import type { ResumeModule } from '../../store/useResumeStore';
 
-function FlexContainer({ module }: { module: ResumeModule }) {
-  const renderModule = useContext(ModuleRenderContext);
+interface FlexContainerProps {
+  module: ResumeModule;
+  children?: React.ReactNode;
+}
+
+function FlexContainer({ module, children }: FlexContainerProps) {
   const direction = (module.style?.flexDirection as 'row' | 'column') || 'column';
   const gap = module.style?.gap || '16px';
 
@@ -15,19 +16,17 @@ function FlexContainer({ module }: { module: ResumeModule }) {
     ...module.style,
   };
 
-  // 获取子模块的 ID 列表用于 SortableContext
-  const childIds = module.children?.map(c => c.id) || [];
 
+  // 使用 children prop（由 CanvasArea 通过 EditableModule 传入）
+  // 兜底：如果没有 children prop，显示占位提示
   return (
     <div
       className="border border-dashed border-gray-300 min-h-[60px] p-2"
       style={containerStyle}
       data-id={module.id}
     >
-      {childIds.length > 0 ? (
-        <SortableContext items={childIds} strategy={verticalListSortingStrategy}>
-          {module.children?.map(child => renderModule(child))}
-        </SortableContext>
+      {children ? (
+        children
       ) : (
         <p className="text-gray-400 text-sm">拖入模块或控件</p>
       )}

@@ -3,6 +3,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { useResumeStore } from '../../store/useResumeStore';
 import type { ResumeModule } from '../../store/useResumeStore';
 import { useActiveEditor } from '../../hooks/useActiveEditor';
+import { sanitizeLinkUrl } from '../../tiptap/editorExtensions';
 
 // ---------- 小型输入控件 ----------
 function StyleInputWithUnit({
@@ -238,15 +239,20 @@ function Toolbar() {
   const insertLink = () => {
     const url = window.prompt('请输入链接地址');
     if (!url) return;
+    const safeUrl = sanitizeLinkUrl(url);
+    if (!safeUrl) {
+      alert('链接无效，仅支持 http、https 或 mailto 协议。');
+      return;
+    }
     if (!activeEditor) return;
     const { state } = activeEditor;
     const { from, to, empty } = state.selection;
     const selectedText = empty ? '' : state.doc.textBetween(from, to);
     if (selectedText) {
-      chain()?.setLink({ href: url }).run();
+      chain()?.setLink({ href: safeUrl }).run();
     } else {
       const text = window.prompt('请输入链接显示文字', '链接文字');
-      if (text) chain()?.insertContent(`<a href="${url}" target="_blank">${text}</a>`).run();
+      if (text) chain()?.insertContent(`<a href="${safeUrl}" target="_blank" rel="noopener noreferrer">${text}</a>`).run();
     }
   };
 

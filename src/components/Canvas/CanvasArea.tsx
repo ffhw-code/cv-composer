@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useResumeStore, type ResumeModule } from '../../store/useResumeStore';
 import EditableModule from '../Module/EditableModule';
 import SortableModule from './SortableModule';
@@ -186,8 +186,7 @@ function CanvasArea({ deleteMode, onExitDeleteMode }: CanvasAreaProps) {
   };
   const closeContextMenu = () => setContextMenu(null);
 
-  const renderModuleRecursive = useCallback(
-    (mod: ResumeModule): React.ReactNode => {
+  function renderModuleRecursive(mod: ResumeModule): React.ReactNode {
       const isSelected = selectedId === mod.id;
       const isDropHighlight = mod.id === dropTargetId;
 
@@ -197,27 +196,6 @@ function CanvasArea({ deleteMode, onExitDeleteMode }: CanvasAreaProps) {
         (mod.children && mod.children.length > 0);
 
       if (isContainer) {
-        // 处理布局方向，断言为正确的类型
-        const style = mod.style || {};
-        const display = style.display || (mod.type === 'grid' ? 'grid' : 'flex');
-        const flexDirection =
-          mod.type === 'grid'
-            ? undefined
-            : ((style.flexDirection as 'row' | 'column' | 'row-reverse' | 'column-reverse') || 'column');
-        const gap = style.gap || '16px';
-
-        const containerStyle: React.CSSProperties = {
-          display,
-          flexDirection,
-          gap,
-          ...mod.style,
-        };
-
-        // 强制 module 容器使用弹性列布局
-        if (mod.type === 'module') {
-          containerStyle.display = 'flex';
-          containerStyle.flexDirection = containerStyle.flexDirection || 'column';
-        }
 
         const highlightClass = isDropHighlight
           ? 'ring-2 ring-blue-400 ring-offset-2'
@@ -242,7 +220,11 @@ function CanvasArea({ deleteMode, onExitDeleteMode }: CanvasAreaProps) {
                     e.stopPropagation();
                     setSelectedIds((prev) => {
                       const next = new Set(prev);
-                      next.has(mod.id) ? next.delete(mod.id) : next.add(mod.id);
+                      if (next.has(mod.id)) {
+                        next.delete(mod.id);
+                      } else {
+                        next.add(mod.id);
+                      }
                       return next;
                     });
                   }}
@@ -254,18 +236,16 @@ function CanvasArea({ deleteMode, onExitDeleteMode }: CanvasAreaProps) {
                 </button>
               </div>
             )}
-            <div
-              className={`border border-dashed border-gray-300 min-h-[60px] p-2 ${highlightClass} ${mod.type === 'module' ? 'flex flex-col' : ''}`}
-              style={containerStyle}
-              data-id={mod.id}
-            >
-              {mod.children && mod.children.length > 0 ? (
-                <SortableContext items={mod.children.map((c) => c.id)} strategy={verticalListSortingStrategy}>
-                  {mod.children.map((child) => renderModuleRecursive(child))}
-                </SortableContext>
-              ) : (
-                <p className="text-gray-400 text-sm">拖入模块或控件</p>
-              )}
+            <div className={highlightClass}>
+              <EditableModule module={mod}>
+                {mod.children && mod.children.length > 0 ? (
+                  <SortableContext items={mod.children.map((c) => c.id)} strategy={verticalListSortingStrategy}>
+                    {mod.children.map((child) => renderModuleRecursive(child))}
+                  </SortableContext>
+                ) : (
+                  <p className="text-gray-400 text-sm">拖入模块或控件</p>
+                )}
+              </EditableModule>
             </div>
           </SortableModule>
         );
@@ -291,7 +271,11 @@ function CanvasArea({ deleteMode, onExitDeleteMode }: CanvasAreaProps) {
                   e.stopPropagation();
                   setSelectedIds((prev) => {
                     const next = new Set(prev);
-                    next.has(mod.id) ? next.delete(mod.id) : next.add(mod.id);
+                    if (next.has(mod.id)) {
+                      next.delete(mod.id);
+                    } else {
+                      next.add(mod.id);
+                    }
                     return next;
                   });
                 }}
@@ -306,9 +290,7 @@ function CanvasArea({ deleteMode, onExitDeleteMode }: CanvasAreaProps) {
           <EditableModule module={mod} />
         </SortableModule>
       );
-    },
-    [selectedId, deleteMode, selectedIds, select, handleContextMenu, dropTargetId]
-  );
+  }
 
   const allIds = getAllSortableIds(modules);
 
