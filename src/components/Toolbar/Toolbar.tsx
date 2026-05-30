@@ -104,6 +104,7 @@ function Toolbar() {
   const [customLetterSpacing, setCustomLetterSpacing] = useState('');
   const [imageActive, setImageActive] = useState(false);
   const [activeGroup, setActiveGroup] = useState<string>('基本');
+  const [editorGroup, setEditorGroup] = useState<string>('文本');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const loadFileRef = useRef<HTMLInputElement>(null);
 
@@ -408,145 +409,166 @@ function Toolbar() {
           </div>
         ) : (
           /* ---------- TipTap 文本编辑 / 插入工具 ---------- */
-          <div className="flex flex-col gap-1">
-            <div className="flex items-center gap-2 flex-wrap">
-              {activeTool === 'edit' && (
-                <>
-                  <button onMouseDown={exec(() => chain()?.toggleBold().run())} className="px-2 py-1 text-xs font-bold hover:bg-gray-200 rounded" title="加粗">B</button>
-                  <button onMouseDown={exec(() => chain()?.toggleItalic().run())} className="px-2 py-1 text-xs italic hover:bg-gray-200 rounded" title="斜体">I</button>
-                  <button onMouseDown={exec(() => chain()?.toggleUnderline().run())} className="px-2 py-1 text-xs underline hover:bg-gray-200 rounded" title="下划线">U</button>
-                  <button onMouseDown={exec(() => chain()?.toggleStrike().run())} className="px-2 py-1 text-xs line-through hover:bg-gray-200 rounded" title="删除线">S</button>
-
-                  <span className="text-gray-300 text-xs">|</span>
-
-                  <select className="text-xs border border-gray-300 rounded py-0.5 px-1"
-                    onChange={(e) => activeEditor?.chain().focus().setFontFamily(e.target.value).run()}
-                    value={activeEditor?.getAttributes('textStyle').fontFamily || ''}
+          <>{activeTool === 'edit' ? (
+            <div className="flex flex-col gap-1 w-full">
+              {/* 分组标签 */}
+              <div className="flex items-center gap-1 flex-wrap">
+                {['文本', '页面设置'].map((g) => (
+                  <button
+                    key={g}
+                    onClick={() => setEditorGroup(g)}
+                    className={`px-2 py-0.5 rounded text-xs transition-colors ${
+                      editorGroup === g
+                        ? 'bg-blue-500 text-white'
+                        : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
+                    }`}
                   >
-                    <option value="" disabled>字体</option>
-                    {fontFamilyOptions.map((font) => <option key={font} value={font}>{font}</option>)}
-                  </select>
+                    {g}
+                  </button>
+                ))}
+              </div>
 
-                  <span className="flex items-center gap-1">
+              {/* 组内容 */}
+              <div className="flex items-center gap-2 flex-wrap">
+                {editorGroup === '文本' && (
+                  <>
+                    <button onMouseDown={exec(() => chain()?.toggleBold().run())} className="px-2 py-1 text-xs font-bold hover:bg-gray-200 rounded" title="加粗">B</button>
+                    <button onMouseDown={exec(() => chain()?.toggleItalic().run())} className="px-2 py-1 text-xs italic hover:bg-gray-200 rounded" title="斜体">I</button>
+                    <button onMouseDown={exec(() => chain()?.toggleUnderline().run())} className="px-2 py-1 text-xs underline hover:bg-gray-200 rounded" title="下划线">U</button>
+                    <button onMouseDown={exec(() => chain()?.toggleStrike().run())} className="px-2 py-1 text-xs line-through hover:bg-gray-200 rounded" title="删除线">S</button>
+
+                    <span className="text-gray-300 text-xs">|</span>
+
                     <select className="text-xs border border-gray-300 rounded py-0.5 px-1"
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        if (val) {
-                          setCustomFontSize(val);
-                          activeEditor?.chain().focus().setFontSize(val + 'px').run();
-                        }
-                      }}
-                      value=""
+                      onChange={(e) => activeEditor?.chain().focus().setFontFamily(e.target.value).run()}
+                      value={activeEditor?.getAttributes('textStyle').fontFamily || ''}
                     >
-                      <option value="" disabled>字号</option>
-                      {FONT_SIZE_PRESETS.map((size) => <option key={size} value={size}>{size}</option>)}
+                      <option value="" disabled>字体</option>
+                      {fontFamilyOptions.map((font) => <option key={font} value={font}>{font}</option>)}
                     </select>
-                    <input type="number" min="1" className="w-12 text-xs border border-gray-300 rounded py-0.5 px-1" placeholder="自定义"
-                      value={customFontSize}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setCustomFontSize(val);
-                        const num = parseInt(val, 10);
-                        if (!isNaN(num) && num > 0) activeEditor?.chain().focus().setFontSize(num + 'px').run();
-                      }}
-                    />
-                  </span>
 
-                  <span className="text-gray-300 text-xs">|</span>
-
-                  <div className="flex items-center gap-1">
-                  <span className="flex items-center gap-1">
-                    <select className="text-xs border border-gray-300 rounded py-0.5 px-1"
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        if (val) { setCustomFontWeight(val); activeEditor?.chain().focus().setMark('textStyle', { fontWeight: val }).run(); }
-                      }}
-                      value=""
-                    >
-                      <option value="" disabled>字重</option>
-                      {fontWeightOptions.map((w) => <option key={w} value={w}>{w}</option>)}
-                    </select>
-                    <input type="text" inputMode="numeric" className="w-10 text-xs border border-gray-300 rounded py-0.5 px-1" placeholder="自定义"
-                      value={customFontWeight}
-                      onInput={(e) => {
-                        const val = (e.target as HTMLInputElement).value;
-                        setCustomFontWeight(val);
-                        if (val) activeEditor?.chain().focus().setMark('textStyle', { fontWeight: val }).run();
-                      }}
-                    />
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <select className="text-xs border border-gray-300 rounded py-0.5 px-1"
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        if (val) { setCustomLetterSpacing(val); activeEditor?.chain().focus().setMark('textStyle', { letterSpacing: val + 'px' }).run(); }
-                      }}
-                      value=""
-                    >
-                      <option value="" disabled>字距</option>
-                      {letterSpacingOptions.map((s) => <option key={s} value={s}>{s}px</option>)}
-                    </select>
-                    <input type="text" inputMode="numeric" className="w-10 text-xs border border-gray-300 rounded py-0.5 px-1" placeholder="自定义"
-                      value={customLetterSpacing}
-                      onInput={(e) => {
-                        const val = (e.target as HTMLInputElement).value;
-                        setCustomLetterSpacing(val);
-                        if (val) activeEditor?.chain().focus().setMark('textStyle', { letterSpacing: val + 'px' }).run();
-                      }}
-                    />
-                  </span>
-                    <input type="color" value={textColor} onChange={(e) => { setTextColor(e.target.value); activeEditor?.chain().focus().setColor(e.target.value).run(); }} className="w-5 h-5 border border-gray-300 rounded cursor-pointer p-0" title="文字颜色" />
-                    <input type="color" value={highlightColor} onChange={(e) => { setHighlightColor(e.target.value); activeEditor?.chain().focus().toggleHighlight({ color: e.target.value }).run(); }} className="w-5 h-5 border border-gray-300 rounded cursor-pointer p-0" title="背景高亮" />
-                  </div>
-
-                  <span className="text-gray-300 text-xs">|</span>
-
-                  <button onMouseDown={exec(() => chain()?.setTextAlign('left').run())} className="px-1.5 py-0.5 text-xs hover:bg-gray-200 rounded" title="左对齐">⫷</button>
-                  <button onMouseDown={exec(() => chain()?.setTextAlign('center').run())} className="px-1.5 py-0.5 text-xs hover:bg-gray-200 rounded" title="居中">⫸</button>
-                  <button onMouseDown={exec(() => chain()?.setTextAlign('right').run())} className="px-1.5 py-0.5 text-xs hover:bg-gray-200 rounded" title="右对齐">⫹</button>
-                  <button onMouseDown={exec(() => chain()?.setTextAlign('justify').run())} className="px-1.5 py-0.5 text-xs hover:bg-gray-200 rounded" title="两端对齐">☰</button>
-
-                  <span className="text-gray-300 text-xs">|</span>
-
-                  <button onMouseDown={exec(() => chain()?.toggleBulletList().run())} className="px-1.5 py-0.5 text-xs hover:bg-gray-200 rounded" title="无序列表">•</button>
-                  <button onMouseDown={exec(() => chain()?.toggleOrderedList().run())} className="px-1.5 py-0.5 text-xs hover:bg-gray-200 rounded" title="有序列表">1.</button>
-
-                  {imageActive && (
-                    <>
-                      <span className="text-gray-300 text-xs">|</span>
-                      <ImageSizeInputs
-                        width={activeEditor?.getAttributes('resizableImage').width || ''}
-                        height={activeEditor?.getAttributes('resizableImage').height || ''}
-                        onWidthChange={(val) => {
-                          if (val === '') activeEditor?.chain().focus().updateAttributes('resizableImage', { width: null }).run();
-                          else activeEditor?.chain().focus().updateAttributes('resizableImage', { width: val }).run();
+                    <span className="flex items-center gap-1">
+                      <select className="text-xs border border-gray-300 rounded py-0.5 px-1"
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (val) {
+                            setCustomFontSize(val);
+                            activeEditor?.chain().focus().setFontSize(val + 'px').run();
+                          }
                         }}
-                        onHeightChange={(val) => {
-                          if (val === '') activeEditor?.chain().focus().updateAttributes('resizableImage', { height: null }).run();
-                          else activeEditor?.chain().focus().updateAttributes('resizableImage', { height: val }).run();
+                        value=""
+                      >
+                        <option value="" disabled>字号</option>
+                        {FONT_SIZE_PRESETS.map((size) => <option key={size} value={size}>{size}</option>)}
+                      </select>
+                      <input type="number" min="1" className="w-12 text-xs border border-gray-300 rounded py-0.5 px-1" placeholder="自定义"
+                        value={customFontSize}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setCustomFontSize(val);
+                          const num = parseInt(val, 10);
+                          if (!isNaN(num) && num > 0) activeEditor?.chain().focus().setFontSize(num + 'px').run();
                         }}
                       />
-                    </>
-                  )}
-                </>
-              )}
+                    </span>
 
-              {activeTool === 'insert' && (
-                <>
-                  <button onMouseDown={(e) => { e.preventDefault(); insertImage(); }} className="px-2 py-1 text-xs hover:bg-gray-100 rounded">图片</button>
-                  <button onMouseDown={(e) => { e.preventDefault(); insertLink(); }} className="px-2 py-1 text-xs hover:bg-gray-100 rounded">超链接</button>
-                </>
-              )}
-            </div>
+                    <span className="text-gray-300 text-xs">|</span>
 
-            {/* 页面设置：独立一行，放在编辑操作下方 */}
-            <div className="flex items-center gap-2 text-xs flex-wrap">
-              <span className="text-gray-500">页面设置</span>
-              <StyleInputWithUnit label="边距" value={pagePadding} onChange={setPagePadding} unit="px" options={['20', '30', '40', '50', '60']} />
-              <StyleInputWithUnit label="间距" value={pageGap} onChange={setPageGap} unit="px" options={['8', '12', '16', '20', '24']} />
-              <StyleInputWithUnit label="上边距" value={pagePaddingTop} onChange={setPagePaddingTop} unit="px" options={['20', '30', '40', '50', '60', '80']} />
+                    <div className="flex items-center gap-1">
+                      <span className="flex items-center gap-1">
+                        <select className="text-xs border border-gray-300 rounded py-0.5 px-1"
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (val) { setCustomFontWeight(val); activeEditor?.chain().focus().setMark('textStyle', { fontWeight: val }).run(); }
+                          }}
+                          value=""
+                        >
+                          <option value="" disabled>字重</option>
+                          {fontWeightOptions.map((w) => <option key={w} value={w}>{w}</option>)}
+                        </select>
+                        <input type="text" inputMode="numeric" className="w-10 text-xs border border-gray-300 rounded py-0.5 px-1" placeholder="自定义"
+                          value={customFontWeight}
+                          onInput={(e) => {
+                            const val = (e.target as HTMLInputElement).value;
+                            setCustomFontWeight(val);
+                            if (val) activeEditor?.chain().focus().setMark('textStyle', { fontWeight: val }).run();
+                          }}
+                        />
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <select className="text-xs border border-gray-300 rounded py-0.5 px-1"
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (val) { setCustomLetterSpacing(val); activeEditor?.chain().focus().setMark('textStyle', { letterSpacing: val + 'px' }).run(); }
+                          }}
+                          value=""
+                        >
+                          <option value="" disabled>字距</option>
+                          {letterSpacingOptions.map((s) => <option key={s} value={s}>{s}px</option>)}
+                        </select>
+                        <input type="text" inputMode="numeric" className="w-10 text-xs border border-gray-300 rounded py-0.5 px-1" placeholder="自定义"
+                          value={customLetterSpacing}
+                          onInput={(e) => {
+                            const val = (e.target as HTMLInputElement).value;
+                            setCustomLetterSpacing(val);
+                            if (val) activeEditor?.chain().focus().setMark('textStyle', { letterSpacing: val + 'px' }).run();
+                          }}
+                        />
+                      </span>
+                      <input type="color" value={textColor} onChange={(e) => { setTextColor(e.target.value); activeEditor?.chain().focus().setColor(e.target.value).run(); }} className="w-5 h-5 border border-gray-300 rounded cursor-pointer p-0" title="文字颜色" />
+                      <input type="color" value={highlightColor} onChange={(e) => { setHighlightColor(e.target.value); activeEditor?.chain().focus().toggleHighlight({ color: e.target.value }).run(); }} className="w-5 h-5 border border-gray-300 rounded cursor-pointer p-0" title="背景高亮" />
+                    </div>
+
+                    <span className="text-gray-300 text-xs">|</span>
+
+                    <button onMouseDown={exec(() => chain()?.setTextAlign('left').run())} className="px-1.5 py-0.5 text-xs hover:bg-gray-200 rounded" title="左对齐">⫷</button>
+                    <button onMouseDown={exec(() => chain()?.setTextAlign('center').run())} className="px-1.5 py-0.5 text-xs hover:bg-gray-200 rounded" title="居中">⫸</button>
+                    <button onMouseDown={exec(() => chain()?.setTextAlign('right').run())} className="px-1.5 py-0.5 text-xs hover:bg-gray-200 rounded" title="右对齐">⫹</button>
+                    <button onMouseDown={exec(() => chain()?.setTextAlign('justify').run())} className="px-1.5 py-0.5 text-xs hover:bg-gray-200 rounded" title="两端对齐">☰</button>
+
+                    <span className="text-gray-300 text-xs">|</span>
+
+                    <button onMouseDown={exec(() => chain()?.toggleBulletList().run())} className="px-1.5 py-0.5 text-xs hover:bg-gray-200 rounded" title="无序列表">•</button>
+                    <button onMouseDown={exec(() => chain()?.toggleOrderedList().run())} className="px-1.5 py-0.5 text-xs hover:bg-gray-200 rounded" title="有序列表">1.</button>
+
+                    {imageActive && (
+                      <>
+                        <span className="text-gray-300 text-xs">|</span>
+                        <ImageSizeInputs
+                          width={activeEditor?.getAttributes('resizableImage').width || ''}
+                          height={activeEditor?.getAttributes('resizableImage').height || ''}
+                          onWidthChange={(val) => {
+                            if (val === '') activeEditor?.chain().focus().updateAttributes('resizableImage', { width: null }).run();
+                            else activeEditor?.chain().focus().updateAttributes('resizableImage', { width: val }).run();
+                          }}
+                          onHeightChange={(val) => {
+                            if (val === '') activeEditor?.chain().focus().updateAttributes('resizableImage', { height: null }).run();
+                            else activeEditor?.chain().focus().updateAttributes('resizableImage', { height: val }).run();
+                          }}
+                        />
+                      </>
+                    )}
+                  </>
+                )}
+
+                {editorGroup === '页面设置' && (
+                  <>
+                    <span className="text-gray-500 text-xs">页面设置</span>
+                    <StyleInputWithUnit label="边距" value={pagePadding} onChange={setPagePadding} unit="px" options={['20', '30', '40', '50', '60']} />
+                    <StyleInputWithUnit label="间距" value={pageGap} onChange={setPageGap} unit="px" options={['8', '12', '16', '20', '24']} />
+                    <StyleInputWithUnit label="上边距" value={pagePaddingTop} onChange={setPagePaddingTop} unit="px" options={['20', '30', '40', '50', '60', '80']} />
+                  </>
+                )}
+              </div>
             </div>
-          </div>
+          ) : (
+            /* ---------- 插入工具 ---------- */
+            <div className="flex items-center gap-2 flex-wrap">
+              <button onMouseDown={(e) => { e.preventDefault(); insertImage(); }} className="px-2 py-1 text-xs hover:bg-gray-100 rounded">图片</button>
+              <button onMouseDown={(e) => { e.preventDefault(); insertLink(); }} className="px-2 py-1 text-xs hover:bg-gray-100 rounded">超链接</button>
+            </div>
+          )}
+          </>
         )}
 
       </div>

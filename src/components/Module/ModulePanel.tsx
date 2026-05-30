@@ -123,18 +123,6 @@ function ModulePanel({
           >
             弹性容器
           </button>
-          <button
-            onClick={() => addModule(null, 'divider', 'divider-default')}
-            className="w-full h-[45px] px-1 py-1 text-xs bg-white border border-gray-300 rounded hover:bg-gray-50 truncate"
-          >
-            分割线
-          </button>
-          <button
-            onClick={() => addModule(null, 'shape', 'shape-default')}
-            className="w-full h-[45px] px-1 py-1 text-xs bg-white border border-gray-300 rounded hover:bg-gray-50 truncate"
-          >
-            色块
-          </button>
         </div>
       )}
 

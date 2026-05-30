@@ -10,8 +10,7 @@ function generateAvailableModules(): string {
     .concat(getStylesByType('image'))
     .concat(getStylesByType('flex'))
     .concat(getStylesByType('grid'))
-    .concat(getStylesByType('divider'))
-    .concat(getStylesByType('shape'));
+    ;
 
   const headerInfo = headers.map(s => `"${s.style}" (${s.label})`).join(', ');
   const moduleInfo = modules.map(s => `"${s.style}" (${s.label})`).join(', ');

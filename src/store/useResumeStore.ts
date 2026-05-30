@@ -3,7 +3,7 @@ import { getStyleConfig } from './styleRegistry';
 
 export interface ResumeModule {
   id: string;
-  type: 'header' | 'module' | 'text' | 'heading' | 'list' | 'image' | 'flex' | 'grid' | 'divider' | 'shape';
+  type: 'header' | 'module' | 'text' | 'heading' | 'list' | 'image' | 'flex' | 'grid';
   styleId?: string;
   style?: Record<string, string>;
   name?: string;

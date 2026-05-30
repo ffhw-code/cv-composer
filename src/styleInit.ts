@@ -6,8 +6,6 @@ import ListControl from './components/Styles/ListControl';
 import FlexContainer from './components/Styles/FlexContainer';
 import GridContainer from './components/Styles/GridContainer';
 import ImageModule from './components/Styles/ImageModule';
-import DividerControl from './components/Styles/DividerControl';
-import ShapeControl from './components/Styles/ShapeControl';
 import MinimalContainer from './components/Styles/MinimalContainer';  // 新增
 
 import headerThumb1 from './assets/images/headerThumb1.png';
@@ -26,8 +24,6 @@ export function initStyles() {
   registerStyle({ type: 'image', style: 'image-default', label: '图片', thumb: '', component: ImageModule, defaultContent: { content: '' } });
   registerStyle({ type: 'flex', style: 'flex-default', label: '弹性容器', thumb: '', component: FlexContainer });
   registerStyle({ type: 'grid', style: 'grid-default', label: '网格容器', thumb: '', component: GridContainer, defaultStyle: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' } });
-  registerStyle({ type: 'divider', style: 'divider-default', label: '分割线', thumb: '', component: DividerControl, defaultStyle: { width: '100%', lineWidth: '100%', lineHeight: '2px', lineColor: '#e2e8f0', lineStyle: 'solid', margin: '12px 0' } });
-  registerStyle({ type: 'shape', style: 'shape-default', label: '色块', thumb: '', component: ShapeControl, defaultStyle: { shape: 'rectangle', size: '80', backgroundColor: '#3b82f6', borderRadius: '4px' } });
 
   // ===================== 新版简历头模板 =====================
   registerStyle({

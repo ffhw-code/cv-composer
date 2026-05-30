@@ -115,7 +115,7 @@ function updateModuleInTree(
   });
 }
 
-const VALID_TYPES = ['header', 'module', 'text', 'heading', 'list', 'image', 'flex', 'grid', 'divider', 'shape'];
+const VALID_TYPES = ['header', 'module', 'text', 'heading', 'list', 'image', 'flex', 'grid'];
 
 function correctType(raw: string): string | null {
   const lower = raw.toLowerCase().trim();
@@ -124,7 +124,7 @@ function correctType(raw: string): string | null {
     'paragraph': 'text', 'photo': 'image', '简历头': 'header', '模块': 'module',
     '文本框': 'text', '标题': 'heading', '列表': 'list', '图片': 'image',
     '弹性容器': 'flex', '网格容器': 'grid',
-    '分割线': 'divider', '色块': 'shape', '装饰线': 'divider', '几何图形': 'shape',
+    // divider/shape 已移除，装饰通过 CSS 属性实现
   };
   if (alias[lower]) return alias[lower];
   for (const vt of VALID_TYPES) {
