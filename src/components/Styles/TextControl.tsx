@@ -43,6 +43,9 @@ function TextControl({ module }: { module: ResumeModule }) {
     dom.style.color = style.color || '';
     dom.style.textAlign = style.textAlign || '';
     dom.style.backgroundColor = style.backgroundColor || '';
+    dom.style.fontWeight = style.fontWeight || '';
+    dom.style.lineHeight = style.lineHeight || '';
+    dom.style.letterSpacing = style.letterSpacing || '';
     // 注意：编辑器内部可能有背景，我们也可以直接在外层 div 设置背景
   }, [editor, module.style]);
 

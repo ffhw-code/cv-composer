@@ -1,4 +1,5 @@
 import type { ResumeModule } from '../../store/useResumeStore';
+import { buildContainerStyle, hasCustomBorder } from '../../utils/styleHelpers';
 
 interface MinimalContainerProps {
   module: ResumeModule;
@@ -6,23 +7,22 @@ interface MinimalContainerProps {
 }
 
 function MinimalContainer({ module, children }: MinimalContainerProps) {
-  const style = module.style || {};
+  const custom = hasCustomBorder(module.style);
+  const inline = buildContainerStyle(module.style);
 
-  // 保留所有样式属性（包括布局属性），MinimalContainer 现在负责完整渲染
   const mergedStyle: React.CSSProperties = {
-    ...style,
+    ...inline,
     minHeight: '60px',
   };
 
+  const borderClass = custom ? '' : 'border border-dashed border-gray-300 ';
+
   if (children) {
-    return <div style={mergedStyle}>{children}</div>;
+    return <div style={mergedStyle} className={borderClass + 'p-2'}>{children}</div>;
   }
 
   return (
-    <div
-      style={mergedStyle}
-      className="border border-dashed border-gray-300 p-2 text-gray-400 text-xs flex items-center justify-center"
-    >
+    <div style={mergedStyle} className={borderClass + 'p-2 text-gray-400 text-xs flex items-center justify-center'}>
       拖入控件或输入指令完善模块
     </div>
   );

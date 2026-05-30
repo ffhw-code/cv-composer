@@ -3,7 +3,7 @@ import { getStyleConfig } from './styleRegistry';
 
 export interface ResumeModule {
   id: string;
-  type: 'header' | 'module' | 'text' | 'heading' | 'list' | 'image' | 'flex' | 'grid';
+  type: 'header' | 'module' | 'text' | 'heading' | 'list' | 'image' | 'flex' | 'grid' | 'divider' | 'shape';
   styleId?: string;
   style?: Record<string, string>;
   name?: string;
@@ -29,6 +29,8 @@ interface ResumeStore {
   pageGap: string;
   setPagePadding: (value: string) => void;
   setPageGap: (value: string) => void;
+  pagePaddingTop: string;
+  setPagePaddingTop: (value: string) => void;
 
   addModule: (parentId: string | null, type: ResumeModule['type'], styleId?: string) => void;
   addModuleFromTemplate: (parentId: string | null, type: ResumeModule['type'], styleId: string) => void;
@@ -174,8 +176,10 @@ export const useResumeStore = create<ResumeStore>((set, get) => {
     future: [],
     pagePadding: '40px',
     pageGap: '16px',
+    pagePaddingTop: '40px',
     setPagePadding: (value: string) => set({ pagePadding: value }),
     setPageGap: (value: string) => set({ pageGap: value }),
+    setPagePaddingTop: (value: string) => set({ pagePaddingTop: value }),
 
     // 基础添加（用于叶子控件）
     addModule: (parentId, type, styleId) => {

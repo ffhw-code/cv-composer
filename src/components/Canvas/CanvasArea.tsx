@@ -48,6 +48,7 @@ function CanvasArea({ deleteMode, onExitDeleteMode }: CanvasAreaProps) {
   const modules = useResumeStore((s) => s.modules);
   const selectedId = useResumeStore((s) => s.selectedId);
   const pagePadding = useResumeStore((s) => s.pagePadding);
+  const pagePaddingTop = useResumeStore((s) => s.pagePaddingTop);
   const pageGap = useResumeStore((s) => s.pageGap);
   const select = useResumeStore((s) => s.select);
   const removeModule = useResumeStore((s) => s.removeModule);
@@ -312,7 +313,7 @@ function CanvasArea({ deleteMode, onExitDeleteMode }: CanvasAreaProps) {
           style={{
             width: '794px',
             minHeight: `${PAGE_HEIGHT}px`,
-            padding: pagePadding,
+            padding: `${pagePaddingTop} ${pagePadding} ${pagePadding} ${pagePadding}` as any,
             gap: pageGap,
             transform: `scale(${scale})`,
             transformOrigin: 'top center',

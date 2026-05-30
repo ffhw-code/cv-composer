@@ -1,4 +1,5 @@
 import type { ResumeModule } from '../../store/useResumeStore';
+import { buildContainerStyle, hasCustomBorder } from '../../utils/styleHelpers';
 
 interface GridContainerProps {
   module: ResumeModule;
@@ -10,17 +11,20 @@ function GridContainer({ module, children }: GridContainerProps) {
   const rows = module.style?.gridTemplateRows || 'auto';
   const gap = module.style?.gap || '16px';
 
+  const custom = hasCustomBorder(module.style);
+  const inline = buildContainerStyle(module.style);
+
   const containerStyle: React.CSSProperties = {
     display: 'grid',
     gridTemplateColumns: columns,
     gridTemplateRows: rows,
     gap,
-    ...module.style,
+    ...inline,
   };
 
   return (
     <div
-      className="border border-dashed border-gray-300 min-h-[60px] p-2"
+      className={custom ? 'min-h-[60px] p-2' : 'border border-dashed border-gray-300 min-h-[60px] p-2'}
       style={containerStyle}
       data-id={module.id}
     >

@@ -115,7 +115,7 @@ function updateModuleInTree(
   });
 }
 
-const VALID_TYPES = ['header', 'module', 'text', 'heading', 'list', 'image', 'flex', 'grid'];
+const VALID_TYPES = ['header', 'module', 'text', 'heading', 'list', 'image', 'flex', 'grid', 'divider', 'shape'];
 
 function correctType(raw: string): string | null {
   const lower = raw.toLowerCase().trim();
@@ -124,6 +124,7 @@ function correctType(raw: string): string | null {
     'paragraph': 'text', 'photo': 'image', '简历头': 'header', '模块': 'module',
     '文本框': 'text', '标题': 'heading', '列表': 'list', '图片': 'image',
     '弹性容器': 'flex', '网格容器': 'grid',
+    '分割线': 'divider', '色块': 'shape', '装饰线': 'divider', '几何图形': 'shape',
   };
   if (alias[lower]) return alias[lower];
   for (const vt of VALID_TYPES) {
@@ -237,6 +238,8 @@ export function executeCommands(
               image: 'image-default',
               flex: 'flex-default',
               grid: 'grid-default',
+            divider: 'divider-default',
+            shape: 'shape-default',
             };
             if (defaultStyleMap[resolvedType]) resolvedStyleId = defaultStyleMap[resolvedType];
           }
@@ -282,6 +285,8 @@ export function executeCommands(
             const defaultStyleMap: Record<string, string> = {
               text: 'text-default', heading: 'heading-default', list: 'list-default',
               image: 'image-default', flex: 'flex-default', grid: 'grid-default',
+            divider: 'divider-default',
+            shape: 'shape-default',
             };
             if (defaultStyleMap[type]) resolvedStyleId = defaultStyleMap[type];
           }

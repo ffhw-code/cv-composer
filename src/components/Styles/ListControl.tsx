@@ -40,6 +40,9 @@ function ListControl({ module }: { module: ResumeModule }) {
     dom.style.fontSize = style.fontSize || '';
     dom.style.color = style.color || '';
     dom.style.textAlign = style.textAlign || '';
+    dom.style.fontWeight = style.fontWeight || '';
+    dom.style.lineHeight = style.lineHeight || '';
+    dom.style.letterSpacing = style.letterSpacing || '';
   }, [editor, module.style]);
 
   const containerStyle: React.CSSProperties = {
