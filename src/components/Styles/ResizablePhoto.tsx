@@ -23,20 +23,9 @@ export default function ResizablePhoto({
   const currentWidth = width || 'auto';
   const currentHeight = height || 'auto';
 
-  const onMouseDown = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const img = imgRef.current;
-    if (!img) return;
-    startPos.current = {
-      x: e.clientX,
-      y: e.clientY,
-      w: img.clientWidth,
-      h: img.clientHeight,
-    };
-    window.addEventListener('mousemove', onMouseMove);
-    window.addEventListener('mouseup', onMouseUp);
-  }, []);
+  // 拖拽调整尺寸（使用 ref 避免循环依赖）
+  const onMouseMoveRef = useRef<((e: MouseEvent) => void) | null>(null);
+  const onMouseUpRef = useRef<(() => void) | null>(null);
 
   const onMouseMove = useCallback((e: MouseEvent) => {
     if (!startPos.current) return;
@@ -59,16 +48,37 @@ export default function ResizablePhoto({
 
   const onMouseUp = useCallback(() => {
     startPos.current = null;
-    window.removeEventListener('mousemove', onMouseMove);
-    window.removeEventListener('mouseup', onMouseUp);
-  }, [onMouseMove]);
+    window.removeEventListener('mousemove', onMouseMoveRef.current!);
+    window.removeEventListener('mouseup', onMouseUpRef.current!);
+  }, []);
+
+  // 同步 ref（在 effect 中更新，不在 render 期间）
+  useEffect(() => {
+    onMouseMoveRef.current = onMouseMove;
+    onMouseUpRef.current = onMouseUp;
+  });
+
+  const onMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const img = imgRef.current;
+    if (!img) return;
+    startPos.current = {
+      x: e.clientX,
+      y: e.clientY,
+      w: img.clientWidth,
+      h: img.clientHeight,
+    };
+    window.addEventListener('mousemove', onMouseMoveRef.current!);
+    window.addEventListener('mouseup', onMouseUpRef.current!);
+  }, []);
 
   useEffect(() => {
     return () => {
-      window.removeEventListener('mousemove', onMouseMove);
-      window.removeEventListener('mouseup', onMouseUp);
+      window.removeEventListener('mousemove', onMouseMoveRef.current!);
+      window.removeEventListener('mouseup', onMouseUpRef.current!);
     };
-  }, [onMouseMove, onMouseUp]);
+  }, []);
 
   return (
     <div className={`relative inline-block group ${className}`}>

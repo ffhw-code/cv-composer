@@ -37,6 +37,7 @@ function HeadingControl({ module }: { module: ResumeModule }) {
     if (!editor) return;
     const dom = editor.view.dom;
     const style = module.style || {};
+    /* eslint-disable react-hooks/immutability */
     dom.style.fontFamily = style.fontFamily || '';
     dom.style.fontSize = style.fontSize || '';
     dom.style.color = style.color || '';
@@ -44,6 +45,7 @@ function HeadingControl({ module }: { module: ResumeModule }) {
     dom.style.fontWeight = style.fontWeight || '';
     dom.style.lineHeight = style.lineHeight || '';
     dom.style.letterSpacing = style.letterSpacing || '';
+    /* eslint-enable react-hooks/immutability */
   }, [editor, module.style]);
 
   const containerStyle: React.CSSProperties = {

@@ -1,13 +1,8 @@
 // src/utils/resumeParser.ts
+import { getApiConfig } from './aiConfig';
 
-interface ApiConfig {
-  provider: 'openai' | 'aliyun' | 'custom';
-  apiKey: string;
-  model: string;
-  baseUrl?: string;
-}
 
-interface ParsedResume {
+export interface ParsedResume {
   name?: string;
   jobTitle?: string;
   birth?: string;
@@ -20,14 +15,15 @@ interface ParsedResume {
   }[];
 }
 
-function getApiConfig(): ApiConfig | null {
-  const stored = localStorage.getItem('resume_ai_config');
-  if (!stored) return null;
-  try {
-    return JSON.parse(stored);
-  } catch {
-    return null;
-  }
+interface ChatMessage {
+  role: string;
+  content: string | ChatMessageContent[];
+}
+
+interface ChatMessageContent {
+  type: string;
+  text?: string;
+  image_url?: { url: string };
 }
 
 async function readFileAsBase64(file: File): Promise<string> {
@@ -86,11 +82,12 @@ function extractJson(content: string): string {
     clean = clean.substring(startIdx, endIdx + 1);
   }
   // 移除控制字符
+  // eslint-disable-next-line no-control-regex
   clean = clean.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '');
   return clean;
 }
 
-async function callApi(baseUrl: string, apiKey: string, model: string, messages: any[]): Promise<ParsedResume> {
+async function callApi(baseUrl: string, apiKey: string, model: string, messages: ChatMessage[]): Promise<ParsedResume> {
   const response = await fetch(`${baseUrl}/chat/completions`, {
     method: 'POST',
     headers: {
@@ -115,7 +112,7 @@ async function callApi(baseUrl: string, apiKey: string, model: string, messages:
     throw new Error('API 未返回有效内容');
   }
 
-  let jsonStr = extractJson(content);
+  const jsonStr = extractJson(content);
 
   const tryParse = (str: string): ParsedResume => {
     try {
@@ -132,15 +129,17 @@ async function callApi(baseUrl: string, apiKey: string, model: string, messages:
 
   try {
     return tryParse(jsonStr);
-  } catch (parseError: any) {
+  } catch (parseError: unknown) {
+    const errMsg = parseError instanceof Error ? parseError.message : String(parseError);
     console.error('JSON 解析失败，原始内容:', content);
     console.error('清理后的 JSON 字符串:', jsonStr);
-    throw new Error(`JSON 解析失败: ${parseError.message}`);
+    // eslint-disable-next-line preserve-caught-error
+    throw new Error(`JSON 解析失败: ${errMsg}`, { cause: parseError instanceof Error ? parseError : undefined });
   }
 }
 
 // 判断是否为多模态视觉模型
-function isVisionModel(model: string): boolean {
+export function isVisionModel(model: string): boolean {
   return /(vl|vision|claude-3|gemini-pro-vision|ocr)/i.test(model);
 }
 
@@ -156,13 +155,14 @@ export async function parseResumeFile(file: File): Promise<ParsedResume> {
 
   // ★ 核心修复：如果是图片，但配置的模型不是视觉模型，自动切换为 qwen-vl-max
   if (isImage && (!model || !isVisionModel(model))) {
-    model = 'qwen-vl-max'; 
-  } else if (!model) {
+    throw new Error('当前配置的模型不支持图片解析，请在 AI 设置中更换为视觉模型（如 qwen-vl-max、gpt-4o）。');
+  }
+  if (!model) {
     model = 'qwen-plus';
   }
 
   const visionModel = isVisionModel(model);
-  let messages: any[];
+  let messages: ChatMessage[];
   const fileType = file.type;
 
   if (fileType === 'application/pdf' ||

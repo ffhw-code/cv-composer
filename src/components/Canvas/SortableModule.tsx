@@ -17,7 +17,6 @@ interface SortableModuleProps {
 
 function SortableModule({
   id,
-  module,
   children,
   isSelected,
   onSelect,

@@ -3,6 +3,9 @@ import JSON5 from 'json5';
 import { loadTemplate, type TemplateModule } from './templates';
 import { executeCommands, type Command } from './commandExecutor';
 import type { ResumeModule } from '../store/useResumeStore';
+import { findModuleById } from '../utils/moduleUtils';
+import type { ParsedResume } from '../utils/resumeParser';
+import { getUploadedFile } from '../utils/aiConfig';
 
 export interface SkillContext {
   modules: ResumeModule[];
@@ -129,17 +132,7 @@ registerSkill('generate-resume', async (params, ctx) => {
 // 2. 润色文本
 registerSkill('polish-text', async (params, ctx) => {
   const moduleId = params.moduleId as string;
-  const findModule = (nodes: ResumeModule[], id: string): ResumeModule | null => {
-    for (const n of nodes) {
-      if (n.id === id) return n;
-      if (n.children) {
-        const found = findModule(n.children, id);
-        if (found) return found;
-      }
-    }
-    return null;
-  };
-  const target = findModule(ctx.modules, moduleId);
+  const target = findModuleById(ctx.modules, moduleId);
   if (!target) return `模块 ${moduleId} 未找到`;
   if (!target.content) return '模块无内容可润色';
 
@@ -201,12 +194,14 @@ registerSkill('smart-fill', async (params, ctx) => {
       usedLabels.add(label);
       return label;
     };
-    const extract = (nodes: any[], parentNode?: any) => {
+    interface ParsedNode { id?: string; name?: string; title?: string; content?: string; jobTitle?: string; type?: string; children?: ParsedNode[] }
+    const extract = (nodes: ParsedNode[], parentNode?: ParsedNode) => {
       for (const n of nodes) {
         const name = n.name || '';
         const title = n.title || '';
         const content = n.content || '';
         const jobTitle = n.jobTitle || '';
+        // eslint-disable-next-line no-useless-assignment
         let label = '';
         if (name && name !== '未命名' && name !== '姓名') label = name;
         else if (title) label = title;
@@ -214,9 +209,9 @@ registerSkill('smart-fill', async (params, ctx) => {
         else if (parentNode?.title && (n.type === 'heading' || n.type === 'text'))
           label = n.type === 'heading' ? `${parentNode.title} 标题` : `${parentNode.title} 内容`;
         else if (content.trim().length > 0) label = content.trim().substring(0, 20);
-        else label = n.type;
+        else label = n.type || '';
         label = generateUniqueLabel(label);
-        items.push({ label, id: n.id, type: n.type, currentContent: content || name || '' });
+        items.push({ label, id: n.id || '', type: n.type || 'text', currentContent: content || name || '' });
         if (n.children?.length) extract(n.children, n);
       }
     };
@@ -242,7 +237,8 @@ ${labelList}
 只使用上面标签，只输出 JSON。`;
 
   const aiReply = await ctx.callAiForSmartFill(systemPrompt, '请生成填充内容');
-  let cleaned = aiReply.replace(/```json\s*|\s*```/g, '').trim();
+  const cleaned = aiReply.replace(/```json\s*|\s*```/g, '').trim();
+  // eslint-disable-next-line no-useless-assignment
   let fillList: { label: string; content: string }[] | null = null;
   try {
     fillList = JSON5.parse(cleaned);
@@ -253,8 +249,9 @@ ${labelList}
       const fixed = cleaned.replace(/,\s*([}\]])/g, '$1');
       try {
         fillList = JSON5.parse(fixed);
-      } catch (e: any) {
-        return `智能填充解析失败：${e.message}`;
+      } catch (e: unknown) {
+        const errMsg = e instanceof Error ? e.message : String(e);
+        return `智能填充解析失败：${errMsg}`;
       }
     }
   }
@@ -283,7 +280,7 @@ ${labelList}
 });
 
 // 从 ParsedResume 动态生成指令数组（不依赖模板，有几个字段创建几个控件）
-function buildResumeCommands(parsed: any): Command[] {
+function buildResumeCommands(parsed: ParsedResume): Command[] {
   function esc(str: string): string {
     return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
@@ -434,11 +431,7 @@ function buildResumeCommands(parsed: any): Command[] {
 }
 
 registerSkill('import-resume', async (_params, ctx) => {
-  const uploaded = (window as any).__uploadedFile as {
-    base64: string;
-    fileName: string;
-    fileType: string;
-  } | undefined;
+  const uploaded = getUploadedFile();
 
   if (!uploaded || !uploaded.base64) {
     return '没有找到上传的简历文件，请重新上传。';
@@ -460,7 +453,7 @@ registerSkill('import-resume', async (_params, ctx) => {
     return 'PDF/Word 文件暂不支持，请先将简历转为 PNG 或 JPG 图片后上传。';
   }
 
-  let parseResumeFile: (file: File) => Promise<any>;
+  let parseResumeFile: (file: File) => Promise<ParsedResume>;
   try {
     const module = await import('../utils/resumeParser');
     parseResumeFile = module.parseResumeFile;
@@ -471,11 +464,12 @@ registerSkill('import-resume', async (_params, ctx) => {
   const blob = base64ToBlob(fileBase64, fileType);
   const file = new File([blob], fileName, { type: fileType });
 
-  let parsed: any;
+  let parsed: ParsedResume;
   try {
     parsed = await parseResumeFile(file);
-  } catch (e: any) {
-    return `文件解析失败：${e.message}`;
+  } catch (e: unknown) {
+    const errMsg = e instanceof Error ? e.message : String(e);
+    return `文件解析失败：${errMsg}`;
   }
 
   if (!parsed) return '解析结果为空。';

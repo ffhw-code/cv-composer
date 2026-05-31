@@ -1,11 +1,11 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { useResumeStore } from '../../store/useResumeStore';
 import type { ResumeModule } from '../../store/useResumeStore';
 
 export default function ImageModule({ module }: { module: ResumeModule }) {
   const updateModule = useResumeStore((s) => s.updateModule);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [_dragging, setDragging] = useState(false);
+  const [, setDragging] = useState(false);
   const startPos = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
 
   const imageData = module.content || '';
@@ -34,22 +34,9 @@ export default function ImageModule({ module }: { module: ResumeModule }) {
     reader.readAsDataURL(file);
   };
 
-  // 拖拽调整尺寸
-  const onDragStart = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragging(true);
-    const img = e.currentTarget.closest('.image-container')?.querySelector('img');
-    if (!img) return;
-    startPos.current = {
-      x: e.clientX,
-      y: e.clientY,
-      w: img.clientWidth,
-      h: img.clientHeight,
-    };
-    window.addEventListener('mousemove', onDragMove);
-    window.addEventListener('mouseup', onDragEnd);
-  }, []);
+  // 拖拽调整尺寸（使用 ref 避免循环依赖）
+  const onDragMoveRef = useRef<((e: MouseEvent) => void) | null>(null);
+  const onDragEndRef = useRef<(() => void) | null>(null);
 
   const onDragMove = useCallback((e: MouseEvent) => {
     if (!startPos.current) return;
@@ -69,9 +56,31 @@ export default function ImageModule({ module }: { module: ResumeModule }) {
   const onDragEnd = useCallback(() => {
     setDragging(false);
     startPos.current = null;
-    window.removeEventListener('mousemove', onDragMove);
-    window.removeEventListener('mouseup', onDragEnd);
-  }, [onDragMove]);
+    window.removeEventListener('mousemove', onDragMoveRef.current!);
+    window.removeEventListener('mouseup', onDragEndRef.current!);
+  }, []);
+
+  // 同步 ref（在 effect 中更新，不在 render 期间）
+  useEffect(() => {
+    onDragMoveRef.current = onDragMove;
+    onDragEndRef.current = onDragEnd;
+  });
+
+  const onDragStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragging(true);
+    const img = e.currentTarget.closest('.image-container')?.querySelector('img');
+    if (!img) return;
+    startPos.current = {
+      x: e.clientX,
+      y: e.clientY,
+      w: img.clientWidth,
+      h: img.clientHeight,
+    };
+    window.addEventListener('mousemove', onDragMoveRef.current!);
+    window.addEventListener('mouseup', onDragEndRef.current!);
+  }, []);
 
   return (
     <div className="image-container relative inline-block group">

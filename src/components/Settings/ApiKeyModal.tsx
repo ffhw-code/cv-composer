@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { getApiConfig, saveApiConfig } from '../../utils/aiConfig';
 
 interface ApiKeyModalProps {
   visible: boolean;
@@ -6,10 +7,11 @@ interface ApiKeyModalProps {
 }
 
 interface ApiConfig {
-  provider: 'openai' | 'aliyun' | 'custom';
+  provider: string;
   apiKey: string;
   model: string;
-  baseUrl?: string;
+  baseUrl: string;
+  visionModel: string;
 }
 
 const PRESETS: Record<'openai' | 'aliyun', { baseUrl: string; model: string }> = {
@@ -23,21 +25,17 @@ function ApiKeyModal({ visible, onClose }: ApiKeyModalProps) {
     apiKey: '',
     model: PRESETS.aliyun.model,
     baseUrl: PRESETS.aliyun.baseUrl,
+    visionModel: 'qwen-vl-max',
   });
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    const stored = localStorage.getItem('resume_ai_config');
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored);
-        setConfig(parsed);
-      } catch {}
-    }
+    const stored = getApiConfig();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (stored) setConfig(stored);
   }, []);
 
   const handleProviderChange = (provider: 'openai' | 'aliyun' | 'custom') => {
-    // 只有 openai 和 aliyun 有预设，custom 不自动覆盖
     const preset = provider !== 'custom' ? PRESETS[provider] : undefined;
     setConfig({
       ...config,
@@ -47,8 +45,24 @@ function ApiKeyModal({ visible, onClose }: ApiKeyModalProps) {
     });
   };
 
+  const [error, setError] = useState('');
+
   const handleSave = () => {
-    localStorage.setItem('resume_ai_config', JSON.stringify(config));
+    // baseUrl 校验
+    if (config.baseUrl) {
+      try {
+        const url = new URL(config.baseUrl);
+        if (!url.protocol.startsWith('http')) {
+          setError('Base URL 必须以 http:// 或 https:// 开头');
+          return;
+        }
+      } catch {
+        setError('Base URL 格式无效，请输入完整的 URL（如 https://api.openai.com/v1）');
+        return;
+      }
+    }
+    setError('');
+    saveApiConfig(config);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   };
@@ -65,7 +79,7 @@ function ApiKeyModal({ visible, onClose }: ApiKeyModalProps) {
             <label className="block text-sm font-medium text-gray-700 mb-1">提供商</label>
             <select
               value={config.provider}
-              onChange={(e) => handleProviderChange(e.target.value as any)}
+              onChange={(e) => handleProviderChange(e.target.value as 'openai' | 'aliyun' | 'custom')}
               className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
             >
               <option value="aliyun">阿里云百炼 (推荐)</option>
@@ -109,6 +123,7 @@ function ApiKeyModal({ visible, onClose }: ApiKeyModalProps) {
               className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
               disabled={config.provider !== 'custom'}
             />
+            {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
           </div>
         </div>
 

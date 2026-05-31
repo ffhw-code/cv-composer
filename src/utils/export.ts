@@ -106,6 +106,6 @@ export function exportPDF() {
   iframe.src = 'about:blank';
 }
 
-export async function exportResume(_format: 'pdf') {
+export async function exportResume() {
   exportPDF();
 }

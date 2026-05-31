@@ -6,6 +6,7 @@ import { executeCommands } from '../../engine/commandExecutor';
 import { executeSkill } from '../../engine/skillExecutor';
 import { buildSystemPrompt, aiTools } from '../../engine/aiPrompt';
 import { retrieveRules } from '../../engine/ruleBase';
+import { getApiConfig, setUploadedFile, getUploadedFile } from '../../utils/aiConfig';
 
 interface ChatPanelProps {
   collapsed: boolean;
@@ -16,11 +17,6 @@ const MAX_TOOL_ROUNDS = 8;
 const AI_REQUEST_TIMEOUT_MS = 120_000;
 const UNSUPPORTED_FILE_MSG = 'PDF/Word 文件暂不支持，请先将简历转为 PNG 或 JPG 图片后上传。';
 
-function getAiConfig() {
-  const stored = localStorage.getItem('resume_ai_config');
-  if (!stored) return null;
-  try { return JSON.parse(stored); } catch { return null; }
-}
 
 function isSupportedUploadFile(file: File): boolean {
   if (file.type.startsWith('image/')) return true;
@@ -77,7 +73,7 @@ function ChatPanel({ collapsed, onToggle }: ChatPanelProps) {
   useEffect(() => { autoResize(); }, [input, autoResize, maxTextareaHeight]);
 
   // 从文本中提取 JSON 数组并执行（支持括号计数 + JSON5 修复，并过滤太短的指令）
-const tryExecuteCommandsFromText = (text: string): boolean => {
+const tryExecuteCommandsFromText = async (text: string): Promise<boolean> => {
   if (!text) return false;
 
   const extractJsonArrays = (str: string): string[] => {
@@ -118,21 +114,56 @@ const tryExecuteCommandsFromText = (text: string): boolean => {
   const candidates = extractJsonArrays(text);
   let executedAny = false;
   for (const candidate of candidates) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let parsed: any;
     try { parsed = JSON.parse(candidate); } catch {
-      try { parsed = JSON.parse(fixJson(candidate)); } catch {}
+      try { parsed = JSON.parse(fixJson(candidate)); } catch { /* ignore parse errors */ }
     }
-    if (parsed && Array.isArray(parsed) && parsed.length > 0) {
+    if (!parsed || !Array.isArray(parsed) || parsed.length === 0) continue;
+
+    // 分离 execute_skill 命令（交给 skillExecutor）和普通命令（交给 commandExecutor）
+    // 兼容 AI 用 action 或 name 字段表达 execute_skill
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+const skillCmds = parsed.filter((c: any) => c.action === 'execute_skill' || c.name === 'execute_skill');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+const normalCmds = parsed.filter((c: any) => c.action !== 'execute_skill' && c.name !== 'execute_skill');
+
+    // 执行普通指令
+    if (normalCmds.length > 0) {
       const currentModules = useResumeStore.getState().modules;
-      const result = executeCommands(currentModules, parsed);
+      const result = executeCommands(currentModules, normalCmds);
       useResumeStore.getState().importModules(result.newModules);
       if (result.errors.length > 0) {
         setMessages(prev => [...prev, { role: 'ai', text: `部分指令执行出错: ${result.errors.join('; ')}` }]);
       } else {
         setMessages(prev => [...prev, { role: 'ai', text: '指令已执行。' }]);
       }
-      executedAny = true;
     }
+
+    // 执行技能指令
+    for (const sc of skillCmds) {
+      try {
+        // AI 可能把 skill name 放在 sc.name 或 sc.params.name 或 sc.params.skill
+        let skillName = sc.name || sc.params?.name || sc.params?.skill;
+        // 防御：AI 把 action 名和 skill 名混淆时，从参数推断真实技能
+        if (!skillName || skillName === 'execute_skill') {
+          if (sc.params?.template || sc.template) skillName = 'generate-resume';
+          else if (sc.params?.info) skillName = 'smart-fill';
+          else if (sc.params?.moduleId) skillName = 'polish-text';
+        }
+        // AI 可能把 template 放在 sc.params.template 或直接放在 sc.template
+        const skillParams = sc.params?.params || (sc.params?.template || sc.template) ? { template: sc.params?.template || sc.template } : {};
+        const skillResult = await executeSkill(skillName, skillParams, buildSkillContext());
+        setToast(`技能 [${sc.params?.name}] 完成`);
+        setTimeout(() => setToast(null), 2000);
+        setMessages(prev => [...prev, { role: 'ai', text: skillResult }]);
+      } catch (err: unknown) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        setMessages(prev => [...prev, { role: 'ai', text: `技能执行失败: ${errMsg}` }]);
+      }
+    }
+
+    executedAny = true;
   }
   return executedAny;
 };
@@ -140,7 +171,7 @@ const tryExecuteCommandsFromText = (text: string): boolean => {
   // 统一的 smart-fill 调用函数（自适应视觉模型格式）
   // 替换原来的 callSmartFill 函数
 const callSmartFill = async (sysPrompt: string, userPrompt: string): Promise<string> => {
-  const config = getAiConfig();
+  const config = getApiConfig();
   if (!config || !config.apiKey) throw new Error('API 未配置');
   const baseUrl = config.baseUrl || 'https://dashscope.aliyuncs.com/compatible-mode/v1';
   const model = config.model || 'qwen-plus';
@@ -179,6 +210,7 @@ const callSmartFill = async (sysPrompt: string, userPrompt: string): Promise<str
       ];
       return await callAiWithMessages(polishMsgs);
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     callAiForEvaluate: async (state: any) => {
       const evalMsgs = [
         { role: 'system', content: '请根据以下简历状态评估质量，给出优点、改进建议。' },
@@ -210,7 +242,7 @@ const callSmartFill = async (sysPrompt: string, userPrompt: string): Promise<str
       { role: 'ai', text: '正在解析简历…' },
     ]);
 
-    const config = getAiConfig();
+    const config = getApiConfig();
     if (!config || !config.apiKey) {
       replaceImportStatusMessage('请先配置 API 服务后再导入简历。');
       return;
@@ -219,14 +251,54 @@ const callSmartFill = async (sysPrompt: string, userPrompt: string): Promise<str
     try {
       const result = await executeSkill('import-resume', {}, buildSkillContext());
       replaceImportStatusMessage(result);
-    } catch (err: any) {
-      replaceImportStatusMessage(`导入失败：${err.message}`);
+    } catch (err: unknown) {
+      const importErrMsg = err instanceof Error ? err.message : String(err);
+      replaceImportStatusMessage(`导入失败：${importErrMsg}`);
     }
   };
 
     // 带工具调用循环和重试的 AI 请求
+
+/** 将 API 错误转为用户可读的中文提示 */
+function translateApiError(status: number, body: string, model: string): string {
+  // 尝试从响应体中提取有用信息
+  let detail = '';
+  try {
+    const parsed = JSON.parse(body);
+    detail = parsed.error?.message || parsed.error?.code || parsed.message || '';
+  } catch { /* ignore parse errors */ }
+
+  const lowerDetail = detail.toLowerCase();
+
+  switch (status) {
+    case 400:
+      if (lowerDetail.includes('model') || lowerDetail.includes('not found') || lowerDetail.includes('does not exist')) {
+        return `模型 "${model}" 不存在或不可用，请检查 API 设置中的模型名称是否正确。`;
+      }
+      if (lowerDetail.includes('invalid')) {
+        return `请求参数有误：${detail || '请检查 API 设置'}。`;
+      }
+      return `请求格式错误${detail ? '：' + detail : '，请检查 API 设置中的模型名称和 Base URL。'}`;
+    case 401:
+      return 'API Key 无效，请在 API 设置中重新填写。';
+    case 403:
+      return 'API Key 没有访问权限，请检查该 Key 是否已开通所需模型的调用权限。';
+    case 404:
+      return `接口地址不存在（404），模型名或 Base URL 可能填错了，请检查 API 设置。`;
+    case 429:
+      return '请求过于频繁，请稍后重试。';
+    case 500:
+    case 502:
+    case 503:
+      return 'AI 服务暂时不可用，请稍后重试。';
+    default:
+      return `AI 服务返回错误 (${status})${detail ? '：' + detail : '，请稍后重试。'}`;
+  }
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const callAiWithMessages = async (msgs: any[], retryCount = 0, toolRoundCount = 0): Promise<string> => {
-  const config = getAiConfig();
+  const config = getApiConfig();
   if (!config || !config.apiKey) return '请先配置 API 服务。';
 
   if (toolRoundCount >= MAX_TOOL_ROUNDS) {
@@ -261,38 +333,45 @@ const callAiWithMessages = async (msgs: any[], retryCount = 0, toolRoundCount = 
     });
   } catch (err: unknown) {
     if (err instanceof Error && err.name === 'AbortError') {
+      // eslint-disable-next-line preserve-caught-error
       throw new Error('请求超时，请稍后重试。');
     }
-    throw err;
+    console.error('[AI Request] 网络错误:', err);
+    throw new Error('无法连接到 AI 服务，请检查网络连接或 Base URL 是否正确。', { cause: err });
   } finally {
     clearTimeout(timeoutId);
   }
 
   if (!response.ok) {
     const errText = await response.text();
-    console.error('[AI Request] API 报错详情:', errText);
-    throw new Error(`API 请求失败: ${response.status} ${errText}`);
+    console.error('[AI Request] API 报错详情:', response.status, errText);
+    throw new Error(translateApiError(response.status, errText, model));
   }
 
   const data = await response.json();
   const msg = data.choices?.[0]?.message;
 
   if (!msg?.tool_calls) {
+    console.log('[AI] 纯文本回复 (无工具调用)');
     return msg?.content || '';
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+console.log('[AI] 收到工具调用:', msg.tool_calls.map((tc: any) => tc.function.name));
   // 百炼 API 严格要求：当 assistant 返回 tool_calls 时，content 必须为 null
   msg.content = null;
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const toolResults: any[] = [];
   let hasError = false;
 
   for (const toolCall of msg.tool_calls) {
     const fnName = toolCall.function.name;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let args: any = {};
     try {
       args = JSON.parse(toolCall.function.arguments || '{}');
-    } catch (e) {
+    } catch {
       console.error(`[Tool Call] 解析参数失败: ${toolCall.function.arguments}`);
     }
 
@@ -318,7 +397,7 @@ const callAiWithMessages = async (msgs: any[], retryCount = 0, toolRoundCount = 
         setTimeout(() => setToast(null), 2000);
         resultContent = skillResult;
       } else if (fnName === 'get_uploaded_file') {
-        const fileData = (window as any).__uploadedFile;
+        const fileData = getUploadedFile();
         if (fileData) {
           // 只返回元信息，不返回 base64，防止 context 爆炸，让技能自己去全局取
           const meta = { 
@@ -332,9 +411,9 @@ const callAiWithMessages = async (msgs: any[], retryCount = 0, toolRoundCount = 
           resultContent = '没有待处理的文件';
         }
       }
-    } catch (err: any) {
+    } catch (err) {
       hasError = true;
-      resultContent = `工具调用失败: ${err.message}`;
+      resultContent = `工具调用失败: ${(err as Error).message}`;
     }
 
     // 百炼 API 的 tool 消息必须包含 name 字段（即函数名）
@@ -376,7 +455,7 @@ const callAiWithMessages = async (msgs: any[], retryCount = 0, toolRoundCount = 
     setMessages(prev => [...prev, { role: 'user', text: userMsg }]);
     setWaiting(true);
 
-    const config = getAiConfig();
+    const config = getApiConfig();
     if (!config || !config.apiKey) {
       setMessages(prev => [...prev, { role: 'ai', text: '请先在 API 设置中配置 AI 服务。' }]);
       setWaiting(false);
@@ -389,13 +468,33 @@ const callAiWithMessages = async (msgs: any[], retryCount = 0, toolRoundCount = 
     const currentMsg = { role: 'user', content: userMsg };
 
     try {
+      console.log('[ChatPanel] 发送消息:', userMsg);
       const aiReply = await callAiWithMessages([systemMsg, ...historyMsgs, currentMsg]);
-      const executed = tryExecuteCommandsFromText(aiReply);
-      if (!executed) {
-        setMessages(prev => [...prev, { role: 'ai', text: aiReply || '未收到有效回复。' }]);
+      console.log('[ChatPanel] AI 原始回复:', JSON.stringify(aiReply).slice(0, 500));
+
+      // 防御：AI 幻觉输出 [上传文件] 格式时，静默重试
+      if (!aiReply || aiReply.startsWith('[上传文件]')) {
+        console.warn('[ChatPanel] AI 幻觉上传格式，静默重试…');
+        const retryReply = await callAiWithMessages([
+          ...([systemMsg, ...historyMsgs, currentMsg]),
+          { role: 'assistant', content: aiReply },
+          { role: 'user', content: '请直接调用 execute_skill(name: "generate-resume") 或 execute_commands 完成请求。不要输出 "[上传文件]" 格式。' },
+        ]);
+        const executed2 = await tryExecuteCommandsFromText(retryReply);
+        if (!executed2) {
+          setMessages(prev => [...prev, { role: 'ai', text: retryReply || '抱歉，请重新描述您的需求。' }]);
+        }
+      } else {
+        const executed = await tryExecuteCommandsFromText(aiReply);
+        console.log('[ChatPanel] 内联指令执行:', executed ? '是' : '否');
+        if (!executed) {
+          setMessages(prev => [...prev, { role: 'ai', text: aiReply || '未收到有效回复。' }]);
+        }
       }
-    } catch (err: any) {
-      setMessages(prev => [...prev, { role: 'ai', text: `出错了: ${err.message}` }]);
+    } catch (err: unknown) {
+      const chatErrMsg = err instanceof Error ? err.message : String(err);
+      console.error('[ChatPanel] 请求失败:', chatErrMsg);
+      setMessages(prev => [...prev, { role: 'ai', text: `出错了: ${chatErrMsg}` }]);
     } finally {
       setWaiting(false);
     }
@@ -447,10 +546,11 @@ const callAiWithMessages = async (msgs: any[], retryCount = 0, toolRoundCount = 
       base64 += '=';
     }
 
-    (window as any).__uploadedFile = { base64, fileName: file.name, fileType: file.type };
+    setUploadedFile({ base64, fileName: file.name, fileType: file.type });
     await runAutoImport(file.name, file.type);
-  } catch (err: any) {
-    setMessages(prev => [...prev, { role: 'ai', text: `文件读取失败: ${err.message}` }]);
+  } catch (err: unknown) {
+    const fileErrMsg = err instanceof Error ? err.message : String(err);
+    setMessages(prev => [...prev, { role: 'ai', text: `文件读取失败: ${fileErrMsg}` }]);
   } finally {
     setParsing(false);
     if (fileInputRef.current) fileInputRef.current.value = '';
@@ -488,11 +588,6 @@ const callAiWithMessages = async (msgs: any[], retryCount = 0, toolRoundCount = 
     });
   }
 
-  // 暴露技能上下文到全局（使用统一的 callSmartFill）
-  useEffect(() => {
-    (window as any).executeSkill = executeSkill;
-    (window as any).__skillCtx = buildSkillContext();
-  }, []);
 
   return (
     <div

@@ -1,73 +1,47 @@
-# React + TypeScript + Vite
+# cv-composer — AI 智能简历编辑器
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+AI 驱动的简历编辑器，融合自动浮动排版引擎与自然语言交互——输入内容，自动生成专业排版。
 
-Currently, two official plugins are available:
+## 快速开始
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
+npm run dev        # 启动开发服务器
+npm run build      # 生产构建
+npm test           # 运行单元测试
+npm run lint       # 代码规范检查
+npx tsc --noEmit   # 类型检查
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## AI 配置
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+点击右上角设置按钮，配置 AI 解析服务：
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+- **提供商**：阿里云百炼（推荐）、OpenAI、或自定义兼容接口
+- **API Key**：在对应平台获取，仅保存在浏览器当前会话中（关闭标签页即清除）
+- **模型**：推荐 `qwen-plus`（文本对话）或 `qwen-vl-max`（图片解析），OpenAI 可用 `gpt-4o`
+- **Base URL**：阿里云 / OpenAI 自动填写，自定义接口需手动输入完整的 `https://` 地址
+
+> 上传简历图片解析需要视觉模型（如 `qwen-vl-max`、`gpt-4o`）。如果配置了非视觉模型，解析时会收到明确提示。
+
+## 使用方式
+
+### 手动编辑
+- 左侧面板拖拽控件到画布
+- 点击模块 → 顶部工具栏分组编辑属性（基本 / 背景 / 边框 / 效果 / 布局）
+- 点击文字模块 → 编辑模式可调整字体、字号、字重、对齐等
+
+### AI 对话
+- 聊天面板中输入自然语言指令
+- 「生成一个简历模板」→ AI 自动创建结构
+- 「根据我的专业背景补充内容」→ AI 智能填充
+- 「把教育经历改为两栏布局」→ AI 调整排版
+- 上传简历图片 → AI 解析并重建为可编辑格式
+
+### 导出
+- 工具栏「保存」导出为 JSON（可后续加载继续编辑）
+- 后续将支持直接导出 PDF
+
+## 技术栈
+
+React 19 · TypeScript · Vite · Tailwind CSS 4 · TipTap · Zustand · dnd-kit · Vitest

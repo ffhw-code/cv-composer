@@ -38,6 +38,7 @@ function TextControl({ module }: { module: ResumeModule }) {
     if (!editor) return;
     const dom = editor.view.dom;
     const style = module.style || {};
+    // eslint-disable-next-line react-hooks/immutability
     dom.style.fontFamily = style.fontFamily || '';
     dom.style.fontSize = style.fontSize || '';
     dom.style.color = style.color || '';

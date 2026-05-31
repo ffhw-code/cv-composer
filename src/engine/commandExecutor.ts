@@ -1,5 +1,6 @@
 // src/engine/commandExecutor.ts
 import type { ResumeModule } from '../store/useResumeStore';
+import { useResumeStore } from '../store/useResumeStore';
 import { getStylesByType } from '../store/styleRegistry';
 
 // ==================== 指令定义 ====================
@@ -18,6 +19,7 @@ export type CommandAction =
 export interface Command {
   action: CommandAction;
   tempId?: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   params: any;
 }
 
@@ -78,9 +80,10 @@ function validateJsonFormat(commands: Command[]): string | null {
     const json = JSON.stringify(commands);
     JSON.parse(json);
     return null;
-  } catch (e: any) {
-    const pos = e.message.match(/position (\d+)/)?.[1] || '未知';
-    return `指令 JSON 格式错误（第 ${pos} 个字符处）：${e.message}`;
+  } catch (e: unknown) {
+    const errMsg = e instanceof Error ? e.message : String(e);
+    const pos = errMsg.match(/position (\d+)/)?.[1] || '未知';
+    return `指令 JSON 格式错误（第 ${pos} 个字符处）：${errMsg}`;
   }
 }
 
@@ -91,7 +94,7 @@ function generateId(): string {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
     return crypto.randomUUID();
   }
-  return `m${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  return `m${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
 function resolveId(id: string, idMap: IdMap): string {
@@ -134,6 +137,7 @@ function correctType(raw: string): string | null {
 }
 
 function matchStyleId(type: string, requested: string): string | null {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const styles = getStylesByType(type as any);
   if (!styles.length) return null;
   const exact = styles.find(s => s.style === requested);
@@ -163,6 +167,7 @@ function buildChildren(childrenCmds: Command[], parentId: string, idMap: IdMap):
       const resolvedStyleId = childParams.styleId ? matchStyleId(resolvedType, childParams.styleId) : null;
       const childMod: ResumeModule = {
         id: childId,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         type: resolvedType as any,
         styleId: resolvedStyleId || childParams.styleId,
         style: childParams.style || {},
@@ -248,7 +253,8 @@ export function executeCommands(
 
           const newMod: ResumeModule = {
             id: realId,
-            type: resolvedType as any,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        type: resolvedType as any,
             styleId: resolvedStyleId,
             style: params.style || {},
             content: params.content || '',
@@ -293,6 +299,7 @@ export function executeCommands(
 
           const newMod: ResumeModule = {
             id: realId,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             type: type as any,
             styleId: resolvedStyleId,
             style: params.style || {},
@@ -422,7 +429,11 @@ export function executeCommands(
           break;
         }
 
-        case 'selectModule': break;
+        case 'selectModule': {
+          const realId = resolveId(cmd.params.id || cmd.params.moduleId, idMap);
+          if (realId) useResumeStore.getState().select(realId);
+          break;
+        }
 
         case 'applyTemplate': {
           const params = cmd.params as ApplyTemplateParams;
@@ -444,8 +455,9 @@ export function executeCommands(
           break;
         }
       }
-    } catch (err: any) {
-      errors.push(`执行指令 ${cmd.action} 时异常: ${err.message}`);
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      errors.push(`执行指令 ${cmd.action} 时异常: ${errMsg}`);
       criticalError = true;
     }
   }

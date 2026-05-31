@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useResumeStore, type ResumeModule } from '../../store/useResumeStore';
+import { findModuleById, findParentById, getAllModuleIds } from '../../utils/moduleUtils';
 import EditableModule from '../Module/EditableModule';
 import SortableModule from './SortableModule';
 import ContextMenu from './ContextMenu';
@@ -24,26 +25,6 @@ interface CanvasAreaProps {
   onExitDeleteMode: () => void;
 }
 
-function findModuleRecursive(modules: ResumeModule[], id: string): ResumeModule | null {
-  for (const mod of modules) {
-    if (mod.id === id) return mod;
-    if (mod.children) {
-      const found = findModuleRecursive(mod.children, id);
-      if (found) return found;
-    }
-  }
-  return null;
-}
-
-function getAllSortableIds(modules: ResumeModule[]): string[] {
-  let ids: string[] = [];
-  for (const mod of modules) {
-    ids.push(mod.id);
-    if (mod.children) ids = ids.concat(getAllSortableIds(mod.children));
-  }
-  return ids;
-}
-
 function CanvasArea({ deleteMode, onExitDeleteMode }: CanvasAreaProps) {
   const modules = useResumeStore((s) => s.modules);
   const selectedId = useResumeStore((s) => s.selectedId);
@@ -61,10 +42,12 @@ function CanvasArea({ deleteMode, onExitDeleteMode }: CanvasAreaProps) {
 
   useEffect(() => {
     if (!deleteMode) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelectedIds(new Set());
       select(null);
     }
   }, [deleteMode, select]);
+
 
   const zoomIn = () => setScale((s) => Math.min(s + 0.1, 2));
   const zoomOut = () => setScale((s) => Math.max(s - 0.1, 0.5));
@@ -93,7 +76,7 @@ function CanvasArea({ deleteMode, onExitDeleteMode }: CanvasAreaProps) {
       setDropTargetId(null);
       return;
     }
-    const overModule = findModuleRecursive(modules, over.id as string);
+    const overModule = findModuleById(modules, over.id as string);
     if (
       overModule &&
       (overModule.type === 'flex' || overModule.type === 'grid') &&
@@ -112,15 +95,15 @@ function CanvasArea({ deleteMode, onExitDeleteMode }: CanvasAreaProps) {
 
     const activeIdStr = active.id as string;
     const overIdStr = over.id as string;
-    const activeModule = findModuleRecursive(modules, activeIdStr);
-    const overModule = findModuleRecursive(modules, overIdStr);
+    const activeModule = findModuleById(modules, activeIdStr);
+    const overModule = findModuleById(modules, overIdStr);
     if (!activeModule || !overModule) return;
 
     const activeRect = active.rect.current.translated;
     const overRect = over.rect;
 
-    let newParentId: string | null = null;
-    let newIndex = 0;
+    let newParentId: string | null;
+    let newIndex: number;
 
     const isContainer =
       overModule.type === 'flex' ||
@@ -142,7 +125,7 @@ function CanvasArea({ deleteMode, onExitDeleteMode }: CanvasAreaProps) {
         newIndex = childrenCount;
       }
     } else {
-      const parent = findParentInModules(modules, overIdStr);
+      const parent = findParentById(modules, overIdStr);
       const parentList: ResumeModule[] = parent ? parent.children! : modules;
       const listWithoutActive = parentList.filter(item => item.id !== activeIdStr);
       const overIndexInNewList = listWithoutActive.findIndex(item => item.id === overIdStr);
@@ -165,21 +148,10 @@ function CanvasArea({ deleteMode, onExitDeleteMode }: CanvasAreaProps) {
     moveModule(activeIdStr, newParentId, newIndex);
   };
 
-  function findParentInModules(modules: ResumeModule[], id: string): ResumeModule | null {
-    for (const mod of modules) {
-      if (mod.children && mod.children.some(c => c.id === id)) return mod;
-      if (mod.children) {
-        const found = findParentInModules(mod.children, id);
-        if (found) return found;
-      }
-    }
-    return null;
-  }
-
   const handleContextMenu = (e: React.MouseEvent, modId: string) => {
     e.preventDefault();
     e.stopPropagation();
-    const mod = findModuleRecursive(modules, modId);
+    const mod = findModuleById(modules, modId);
     if (mod) {
       select(modId);
       setContextMenu({ module: mod, x: e.clientX, y: e.clientY });
@@ -188,71 +160,19 @@ function CanvasArea({ deleteMode, onExitDeleteMode }: CanvasAreaProps) {
   const closeContextMenu = () => setContextMenu(null);
 
   function renderModuleRecursive(mod: ResumeModule): React.ReactNode {
-      const isSelected = selectedId === mod.id;
-      const isDropHighlight = mod.id === dropTargetId;
+    const isSelected = selectedId === mod.id;
+    const isDropHighlight = mod.id === dropTargetId;
 
-      const isContainer =
-        mod.type === 'flex' ||
-        mod.type === 'grid' ||
-        (mod.children && mod.children.length > 0);
+    const isContainer =
+      mod.type === 'flex' ||
+      mod.type === 'grid' ||
+      (mod.children && mod.children.length > 0);
 
-      if (isContainer) {
+    if (isContainer) {
+      const highlightClass = isDropHighlight
+        ? 'ring-2 ring-blue-400 ring-offset-2'
+        : '';
 
-        const highlightClass = isDropHighlight
-          ? 'ring-2 ring-blue-400 ring-offset-2'
-          : '';
-
-        return (
-          <SortableModule
-            key={mod.id}
-            id={mod.id}
-            module={mod}
-            isSelected={isSelected}
-            onSelect={() => select(mod.id)}
-            onEditFocus={() => select(null)}
-            disableDrag={deleteMode}
-            data-id={mod.id}
-            onContextMenu={(e) => handleContextMenu(e, mod.id)}
-          >
-            {deleteMode && (
-              <div className="absolute -left-8 top-1/2 -translate-y-1/2 z-10">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSelectedIds((prev) => {
-                      const next = new Set(prev);
-                      if (next.has(mod.id)) {
-                        next.delete(mod.id);
-                      } else {
-                        next.add(mod.id);
-                      }
-                      return next;
-                    });
-                  }}
-                  className={`w-6 h-6 p-0 border-2 rounded-full transition-all duration-75 flex items-center justify-center
-                    ${selectedIds.has(mod.id) ? 'bg-blue-500 border-blue-600 shadow-[inset_0_1px_3px_rgba(0,0,0,0.2)] translate-y-[1px]' : 'bg-white border-gray-300 hover:border-blue-400 shadow-[0_2px_4px_rgba(0,0,0,0.1)]'}
-                    active:scale-95`}
-                >
-                  {selectedIds.has(mod.id) && <span className="text-white text-xs font-bold">✓</span>}
-                </button>
-              </div>
-            )}
-            <div className={highlightClass}>
-              <EditableModule module={mod}>
-                {mod.children && mod.children.length > 0 ? (
-                  <SortableContext items={mod.children.map((c) => c.id)} strategy={verticalListSortingStrategy}>
-                    {mod.children.map((child) => renderModuleRecursive(child))}
-                  </SortableContext>
-                ) : (
-                  <p className="text-gray-400 text-sm">拖入模块或控件</p>
-                )}
-              </EditableModule>
-            </div>
-          </SortableModule>
-        );
-      }
-
-      // 叶子模块
       return (
         <SortableModule
           key={mod.id}
@@ -288,12 +208,63 @@ function CanvasArea({ deleteMode, onExitDeleteMode }: CanvasAreaProps) {
               </button>
             </div>
           )}
-          <EditableModule module={mod} />
+          <div className={highlightClass}>
+            <EditableModule module={mod}>
+              {mod.children && mod.children.length > 0 ? (
+                <SortableContext items={mod.children.map((c) => c.id)} strategy={verticalListSortingStrategy}>
+                  {mod.children.map((child) => renderModuleRecursive(child))}
+                </SortableContext>
+              ) : (
+                <p className="text-gray-400 text-sm">拖入模块或控件</p>
+              )}
+            </EditableModule>
+          </div>
         </SortableModule>
       );
+    }
+
+    // 叶子模块
+    return (
+      <SortableModule
+        key={mod.id}
+        id={mod.id}
+        module={mod}
+        isSelected={isSelected}
+        onSelect={() => select(mod.id)}
+        onEditFocus={() => select(null)}
+        disableDrag={deleteMode}
+        data-id={mod.id}
+        onContextMenu={(e) => handleContextMenu(e, mod.id)}
+      >
+        {deleteMode && (
+          <div className="absolute -left-8 top-1/2 -translate-y-1/2 z-10">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setSelectedIds((prev) => {
+                  const next = new Set(prev);
+                  if (next.has(mod.id)) {
+                    next.delete(mod.id);
+                  } else {
+                    next.add(mod.id);
+                  }
+                  return next;
+                });
+              }}
+              className={`w-6 h-6 p-0 border-2 rounded-full transition-all duration-75 flex items-center justify-center
+                ${selectedIds.has(mod.id) ? 'bg-blue-500 border-blue-600 shadow-[inset_0_1px_3px_rgba(0,0,0,0.2)] translate-y-[1px]' : 'bg-white border-gray-300 hover:border-blue-400 shadow-[0_2px_4px_rgba(0,0,0,0.1)]'}
+                active:scale-95`}
+            >
+              {selectedIds.has(mod.id) && <span className="text-white text-xs font-bold">✓</span>}
+            </button>
+          </div>
+        )}
+        <EditableModule module={mod} />
+      </SortableModule>
+    );
   }
 
-  const allIds = getAllSortableIds(modules);
+  const allIds = getAllModuleIds(modules);
 
   return (
     <div
@@ -313,7 +284,7 @@ function CanvasArea({ deleteMode, onExitDeleteMode }: CanvasAreaProps) {
           style={{
             width: '794px',
             minHeight: `${PAGE_HEIGHT}px`,
-            padding: `${pagePaddingTop} ${pagePadding} ${pagePadding} ${pagePadding}` as any,
+            padding: `${pagePaddingTop} ${pagePadding} ${pagePadding} ${pagePadding}`,
             gap: pageGap,
             transform: `scale(${scale})`,
             transformOrigin: 'top center',

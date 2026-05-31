@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 // src/hooks/useActiveEditor.ts
 import { createContext, useContext, useState, type ReactNode } from 'react';
 import type { Editor } from '@tiptap/react';

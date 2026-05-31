@@ -169,7 +169,7 @@ function Toolbar() {
     reader.onload = () => {
       try {
         const data = JSON.parse(reader.result as string);
-        if (Array.isArray(data) && data.every((item: any) => item && typeof item.id === 'string' && typeof item.type === 'string')) {
+        if (Array.isArray(data) && data.every((item: { id?: string; type?: string }) => item && typeof item.id === 'string' && typeof item.type === 'string')) {
           useResumeStore.getState().importModules(data);
         } else {
           alert('JSON 格式错误');
