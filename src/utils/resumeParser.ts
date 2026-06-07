@@ -9,10 +9,56 @@ export interface ParsedResume {
   phone?: string;
   email?: string;
   photo?: string;
-  modules?: {
-    title: string;
-    content: string;
-  }[];
+  modules?: ParsedModule[];
+  /** AI 解析出的布局元数据，用于近似复现排版 */
+  layout?: ResumeLayout;
+  /** AI 输出的布局结构树，优先级高于 buildResumeCommands */
+  layoutTree?: LayoutTree;
+}
+
+export interface ParsedModule {
+  title: string;
+  content: string;
+  /** 该模块的布局提示 */
+  layout?: ModuleLayout;
+}
+
+/** 简历整体布局描述 */
+export interface ResumeLayout {
+  colorScheme?: string;
+  headerStyle?: string;
+  fontSize?: string;
+  accentColor?: string;
+  pageBackground?: string;
+  sectionDividers?: boolean;
+}
+
+/** 单个模块的布局提示 */
+export interface ModuleLayout {
+  columns?: number;
+  hasIcons?: boolean;
+  textStyle?: string;
+  backgroundColor?: string;
+  hasShadow?: boolean;
+}
+
+/** 布局树节点：描述控件嵌套结构 */
+export interface LayoutTreeNode {
+  type: 'flex' | 'grid' | 'text' | 'heading' | 'list' | 'image';
+  ref?: string;
+  direction?: 'row' | 'column';
+  columns?: number;
+  gap?: string;
+  padding?: string;
+  lineHeight?: string;
+  style?: Record<string, string>;
+  children?: LayoutTreeNode[];
+}
+
+/** 整个简历的布局树 */
+export interface LayoutTree {
+  header: LayoutTreeNode;
+  modules: LayoutTreeNode[];
 }
 
 interface ChatMessage {
@@ -62,16 +108,17 @@ function buildPrompt(): string {
   "modules": [
     {
       "title": "模块标题（如教育背景、工作经历、技能等）",
-      "content": "模块详细内容（HTML 格式，可使用 <ul><li> 等标签）"
+      "content": "模块详细内容，保留原文格式与所有细节，用 HTML 标签（<p><strong><br/><ul><li>）"
     }
   ]
 }
 
 注意：
-1. photo 字段永远返回空字符串 ""，不要返回任何 base64 编码。
-2. 如果某项信息不存在，请用空字符串 "" 表示。
-3. 模块内容请尽量保留原文结构，使用 HTML 标签格式化。
-4. 只返回 JSON 对象，不要包含任何其他文字或解释。`;
+1. photo 永远返回 ""。
+2. 不存在的字段填空字符串 ""，禁止填"姓名""求职意向"等占位文字。
+3. 模块内容用 HTML 标签表达结构（<p><br/><strong><ul><li>），禁止用空格/全角空格对齐排版——空格对齐会导致 JSON 过大且解析失败。
+4. 每条内容控制在 500 字以内，如果简历原文很长请精炼为要点。
+5. 只返回 JSON，不要任何额外文字。`;
 }
 
 function extractJson(content: string): string {

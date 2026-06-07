@@ -3,8 +3,9 @@ import JSON5 from 'json5';
 import { loadTemplate, type TemplateModule } from './templates';
 import { executeCommands, type Command } from './commandExecutor';
 import type { ResumeModule } from '../store/useResumeStore';
+import { useResumeStore } from '../store/useResumeStore';
 import { findModuleById } from '../utils/moduleUtils';
-import type { ParsedResume } from '../utils/resumeParser';
+import type { ParsedResume, LayoutTree, LayoutTreeNode } from '../utils/resumeParser';
 import { getUploadedFile } from '../utils/aiConfig';
 
 export interface SkillContext {
@@ -279,6 +280,121 @@ ${labelList}
   return `智能填充完成，已更新 ${commands.length} 个模块。`;
 });
 
+
+// ===== 布局树翻译器 =====
+
+/** 将 AI 输出的布局树翻译为 Command 数组 */
+function translateLayoutTree(tree: LayoutTree, parsed: ParsedResume): Command[] {
+  const commands: Command[] = [];
+  let idCounter = 0;
+  const nextId = (prefix: string) => `${prefix}-${idCounter++}`;
+
+  /** 从 parsed 中取 ref 指向的值 */
+  function resolveRef(ref: string): string {
+    // modules.N.field
+    const modMatch = ref.match(/^modules\.(\d+)\.(.+)$/);
+    if (modMatch) {
+      const idx = parseInt(modMatch[1], 10);
+      const field = modMatch[2];
+      const mod = parsed.modules?.[idx];
+      if (!mod) return '';
+      if (field === 'content') return mod.content || '';
+      if (field === 'title') return mod.title || '';
+      return (mod as unknown as Record<string, string>)[field] || '';
+    }
+    // top-level field
+    return (parsed as Record<string, unknown>)[ref] as string || '';
+  }
+
+  function esc(str: string): string {
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  function walk(node: LayoutTreeNode, prefix: string): Command {
+    const id = nextId(prefix);
+    const baseStyle: Record<string, string> = { ...node.style };
+
+    // 公共样式默认值
+    if (node.type === 'text' || node.type === 'heading' || node.type === 'list') {
+      baseStyle.fontSize = baseStyle.fontSize || '15px';
+      baseStyle.color = baseStyle.color || '#334155';
+      if (node.type === 'heading') {
+        baseStyle.fontWeight = baseStyle.fontWeight || '700';
+        baseStyle.fontSize = baseStyle.fontSize || '20px';
+      }
+    }
+
+    const cmd: Command = {
+      action: 'addModule',
+      tempId: id,
+      params: {
+        type: node.type,
+        styleId: node.type + '-default',
+        style: baseStyle,
+      } as Record<string, unknown>,
+    };
+
+    // 填充内容
+    if (node.ref) {
+      const val = resolveRef(node.ref);
+      const isPlainTextField = ['name', 'jobTitle', 'birth', 'phone', 'email'].includes(node.ref);
+
+      if (node.type === 'text' || node.type === 'heading') {
+        // 个人信息是纯文本需转义；模块内容是 HTML 直接使用
+        (cmd.params as Record<string, unknown>).content = isPlainTextField
+          ? '<p>' + esc(val) + '</p>'
+          : (val || '<p></p>');
+      } else if (node.type === 'list') {
+        (cmd.params as Record<string, unknown>).content = val || '<ul><li></li></ul>';
+      } else if (node.type === 'image') {
+        (cmd.params as Record<string, unknown>).content = val;
+      }
+
+      // 个人信息字段同步到模块属性
+      if (isPlainTextField) {
+        (cmd.params as Record<string, unknown>)[node.ref] = val;
+      }
+    }
+
+    // 容器属性
+    if (node.type === 'flex') {
+      baseStyle.display = 'flex';
+      baseStyle.flexDirection = node.direction || 'column';
+    }
+    if (node.type === 'grid') {
+      baseStyle.display = 'grid';
+      baseStyle.gridTemplateColumns = 'repeat(' + (node.columns || 1) + ', 1fr)';
+    }
+    if (node.gap) baseStyle.gap = node.gap;
+    if (node.padding) baseStyle.padding = node.padding;
+    if (node.lineHeight) baseStyle.lineHeight = node.lineHeight;
+
+    // 递归子节点
+    if (node.children && node.children.length > 0) {
+      const children = node.children.map((c, i) => walk(c, prefix + '-c' + i));
+      (cmd.params as Record<string, unknown>).children = children;
+    }
+
+    return cmd;
+  }
+
+  // header
+  if (tree.header) {
+    commands.push(walk(tree.header, 'h'));
+  }
+
+  // modules
+  if (tree.modules) {
+    for (let i = 0; i < tree.modules.length; i++) {
+      commands.push(walk(tree.modules[i], 'mod' + i));
+    }
+  }
+
+  return commands;
+}
+
+// ===== 原有：从 ParsedResume 动态生成指令（回退方案） =====
+
 // 从 ParsedResume 动态生成指令数组（不依赖模板，有几个字段创建几个控件）
 function buildResumeCommands(parsed: ParsedResume): Command[] {
   function esc(str: string): string {
@@ -331,25 +447,26 @@ function buildResumeCommands(parsed: ParsedResume): Command[] {
       params: {
         type: 'grid',
         styleId: 'grid-default',
-        style: { gridTemplateColumns: cols, gap: '12px' },
+        style: { gridTemplateColumns: cols, gap: '4px' },
         children: gridChildren,
       },
     });
   }
 
-  // --- header 容器 ---
-  const headerChildren: Command[] = [
-    {
+  // --- header 容器（仅在照片数据存在时添加照片控件） ---
+  const headerChildren: Command[] = [];
+  if (parsed.photo) {
+    headerChildren.push({
       action: 'addModule' as const,
       tempId: 'h-img',
       params: {
         type: 'image',
         styleId: 'image-default',
         style: { width: '100px', height: '130px', borderRadius: '8px', objectFit: 'cover' },
-        content: '',
+        content: parsed.photo,
       },
-    },
-  ];
+    });
+  }
 
   if (infoFlexChildren.length > 0) {
     headerChildren.push({
@@ -358,39 +475,67 @@ function buildResumeCommands(parsed: ParsedResume): Command[] {
       params: {
         type: 'flex',
         styleId: 'flex-default',
-        style: { flexDirection: 'column', gap: '12px', flex: '1' },
+        style: { flexDirection: 'column', gap: '8px', flex: '1' },
         children: infoFlexChildren,
       },
     });
   }
 
-  commands.push({
-    action: 'addModule',
-    tempId: 'header',
-    params: {
-      type: 'header',
-      styleId: 'header-classic',
-      style: {
-        display: 'flex', flexDirection: 'row', alignItems: 'flex-start', gap: '20px',
-        padding: '24px', backgroundColor: '#ffffff', borderRadius: '12px',
-        border: '1px solid #e8ecf1', boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+  // --- 根据 layout 计算 header 样式 ---
+  const ly = parsed.layout || {};
+  const headerBg = ly.pageBackground || '#ffffff';
+  const accent = ly.accentColor || '#3b82f6';
+  const isCentered = ly.headerStyle === 'centered';
+
+  // 仅当有子控件时才添加 header 容器
+  if (headerChildren.length > 0) {
+    commands.push({
+      action: 'addModule',
+      tempId: 'header',
+      params: {
+        type: 'header',
+        styleId: 'header-classic',
+        style: {
+          display: 'flex',
+          flexDirection: isCentered ? 'column' : 'row',
+          alignItems: isCentered ? 'center' : 'flex-start',
+          gap: '8px',
+          padding: '12px',
+          backgroundColor: headerBg,
+          borderRadius: '12px',
+          border: ly.sectionDividers ? '1px solid #e8ecf1' : 'none',
+          boxShadow: ly.sectionDividers ? '0 1px 3px rgba(0,0,0,0.04)' : 'none',
+        },
+        children: headerChildren,
       },
-      children: headerChildren,
-    },
-  });
+    });
+  }
+
+
 
   // --- 模块容器（每个 parsed.modules 条目一个） ---
-  const moduleStyles = [
-    { id: 'module-card', style: { display: 'flex', flexDirection: 'column', gap: '12px', padding: '20px', backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' } as Record<string, string> },
-    { id: 'module-timeline', style: { display: 'flex', flexDirection: 'column', gap: '10px', padding: '16px 0 16px 24px', borderLeft: '4px solid #3b82f6' } as Record<string, string> },
-  ];
 
   const modules = parsed.modules || [];
   for (let i = 0; i < modules.length; i++) {
     const mod = modules[i];
-    const sty = moduleStyles[i % moduleStyles.length];
+    const mLayout = mod.layout || {};
     const raw = (mod.content || '').trim();
     const isList = raw.startsWith('<ul') || raw.startsWith('<ol') || raw.startsWith('- ') || raw.startsWith('• ');
+
+    // 根据 layout 调整标题样式（背景色用于标题栏装饰）
+    const headingStyle: Record<string, string> = {
+      fontSize: '18px', fontWeight: '700', color: accent,
+      padding: '4px 0',
+      backgroundColor: mLayout.backgroundColor || 'transparent',
+      borderRadius: mLayout.backgroundColor ? '6px' : '0',
+      borderBottom: ly.sectionDividers ? `2px solid ${accent}33` : 'none',
+    };
+
+    // 根据 layout 调整内容样式
+    const contentStyle: Record<string, string> = {
+      fontSize: ly.fontSize === 'large' ? '17px' : ly.fontSize === 'small' ? '13px' : '15px',
+      color: '#334155', lineHeight: '1.4',
+    };
 
     const modChildren: Command[] = [
       {
@@ -399,7 +544,7 @@ function buildResumeCommands(parsed: ParsedResume): Command[] {
         params: {
           type: 'heading',
           styleId: 'heading-default',
-          style: { fontSize: '20px', fontWeight: '700', color: '#0f172a', paddingBottom: '8px', borderBottom: '2px solid #f1f5f9' },
+          style: headingStyle,
           content: `<p>${esc(mod.title)}</p>`,
         },
       },
@@ -409,19 +554,58 @@ function buildResumeCommands(parsed: ParsedResume): Command[] {
         params: {
           type: isList ? 'list' : 'text',
           styleId: isList ? 'list-default' : 'text-default',
-          style: { fontSize: '15px', color: '#334155', lineHeight: '1.6' },
+          style: contentStyle,
           content: mod.content || '<p></p>',
         },
       },
     ];
+
+    // 如果模块是多栏布局，用 grid 包裹
+    if (mLayout.columns && mLayout.columns > 1) {
+      modChildren.length = 0;
+      modChildren.push({
+        action: 'addModule',
+        tempId: `mod-${i}-grid`,
+        params: {
+          type: 'grid',
+          styleId: 'grid-default',
+          style: { gridTemplateColumns: `repeat(${mLayout.columns}, 1fr)`, gap: '8px' },
+          children: [
+            {
+              action: 'addModule',
+              tempId: `mod-${i}-h`,
+              params: { type: 'heading', styleId: 'heading-default', style: headingStyle, content: `<p>${esc(mod.title)}</p>` },
+            },
+            {
+              action: 'addModule',
+              tempId: `mod-${i}-t`,
+              params: { type: isList ? 'list' : 'text', styleId: isList ? 'list-default' : 'text-default', style: contentStyle, content: mod.content || '<p></p>' },
+            },
+          ],
+        },
+      });
+    }
+
+    // 模块容器样式（背景色已移至标题，容器保持透明）
+    const modContainerStyle: Record<string, string> = {
+      display: 'flex', flexDirection: 'column', gap: '8px',
+      padding: '8px 0',
+      backgroundColor: 'transparent',
+    };
+    if (ly.sectionDividers) {
+      modContainerStyle.borderBottom = `1px solid ${accent}22`;
+    }
+    if (mLayout.hasShadow) {
+      modContainerStyle.boxShadow = '0 2px 8px rgba(0,0,0,0.06)';
+    }
 
     commands.push({
       action: 'addModule',
       tempId: `mod-${i}`,
       params: {
         type: 'module',
-        styleId: sty.id,
-        style: sty.style,
+        styleId: 'module-card',
+        style: modContainerStyle,
         children: modChildren,
       },
     });
@@ -429,6 +613,154 @@ function buildResumeCommands(parsed: ParsedResume): Command[] {
 
   return commands;
 }
+
+// ===== Overflow detection & compression =====
+
+const A4_HEIGHT_PX = 794;
+
+function estimateCommandHeight(cmd: Command): number {
+  const s = (cmd.params as Record<string, unknown>).style as Record<string, string> | undefined;
+  const type = (cmd.params as Record<string, unknown>).type as string;
+  const content = (cmd.params as Record<string, unknown>).content as string | undefined;
+  const children = (cmd.params as Record<string, unknown>).children as Command[] | undefined;
+  let h = 0;
+
+  const px = (key: string) => {
+    const v = s?.[key];
+    if (!v) return 0;
+    const n = parseFloat(v);
+    return isNaN(n) ? 0 : n;
+  };
+
+  const paddingV = px('paddingTop') || px('padding') || 0;
+  const gap = px('gap') || 0;
+
+  switch (type) {
+    case 'text':
+    case 'heading':
+    case 'list': {
+      const fontSize = px('fontSize') || 15;
+      const lineHeight = parseFloat(s?.lineHeight || '1.5');
+      const text = content?.replace(/<[^>]+>/g, '') || '';
+      const lines = Math.max(1, Math.ceil(text.length / 30));
+      h = fontSize * lineHeight * lines + paddingV * 2;
+      break;
+    }
+    case 'image': {
+      h = px('height') || 100;
+      break;
+    }
+    case 'flex':
+    case 'grid':
+    case 'module':
+    case 'header': {
+      let childrenH = 0;
+      if (children) {
+        for (const c of children) childrenH += estimateCommandHeight(c);
+      }
+      const childCount = children?.length || 1;
+      h = childrenH + gap * (childCount - 1) + paddingV * 2;
+      break;
+    }
+  }
+  return h;
+}
+
+function estimateTotalHeight(commands: Command[], pagePaddingTop: number, pagePaddingBottom: number): number {
+  let total = pagePaddingTop + pagePaddingBottom;
+  for (const cmd of commands) total += estimateCommandHeight(cmd);
+  return total;
+}
+
+function compressCommandTree(cmd: Command, ratio: number): void {
+  const s = (cmd.params as Record<string, unknown>).style as Record<string, string> | undefined;
+  if (!s) return;
+
+  const keys = ['padding', 'paddingTop', 'paddingBottom', 'gap', 'margin', 'marginTop', 'marginBottom'];
+
+  for (const k of keys) {
+    const v = s[k];
+    if (!v) continue;
+    const num = parseFloat(v);
+    if (isNaN(num)) continue;
+
+    const min = 0;
+    const compressed = Math.max(min, Math.round(num * ratio));
+    s[k] = compressed + 'px';
+  }
+
+  const cmdChildren = (cmd.params as Record<string, unknown>).children as Command[] | undefined;
+  if (cmdChildren) {
+    for (const c of cmdChildren) compressCommandTree(c, ratio);
+  }
+}
+
+/** 检查命令树是否还有压缩空间 */
+function canCompressMore(cmd: Command): boolean {
+  const s = (cmd.params as Record<string, unknown>).style as Record<string, string> | undefined;
+  if (!s) {
+    const children = (cmd.params as Record<string, unknown>).children as Command[] | undefined;
+    if (children) return children.some(canCompressMore);
+    return false;
+  }
+
+  const keys = ['padding', 'paddingTop', 'paddingBottom', 'gap', 'margin', 'marginTop', 'marginBottom'];
+  for (const k of keys) {
+    const v = s[k];
+    if (!v) continue;
+    const num = parseFloat(v);
+    if (!isNaN(num) && num > 0) return true;
+  }
+
+  const cmdChildren = (cmd.params as Record<string, unknown>).children as Command[] | undefined;
+  if (cmdChildren) return cmdChildren.some(canCompressMore);
+  return false;
+}
+
+function applyOverflowCompression(
+  commands: Command[],
+  pagePaddingTop: number,
+  pagePaddingBottom: number,
+): { compressed: boolean; ratio: number; newPaddingTop: number; newPaddingBottom: number; gaveUp: boolean } {
+  const MAX_ITERATIONS = 5;
+  let padTop = pagePaddingTop;
+  let padBottom = pagePaddingBottom;
+  let anyCompressed = false;
+  let finalRatio = 1;
+
+  for (let iter = 0; iter < MAX_ITERATIONS; iter++) {
+    const estimated = estimateTotalHeight(commands, padTop, padBottom);
+    console.log('[import-resume] Iteration ' + (iter + 1) + ': estimated ' + estimated.toFixed(0) + 'px / A4=' + A4_HEIGHT_PX + 'px');
+
+    if (estimated <= A4_HEIGHT_PX) break;
+
+    if (!commands.some(canCompressMore) && padTop === 0 && padBottom === 0) {
+      console.log('[import-resume] No more compression possible');
+      break;
+    }
+
+    const ratio = A4_HEIGHT_PX / estimated * 0.95;  // 留 5% 余量避免反复
+    finalRatio = ratio;
+    console.log('[import-resume] Overflow, compressing with ratio: ' + ratio.toFixed(3));
+
+    for (const cmd of commands) compressCommandTree(cmd, ratio);
+    padTop = Math.max(0, Math.round(padTop * ratio));
+    padBottom = Math.max(0, Math.round(padBottom * ratio));
+    anyCompressed = true;
+  }
+
+  // 最后一轮检查是否仍溢出
+  const finalEstimate = estimateTotalHeight(commands, padTop, padBottom);
+  const gaveUp = finalEstimate > A4_HEIGHT_PX && anyCompressed;
+
+  if (gaveUp) {
+    console.warn('[import-resume] Unable to fit content within A4 after compression. Final: ' + finalEstimate.toFixed(0) + 'px');
+  }
+
+  return { compressed: anyCompressed, ratio: finalRatio, newPaddingTop: padTop, newPaddingBottom: padBottom, gaveUp };
+}
+
+// ===== Import skill =====
 
 registerSkill('import-resume', async (_params, ctx) => {
   const uploaded = getUploadedFile();
@@ -473,9 +805,40 @@ registerSkill('import-resume', async (_params, ctx) => {
   }
 
   if (!parsed) return '解析结果为空。';
-  // 从解析数据动态生成指令（不依赖模板，有几个字段创建几个控件）
-  const commands = buildResumeCommands(parsed);
-  console.log('[import-resume] 动态生成指令数:', commands.length);
+
+  // 输出解析摘要，便于诊断
+  console.log('[import-resume] 解析结果:', JSON.stringify({
+    name: parsed.name,
+    jobTitle: parsed.jobTitle,
+    phone: parsed.phone,
+    email: parsed.email,
+    moduleCount: parsed.modules?.length || 0,
+    layoutKeys: parsed.layout ? Object.keys(parsed.layout).filter(k => parsed.layout![k as keyof typeof parsed.layout]) : [],
+  }, null, 2));
+
+  // 优先使用 AI 输出的布局树，回退到固定模板生成
+  let commands: Command[];
+  if (parsed.layoutTree) {
+    console.log('[import-resume] AI 布局树:', JSON.stringify(parsed.layoutTree, null, 2));
+    console.log('[import-resume] 使用 AI 布局树生成指令');
+    commands = translateLayoutTree(parsed.layoutTree, parsed);
+  } else {
+    console.log('[import-resume] 回退到默认模板生成指令');
+    commands = buildResumeCommands(parsed);
+  }
+  console.log('[import-resume] 生成指令数:', commands.length);
+
+  // 溢出检测（含页边距）
+  const store = useResumeStore.getState();
+  const padTop = parseInt(store.pagePaddingTop || store.pagePadding) || 40;
+  const padBottom = parseInt(store.pagePadding) || 40;
+  const overflow = applyOverflowCompression(commands, padTop, padBottom);
+
+  // 应用压缩后的页边距
+  if (overflow.compressed) {
+    useResumeStore.getState().setPagePaddingTop(String(overflow.newPaddingTop) + 'px');
+    useResumeStore.getState().setPagePadding(String(overflow.newPaddingBottom) + 'px');
+  }
 
   const result = executeCommands(ctx.modules, commands);
   console.log('[import-resume] 生成的模块数:', result.newModules.length);
@@ -484,7 +847,13 @@ registerSkill('import-resume', async (_params, ctx) => {
   }
 
   ctx.importModules(result.newModules);
-  return `简历导入完成，已导入 ${result.newModules.length} 个模块。`;
+  let compressNote = '';
+  if (overflow.gaveUp) {
+    compressNote = ' (警告：内容过多，压缩后仍超出 A4 页面，请手动调整间距或精简内容)';
+  } else if (overflow.compressed) {
+    compressNote = ' (内容溢出，已自动压缩间距和页边距)';
+  }
+  return `简历导入完成，已导入 ${result.newModules.length} 个模块。${compressNote}`;
 
 });
 

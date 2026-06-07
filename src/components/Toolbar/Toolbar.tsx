@@ -21,33 +21,54 @@ function StyleInputWithUnit({
 }) {
   const parsedValue = value?.replace(unit, '').trim() || '';
 
+  // 无预设选项：纯自定义输入
+  if (options.length === 0) {
+    return (
+      <div className="flex items-center gap-1 text-xs">
+        <span className="text-gray-500 w-10 truncate">{label}</span>
+        <input
+          type="text"
+          value={parsedValue}
+          onChange={(e) => {
+            const raw = e.target.value;
+            onChange(raw === '' ? '' : raw + unit);
+          }}
+          className="w-12 border border-gray-300 rounded px-1 py-0.5 text-xs"
+        />
+        <span className="text-gray-400 text-xs">{unit}</span>
+      </div>
+    );
+  }
+
+  // 有预设选项：下拉选择 + 自定义输入
   return (
     <div className="flex items-center gap-1 text-xs">
       <span className="text-gray-500 w-10 truncate">{label}</span>
-      {options.length > 0 ? (
+      <span className="flex items-center gap-1">
         <select
-          value={parsedValue}
-          onChange={(e) => onChange(e.target.value + unit)}
-          className="border border-gray-300 rounded text-xs py-0.5 px-1"
+          className="text-xs border border-gray-300 rounded py-0.5 px-1"
+          onChange={(e) => {
+            const val = e.target.value;
+            if (val) onChange(val + unit);
+          }}
+          value=""
         >
+          <option value="" disabled>{label}</option>
           {options.map((opt) => (
             <option key={opt} value={opt}>{opt}{unit}</option>
           ))}
         </select>
-      ) : (
-        <>
-          <input
-            type="text"
-            value={parsedValue}
-            onChange={(e) => {
-              const raw = e.target.value;
-              onChange(raw === '' ? '' : raw + unit);
-            }}
-            className="w-12 border border-gray-300 rounded px-1 py-0.5 text-xs"
-          />
-          <span className="text-gray-400 text-xs">{unit}</span>
-        </>
-      )}
+        <input
+          type="text"
+          className="w-10 text-xs border border-gray-300 rounded py-0.5 px-1"
+          placeholder="自定义"
+          value={parsedValue}
+          onChange={(e) => {
+            const raw = e.target.value;
+            onChange(raw === '' ? '' : raw + unit);
+          }}
+        />
+      </span>
     </div>
   );
 }
