@@ -46,6 +46,20 @@ export interface SetContentParams { id: string; content: string }
 export interface SetPropertyParams { id: string; property: string; value: string }
 export interface SelectModuleParams { id: string }
 export interface ApplyTemplateParams { id: string; styleId: string }
+// ==================== 结构化错误类型 ====================
+
+export interface CommandError {
+  /** 错误码，用于 LLM 自纠正 */
+  code: string;
+  /** 人类可读的描述 */
+  message: string;
+  /** 给 LLM 的修正建议 */
+  fix: string;
+}
+
+function makeError(code: string, message: string, fix: string): CommandError {
+  return { code, message, fix };
+}
 
 // ==================== 校验函数 ====================
 
@@ -191,26 +205,26 @@ function buildChildren(childrenCmds: Command[], parentId: string, idMap: IdMap):
 export function executeCommands(
   modules: ResumeModule[],
   commands: Command[]
-): { newModules: ResumeModule[]; errors: string[]; rolledBack: boolean } {
+): { newModules: ResumeModule[]; errors: CommandError[]; rolledBack: boolean } {
   // 1. 结构完整性校验
   const structureError = validateCommands(commands);
   if (structureError) {
     console.error('[SkillSystem] 指令结构校验失败:', structureError);
-    return { newModules: modules, errors: [structureError], rolledBack: false };
+    return { newModules: modules, errors: [makeError('MISSING_CHILDREN', structureError, '容器模块必须包含 children 数组。请为容器添加至少一个子 addModule 指令。')], rolledBack: false };
   }
 
   // 2. JSON 格式校验
   const jsonError = validateJsonFormat(commands);
   if (jsonError) {
     console.error('[SkillSystem] JSON 格式校验失败:', jsonError);
-    return { newModules: modules, errors: [jsonError], rolledBack: false };
+    return { newModules: modules, errors: [makeError('INVALID_FORMAT', jsonError, '指令 JSON 格式不合法，请检查括号配对、引号转义和逗号分隔。')], rolledBack: false };
   }
 
   console.group(`[SkillSystem] 执行指令序列，共 ${commands.length} 条`);
   const idMap: IdMap = new Map();
   const originalModules = deepCloneModules(modules);
   let currentModules = deepCloneModules(modules);
-  const errors: string[] = [];
+  const errors: CommandError[] = [];
   let criticalError = false;
 
   function processCommand(cmd: Command) {
@@ -223,7 +237,7 @@ export function executeCommands(
 
           const resolvedType = correctType(params.type);
           if (!resolvedType) {
-            errors.push(`无效的模块类型: "${params.type}"`);
+            errors.push(makeError("INVALID_TYPE", `无效的模块类型: "${params.type}"`, `可用的模块类型有: text, heading, list, image, flex, grid, header, module。请使用其中一种。`));
             criticalError = true;
             return;
           }
@@ -334,7 +348,7 @@ export function executeCommands(
             for (const n of nodes) { if (n.id === realId) { found = true; return; } if (n.children) checkExist(n.children); }
           };
           checkExist(currentModules);
-          if (!found) { errors.push(`updateModule: 模块 ${params.id} 不存在`); criticalError = true; return; }
+          if (!found) { errors.push(makeError("MODULE_NOT_FOUND", `updateModule: 模块 ${params.id} 不存在`, `请检查模块 id 是否正确，确保它来自「当前画布」列表中的已有模块。`)); criticalError = true; return; }
           currentModules = updateModuleInTree(currentModules, realId, (mod) => ({ ...mod, ...params.data }));
           break;
         }
@@ -350,7 +364,7 @@ export function executeCommands(
             }).map(n => ({ ...n, children: n.children ? removeFrom(n.children) : [] }));
           }
           currentModules = removeFrom(currentModules);
-          if (!found) { errors.push(`removeModule: 模块 ${params.id} 不存在`); criticalError = true; }
+          if (!found) { errors.push(makeError("MODULE_NOT_FOUND", `removeModule: 模块 ${params.id} 不存在`, `请检查要删除的模块 id，确保它来自「当前画布」列表。`)); criticalError = true; }
           break;
         }
 
@@ -366,7 +380,7 @@ export function executeCommands(
             }).map(n => ({ ...n, children: n.children ? removeMod(n.children) : [] }));
           }
           currentModules = removeMod(currentModules);
-          if (!targetMod) { errors.push(`moveModule: 模块 ${params.id} 不存在`); criticalError = true; break; }
+          if (!targetMod) { errors.push(makeError("MODULE_NOT_FOUND", `moveModule: 模块 ${params.id} 不存在`, `请检查要移动的模块 id，确保它来自「当前画布」列表。`)); criticalError = true; break; }
           if (newParentId === null) {
             const idx = Math.min(params.index, currentModules.length);
             currentModules = [...currentModules.slice(0, idx), targetMod, ...currentModules.slice(idx)];
@@ -389,7 +403,7 @@ export function executeCommands(
             for (const n of nodes) { if (n.id === realId) { found = true; return; } if (n.children) checkExist(n.children); }
           };
           checkExist(currentModules);
-          if (!found) { errors.push(`setStyle: 模块 ${params.id} 不存在`); criticalError = true; return; }
+          if (!found) { errors.push(makeError("MODULE_NOT_FOUND", `setStyle: 模块 ${params.id} 不存在`, `请检查模块 id，确保它来自「当前画布」列表。`)); criticalError = true; return; }
           currentModules = updateModuleInTree(currentModules, realId, (mod) => ({
             ...mod,
             style: { ...mod.style, ...params.style },
@@ -405,7 +419,7 @@ export function executeCommands(
             for (const n of nodes) { if (n.id === realId) { found = true; return; } if (n.children) checkExist(n.children); }
           };
           checkExist(currentModules);
-          if (!found) { errors.push(`setContent: 模块 ${params.id} 不存在`); criticalError = true; return; }
+          if (!found) { errors.push(makeError("MODULE_NOT_FOUND", `setContent: 模块 ${params.id} 不存在`, `请检查模块 id，确保它来自「当前画布」列表。`)); criticalError = true; return; }
           currentModules = updateModuleInTree(currentModules, realId, (mod) => ({
             ...mod,
             content: params.content,
@@ -421,7 +435,7 @@ export function executeCommands(
             for (const n of nodes) { if (n.id === realId) { found = true; return; } if (n.children) checkExist(n.children); }
           };
           checkExist(currentModules);
-          if (!found) { errors.push(`setProperty: 模块 ${params.id} 不存在`); criticalError = true; return; }
+          if (!found) { errors.push(makeError("MODULE_NOT_FOUND", `setProperty: 模块 ${params.id} 不存在`, `请检查模块 id，确保它来自「当前画布」列表。`)); criticalError = true; return; }
           currentModules = updateModuleInTree(currentModules, realId, (mod) => ({
             ...mod,
             style: { ...mod.style, [params.property]: params.value },
@@ -447,17 +461,17 @@ export function executeCommands(
             return null;
           };
           const mod = search(currentModules);
-          if (!mod) { errors.push(`applyTemplate: 模块 ${params.id} 不存在`); criticalError = true; return; }
+          if (!mod) { errors.push(makeError("MODULE_NOT_FOUND", `applyTemplate: 模块 ${params.id} 不存在`, `请检查模块 id，确保它来自「当前画布」列表。`)); criticalError = true; return; }
           targetType = mod.type;
           const matchedStyle = matchStyleId(targetType, params.styleId);
-          if (!matchedStyle) { errors.push(`applyTemplate: 样式 ${params.styleId} 不存在`); criticalError = true; return; }
+          if (!matchedStyle) { errors.push(makeError("TEMPLATE_NOT_FOUND", `applyTemplate: 样式 ${params.styleId} 不存在`, `可用样式请查看「可用模块类型及样式ID」列表。`)); criticalError = true; return; }
           currentModules = updateModuleInTree(currentModules, realId, (m) => ({ ...m, styleId: matchedStyle }));
           break;
         }
       }
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
-      errors.push(`执行指令 ${cmd.action} 时异常: ${errMsg}`);
+      errors.push(makeError("EXECUTION_ERROR", `执行指令 ${cmd.action} 时异常: ${errMsg}`, "请检查参数格式后重试。如果问题持续，请尝试用不同的方式描述需求。"));
       criticalError = true;
     }
   }
@@ -468,7 +482,7 @@ export function executeCommands(
   }
 
   console.log(`[SkillSystem] 执行完成，错误数: ${errors.length}`);
-  if (errors.length > 0) console.error('[SkillSystem] 错误详情:', errors);
+  if (errors.length > 0) console.error('[SkillSystem] 错误详情:', errors.map(e => e.message));
   console.groupEnd();
 
   return { newModules: errors.length > 0 ? originalModules : currentModules, errors, rolledBack: errors.length > 0 };

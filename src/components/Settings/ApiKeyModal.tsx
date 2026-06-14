@@ -16,7 +16,7 @@ interface ApiConfig {
 
 const PRESETS: Record<'openai' | 'aliyun', { baseUrl: string; model: string }> = {
   openai: { baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o' },
-  aliyun: { baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'qwen-vl-max' },
+  aliyun: { baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'qwen-max' },
 };
 
 function ApiKeyModal({ visible, onClose }: ApiKeyModalProps) {
@@ -31,7 +31,6 @@ function ApiKeyModal({ visible, onClose }: ApiKeyModalProps) {
 
   useEffect(() => {
     const stored = getApiConfig();
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (stored) setConfig(stored);
   }, []);
 
@@ -48,7 +47,6 @@ function ApiKeyModal({ visible, onClose }: ApiKeyModalProps) {
   const [error, setError] = useState('');
 
   const handleSave = () => {
-    // baseUrl 校验
     if (config.baseUrl) {
       try {
         const url = new URL(config.baseUrl);
@@ -101,14 +99,31 @@ function ApiKeyModal({ visible, onClose }: ApiKeyModalProps) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">模型</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              FC 模型 <span className="text-gray-400 font-normal">(对话/工具调用)</span>
+            </label>
             <input
               type="text"
               value={config.model}
               onChange={(e) => setConfig({ ...config, model: e.target.value })}
+              placeholder="qwen-max"
+              className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+            />
+            <p className="text-xs text-gray-400 mt-1">需要支持 Function Calling</p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              视觉模型 <span className="text-gray-400 font-normal">(图片解析)</span>
+            </label>
+            <input
+              type="text"
+              value={config.visionModel}
+              onChange={(e) => setConfig({ ...config, visionModel: e.target.value })}
               placeholder="qwen-vl-max"
               className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
             />
+            <p className="text-xs text-gray-400 mt-1">用于简历图片解析，无需支持 Function Calling</p>
           </div>
 
           <div>

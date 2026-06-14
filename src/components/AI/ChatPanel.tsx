@@ -2,10 +2,10 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useResumeStore, type ResumeModule } from '../../store/useResumeStore';
 import ApiKeyModal from '../Settings/ApiKeyModal';
-import { executeCommands } from '../../engine/commandExecutor';
-import { executeSkill } from '../../engine/skillExecutor';
 import { buildSystemPrompt, aiTools } from '../../engine/aiPrompt';
-import { retrieveRules } from '../../engine/ruleBase';
+import { getFixedConstraints } from '../../engine/ruleBase';
+import { toolHandlerMap } from '../../engine/toolHandlers';
+import { executeSkill, type SkillContext } from '../../engine/skillExecutor';
 import { getApiConfig, setUploadedFile, getUploadedFile } from '../../utils/aiConfig';
 
 interface ChatPanelProps {
@@ -13,7 +13,7 @@ interface ChatPanelProps {
   onToggle: () => void;
 }
 
-const MAX_TOOL_ROUNDS = 8;
+const MAX_TOOL_ROUNDS = 4;
 const AI_REQUEST_TIMEOUT_MS = 120_000;
 const UNSUPPORTED_FILE_MSG = 'PDF/Word 文件暂不支持，请先将简历转为 PNG 或 JPG 图片后上传。';
 
@@ -73,102 +73,7 @@ function ChatPanel({ collapsed, onToggle }: ChatPanelProps) {
   useEffect(() => { autoResize(); }, [input, autoResize, maxTextareaHeight]);
 
   // 从文本中提取 JSON 数组并执行（支持括号计数 + JSON5 修复，并过滤太短的指令）
-const tryExecuteCommandsFromText = async (text: string): Promise<boolean> => {
-  if (!text) return false;
-
-  const extractJsonArrays = (str: string): string[] => {
-    const results: string[] = [];
-    let i = 0;
-    while (i < str.length) {
-      if (str[i] === '[') {
-        let depth = 0, inString = false, escape = false;
-        let j = i;
-        while (j < str.length) {
-          const ch = str[j];
-          if (escape) { escape = false; j++; continue; }
-          if (ch === '\\') { escape = true; j++; continue; }
-          if (ch === '"') { inString = !inString; j++; continue; }
-          if (!inString) {
-            if (ch === '[') depth++;
-            if (ch === ']') depth--;
-            if (depth === 0) { results.push(str.substring(i, j + 1)); i = j + 1; break; }
-          }
-          j++;
-        }
-        if (depth !== 0) i++;
-      } else i++;
-    }
-    return results;
-  };
-
-  const fixJson = (jsonStr: string): string => {
-    let fixed = jsonStr.replace(/,\s*([}\]])/g, '$1');
-    fixed = fixed.replace(/("\s*\n\s*")/g, '",\n"');
-    fixed = fixed.replace(/(}\s*\n\s*{)/g, '},\n{');
-    fixed = fixed.replace(/(]\s*\n\s*{)/g, '],\n{');
-    fixed = fixed.replace(/(}\s*\n\s*")/g, '},\n"');
-    fixed = fixed.replace(/("\s*\n\s*{)/g, '",\n{');
-    return fixed;
-  };
-
-  const candidates = extractJsonArrays(text);
-  let executedAny = false;
-  for (const candidate of candidates) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let parsed: any;
-    try { parsed = JSON.parse(candidate); } catch {
-      try { parsed = JSON.parse(fixJson(candidate)); } catch { /* ignore parse errors */ }
-    }
-    if (!parsed || !Array.isArray(parsed) || parsed.length === 0) continue;
-
-    // 分离 execute_skill 命令（交给 skillExecutor）和普通命令（交给 commandExecutor）
-    // 兼容 AI 用 action 或 name 字段表达 execute_skill
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const skillCmds = parsed.filter((c: any) => c.action === 'execute_skill' || c.name === 'execute_skill');
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const normalCmds = parsed.filter((c: any) => c.action !== 'execute_skill' && c.name !== 'execute_skill');
-
-    // 执行普通指令
-    if (normalCmds.length > 0) {
-      const currentModules = useResumeStore.getState().modules;
-      const result = executeCommands(currentModules, normalCmds);
-      useResumeStore.getState().importModules(result.newModules);
-      if (result.errors.length > 0) {
-        setMessages(prev => [...prev, { role: 'ai', text: `部分指令执行出错: ${result.errors.join('; ')}` }]);
-      } else {
-        setMessages(prev => [...prev, { role: 'ai', text: '指令已执行。' }]);
-      }
-    }
-
-    // 执行技能指令
-    for (const sc of skillCmds) {
-      try {
-        // AI 可能把 skill name 放在 sc.name 或 sc.params.name 或 sc.params.skill
-        let skillName = sc.name || sc.params?.name || sc.params?.skill;
-        // 防御：AI 把 action 名和 skill 名混淆时，从参数推断真实技能
-        if (!skillName || skillName === 'execute_skill') {
-          if (sc.params?.template || sc.template) skillName = 'generate-resume';
-          else if (sc.params?.info) skillName = 'smart-fill';
-          else if (sc.params?.moduleId) skillName = 'polish-text';
-        }
-        // AI 可能把 template 放在 sc.params.template 或直接放在 sc.template
-        const skillParams = sc.params?.params || (sc.params?.template || sc.template) ? { template: sc.params?.template || sc.template } : {};
-        const skillResult = await executeSkill(skillName, skillParams, buildSkillContext());
-        setToast(`技能 [${sc.params?.name}] 完成`);
-        setTimeout(() => setToast(null), 2000);
-        setMessages(prev => [...prev, { role: 'ai', text: skillResult }]);
-      } catch (err: unknown) {
-        const errMsg = err instanceof Error ? err.message : String(err);
-        setMessages(prev => [...prev, { role: 'ai', text: `技能执行失败: ${errMsg}` }]);
-      }
-    }
-
-    executedAny = true;
-  }
-  return executedAny;
-};
-
-  // 统一的 smart-fill 调用函数（自适应视觉模型格式）
+// 统一的 smart-fill 调用函数（自适应视觉模型格式）
   // 替换原来的 callSmartFill 函数
 const callSmartFill = async (sysPrompt: string, userPrompt: string): Promise<string> => {
   const config = getApiConfig();
@@ -297,12 +202,105 @@ function translateApiError(status: number, body: string, model: string): string 
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const callAiWithMessages = async (msgs: any[], retryCount = 0, toolRoundCount = 0): Promise<string> => {
+const getCanvasStateSummary = (): string => {
+  const modules = useResumeStore.getState().modules;
+  if (modules.length === 0) return '（画布为空）';
+
+  const MAX_TOKENS = 3000;
+
+  const lines: string[] = [];
+  let estimatedTokens = 0;
+
+  const estimateTokens = (text: string): number => Math.ceil(text.length / 1.3);
+
+  const formatNode = (node: ResumeModule, depth: number, isLast: boolean): string => {
+    const indent = '  '.repeat(depth);
+    const prefix = isLast ? '└─ ' : '├─ ';
+    const contentSnippet = node.content
+      ? node.content.replace(/<[^>]+>/g, '').substring(0, 100)
+      : '';
+    const line = `${indent}${prefix}${node.id} (${node.type}${node.styleId ? ', ' + node.styleId : ''})${contentSnippet ? ': ' + JSON.stringify(contentSnippet) : ''}`;
+    const tokenEst = estimateTokens(line);
+    if (estimatedTokens + tokenEst > MAX_TOKENS) {
+      return '__TRUNCATED__';
+    }
+    estimatedTokens += tokenEst;
+    return line;
+  };
+
+  const totalModules = countAll(modules);
+
+  const walk = (nodes: ResumeModule[], depth: number): boolean => {
+    for (let i = 0; i < nodes.length; i++) {
+      const isLast = i === nodes.length - 1;
+      const line = formatNode(nodes[i], depth, isLast);
+      if (line === '__TRUNCATED__') {
+        lines.push(`  `.repeat(depth) + `... (共 ${totalModules} 个模块，已截断)`);
+        return true;
+      }
+      lines.push(line);
+      if (nodes[i].children && nodes[i].children.length > 0) {
+        const wasTruncated = walk(nodes[i].children, depth + 1);
+        if (wasTruncated) return true;
+      }
+    }
+    return false;
+  };
+
+  walk(modules, 0);
+  return lines.join('\n');
+};
+
+function countAll(nodes: ResumeModule[]): number {
+  let count = nodes.length;
+  for (const n of nodes) {
+    if (n.children) count += countAll(n.children);
+  }
+  return count;
+}
+
+
+
+
+/** 修复模型截断的 JSON：补全缺失的括号和引号 */
+function repairTruncatedJson(raw: string): string {
+  let s = raw.trim();
+  let braceCount = 0;
+  let bracketCount = 0;
+  let inString = false;
+  let escaped = false;
+  for (const ch of s) {
+    if (escaped) { escaped = false; continue; }
+    if (ch === "\\") { escaped = true; continue; }
+    if (ch === "\"") { inString = !inString; continue; }
+    if (inString) continue;
+    if (ch === "{") braceCount++;
+    if (ch === "}") braceCount--;
+    if (ch === "[") bracketCount++;
+    if (ch === "]") bracketCount--;
+  }
+  if (inString) s += "\"";
+  while (bracketCount > 0) { s += "]"; bracketCount--; }
+  while (braceCount > 0) { s += "}"; braceCount--; }
+  return s;
+}
+
+const callAiWithMessages = async (msgs: any[], retryCount = 0, toolRoundCount = 0, createdIds?: Set<string>): Promise<string> => {
   const config = getApiConfig();
   if (!config || !config.apiKey) return '请先配置 API 服务。';
 
   if (toolRoundCount >= MAX_TOOL_ROUNDS) {
     return '工具调用次数已达上限，请简化请求后重试。';
+  }
+
+  // 每次 API 调用前刷新画布状态，确保 AI 看到最新的模块 ID
+  if (msgs.length > 0 && msgs[0].role === 'system') {
+    const freshCanvas = getCanvasStateSummary();
+    const freshRules = getFixedConstraints();
+    msgs[0] = {
+      role: 'system',
+      content: buildSystemPrompt() + '\n\n## 必须遵守的规则\n' + freshRules + '\n\n## 当前画布\n' + freshCanvas,
+    };
   }
 
   const baseUrl = config.baseUrl || 'https://dashscope.aliyuncs.com/compatible-mode/v1';
@@ -353,45 +351,52 @@ const callAiWithMessages = async (msgs: any[], retryCount = 0, toolRoundCount = 
 
   if (!msg?.tool_calls) {
     console.log('[AI] 纯文本回复 (无工具调用)');
+
+    // 模型在首轮对话中将 tool 输出为 JSON 文本而非走 tool_calls 通道 → 不支持 function calling
+    if (toolRoundCount === 0 && retryCount === 0) {
+      const content = msg?.content || '';
+      if (/"tool"\s*:\s*"add_/.test(content) || /"action"\s*:\s*"addModule/.test(content)) {
+        throw new Error('该模型不支持 Function Calling，请更换为 qwen-max、qwen-plus-latest 或 gpt-4o。可在 API 设置中修改模型名称。');
+      }
+    }
+
     return msg?.content || '';
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
 console.log('[AI] 收到工具调用:', msg.tool_calls.map((tc: any) => tc.function.name));
   // 百炼 API 严格要求：当 assistant 返回 tool_calls 时，content 必须为 null
-  msg.content = null;
+  delete msg.content; // 避免 JSON 序列化输出 null，阿里 API 不接受 object 类型的 content
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const toolResults: any[] = [];
   let hasError = false;
+  /** 本用户消息中已创建/修改的模块 ID，用于拦截冗余的 set_style/set_property/set_content */
+  const createdIds_ = createdIds || new Set<string>();
 
   for (const toolCall of msg.tool_calls) {
     const fnName = toolCall.function.name;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let args: any = {};
+    let parseError = '';
     try {
       args = JSON.parse(toolCall.function.arguments || '{}');
     } catch {
-      console.error(`[Tool Call] 解析参数失败: ${toolCall.function.arguments}`);
+      // 模型可能截断 JSON，尝试修复缺失的括号
+      const raw = toolCall.function.arguments || '{}';
+      const repaired = repairTruncatedJson(raw);
+      try {
+        args = JSON.parse(repaired);
+        console.warn('[Tool Call] JSON 已修复，原参数不完整:', raw.slice(0, 100));
+      } catch {
+        parseError = `参数 JSON 不合法且无法修复: ${raw.slice(0, 200)}`;
+        console.error(`[Tool Call] ${parseError}`);
+      }
     }
 
     let resultContent = '';
     try {
-      if (fnName === 'get_canvas_state') {
-        resultContent = getCanvasState();
-      } else if (fnName === 'execute_commands') {
-        const commands = args.commands;
-        const currentModules = useResumeStore.getState().modules;
-        const result = executeCommands(currentModules, commands);
-        useResumeStore.getState().importModules(result.newModules);
-
-        if (result.errors.length > 0) {
-          hasError = true;
-          resultContent = `指令执行失败: ${result.errors.join('; ')}。请修正后重试。`;
-        } else {
-          resultContent = '指令已成功执行。';
-        }
-      } else if (fnName === 'execute_skill') {
+      if (fnName === 'execute_skill') {
         const skillResult = await executeSkill(args.name, args.params || {}, buildSkillContext());
         setToast(`技能 [${args.name}] 完成`);
         setTimeout(() => setToast(null), 2000);
@@ -399,7 +404,6 @@ console.log('[AI] 收到工具调用:', msg.tool_calls.map((tc: any) => tc.funct
       } else if (fnName === 'get_uploaded_file') {
         const fileData = getUploadedFile();
         if (fileData) {
-          // 只返回元信息，不返回 base64，防止 context 爆炸，让技能自己去全局取
           const meta = { 
             fileName: fileData.fileName, 
             fileType: fileData.fileType, 
@@ -409,6 +413,51 @@ console.log('[AI] 收到工具调用:', msg.tool_calls.map((tc: any) => tc.funct
           resultContent = JSON.stringify(meta);
         } else {
           resultContent = '没有待处理的文件';
+        }
+      } else {
+        // 拦截冗余样式修改：禁止对本轮刚创建的模块调 set_style/set_property
+        if ((fnName === 'set_style' || fnName === 'set_property' || fnName === 'set_content') && createdIds_.has(args.id)) {
+          hasError = true;
+          resultContent = JSON.stringify({
+            error: 'REDUNDANT_STYLE',
+            message: `${fnName}: 模块 ${args.id} 刚刚创建，内容和样式已在创建时传入，无需再次修改。`,
+            fix: `请删除此 ${fnName} 调用。add_text/add_heading/add_list 等创建工具已支持一次性传入 content 和 style。`,
+          });
+          toolResults.push({ role: 'tool', tool_call_id: toolCall.id, name: fnName, content: resultContent });
+          continue;
+        }
+
+        // 通过 toolHandlerMap 路由所有新工具
+        const handler = toolHandlerMap[fnName];
+        if (handler) {
+          const currentModules = useResumeStore.getState().modules;
+          const toolResult = await handler(args, currentModules);
+          if (toolResult.success) {
+            // 记录本轮创建的模块 ID
+            const summary = toolResult.summary;
+            if (summary && fnName.startsWith('add_')) {
+              try {
+                const parsed = JSON.parse(summary);
+                if (parsed.id) createdIds_.add(parsed.id);
+              } catch { /* summary 非 JSON 格式时忽略 */ }
+            }
+            // 也追踪被修改的模块，防止同一轮内重复 set_style/set_content
+            if (fnName === 'set_style' || fnName === 'set_property' || fnName === 'set_content') {
+              if (args.id) createdIds_.add(args.id);
+            }
+            useResumeStore.getState().importModules(toolResult.newModules);
+            resultContent = toolResult.summary || '操作已成功执行。';
+          } else {
+            hasError = true;
+            resultContent = JSON.stringify({
+              error: toolResult.code,
+              message: toolResult.message,
+              fix: toolResult.fix,
+            });
+          }
+        } else {
+          hasError = true;
+          resultContent = `未知工具: ${fnName}`;
         }
       }
     } catch (err) {
@@ -433,7 +482,7 @@ console.log('[AI] 收到工具调用:', msg.tool_calls.map((tc: any) => tc.funct
 
   if (hasError && retryCount < 2) {
     const newMsgs = [...msgs, msg, ...toolResults, trailingUserMsg];
-    return callAiWithMessages(newMsgs, retryCount + 1, toolRoundCount + 1);
+    return callAiWithMessages(newMsgs, retryCount + 1, toolRoundCount + 1, createdIds_);
   }
 
   // 重试次数已尽，返回最终错误（不再递归）
@@ -443,7 +492,7 @@ console.log('[AI] 收到工具调用:', msg.tool_calls.map((tc: any) => tc.funct
   }
 
   const newMsgs = [...msgs, msg, ...toolResults, trailingUserMsg];
-  return callAiWithMessages(newMsgs, retryCount, toolRoundCount + 1);
+  return callAiWithMessages(newMsgs, retryCount, toolRoundCount + 1, createdIds_);
 };
 
 
@@ -462,7 +511,9 @@ console.log('[AI] 收到工具调用:', msg.tool_calls.map((tc: any) => tc.funct
       return;
     }
 
-    const systemContent = buildSystemPrompt() + '\n\n## 当前可用规则参考\n' + retrieveRules(userMsg).join('\n');
+    const canvasSummary = getCanvasStateSummary();
+    const rules = getFixedConstraints();
+    const systemContent = buildSystemPrompt() + '\n\n## 必须遵守的规则\n' + rules + '\n\n## 当前画布\n' + canvasSummary;
     const systemMsg = { role: 'system', content: systemContent };
     const historyMsgs = messages.slice(-10).map(m => ({ role: m.role === 'user' ? 'user' : 'assistant', content: m.text }));
     const currentMsg = { role: 'user', content: userMsg };
@@ -470,26 +521,12 @@ console.log('[AI] 收到工具调用:', msg.tool_calls.map((tc: any) => tc.funct
     try {
       console.log('[ChatPanel] 发送消息:', userMsg);
       const aiReply = await callAiWithMessages([systemMsg, ...historyMsgs, currentMsg]);
-      console.log('[ChatPanel] AI 原始回复:', JSON.stringify(aiReply).slice(0, 500));
+      console.log('[ChatPanel] AI 回复:', JSON.stringify(aiReply).slice(0, 500));
 
-      // 防御：AI 幻觉输出 [上传文件] 格式时，静默重试
-      if (!aiReply || aiReply.startsWith('[上传文件]')) {
-        console.warn('[ChatPanel] AI 幻觉上传格式，静默重试…');
-        const retryReply = await callAiWithMessages([
-          ...([systemMsg, ...historyMsgs, currentMsg]),
-          { role: 'assistant', content: aiReply },
-          { role: 'user', content: '请直接调用 execute_skill(name: "generate-resume") 或 execute_commands 完成请求。不要输出 "[上传文件]" 格式。' },
-        ]);
-        const executed2 = await tryExecuteCommandsFromText(retryReply);
-        if (!executed2) {
-          setMessages(prev => [...prev, { role: 'ai', text: retryReply || '抱歉，请重新描述您的需求。' }]);
-        }
+      if (!aiReply) {
+        setMessages(prev => [...prev, { role: 'ai', text: '未收到有效回复，请重试。' }]);
       } else {
-        const executed = await tryExecuteCommandsFromText(aiReply);
-        console.log('[ChatPanel] 内联指令执行:', executed ? '是' : '否');
-        if (!executed) {
-          setMessages(prev => [...prev, { role: 'ai', text: aiReply || '未收到有效回复。' }]);
-        }
+        setMessages(prev => [...prev, { role: 'ai', text: aiReply }]);
       }
     } catch (err: unknown) {
       const chatErrMsg = err instanceof Error ? err.message : String(err);

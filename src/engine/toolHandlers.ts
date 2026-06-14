@@ -1,0 +1,808 @@
+// src/engine/toolHandlers.ts
+// 每个 tool 对应一个纯函数，接收参数 + 当前 modules，返回操作结果。
+// 内部通过构造 Command 调用 commandExecutor，不向 LLM 暴露 Command 结构。
+
+import { executeCommands, type Command } from './commandExecutor';
+import type { ResumeModule } from '../store/useResumeStore';
+import { loadTemplate } from './templates';
+import { useResumeStore } from '../store/useResumeStore';
+import { executeSkill, type SkillContext } from './skillExecutor';
+import { exportPDF } from '../utils/export';
+import type {
+  AddTextParams,
+  AddHeadingParams,
+  AddListParams,
+  AddImageParams,
+  AddFlexParams,
+  AddGridParams,
+  AddFlexInlineParams,
+  AddGridInlineParams,
+  InlineChildDef,
+  AddHeaderParams,
+  AddModuleParams,
+  SetContentParams,
+  SetStyleParams,
+  SetPropertyParams,
+  RemoveModuleParams,
+  MoveModuleParams,
+  DuplicateModuleParams,
+  ApplyTemplateParams,
+  ExecuteSkillParams,
+} from './aiPrompt';
+
+// ==================== 返回类型 ====================
+
+export interface ToolSuccess {
+  success: true;
+  newModules: ResumeModule[];
+  /** 给 LLM 的结果摘要，包含创建的模块 id 等内容 */
+  summary: string;
+}
+
+export interface ToolError {
+  success: false;
+  /** 错误码，用于 LLM 自纠正 */
+  code: string;
+  /** 人类可读的描述 */
+  message: string;
+  /** 给 LLM 的修正建议 */
+  fix: string;
+  /** 原始模块（未修改），ChatPanel 可据此决定是否回退 */
+  originalModules: ResumeModule[];
+}
+
+export type ToolResult = ToolSuccess | ToolError;
+
+// ==================== 辅助函数 ====================
+
+function generateId(): string {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return `m${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+function esc(str: string): string {
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function styleToRecord(style?: Record<string, string>): Record<string, string> {
+  return style || {};
+}
+
+/** 将 executeCommands 的返回值转换为 ToolResult */
+function toToolResult(
+  result: { newModules: ResumeModule[]; errors: import('./commandExecutor').CommandError[] },
+  originalModules: ResumeModule[],
+  summary?: string,
+): ToolResult {
+  if (result.errors.length === 0) {
+    return { success: true, newModules: result.newModules, summary: summary || '操作已成功执行。' };
+  }
+  const firstError = result.errors[0];
+  return {
+    success: false,
+    code: firstError.code,
+    message: firstError.message,
+    fix: firstError.fix,
+    originalModules,
+  };
+}
+
+/** 将内联子控件转换为 Command 数组 */
+function inlineChildrenToCommands(children: InlineChildDef[], parentTempId: string): Command[] {
+  return children.map((child, i) => {
+    const style: Record<string, string> = { ...child.style };
+    // 默认样式
+    if (child.type === 'heading') {
+      style.fontSize = style.fontSize || '20px';
+      style.fontWeight = style.fontWeight || '700';
+    }
+    if (!style.fontSize) style.fontSize = '15px';
+    if (!style.color) style.color = '#334155';
+
+    return {
+      action: 'addModule' as const,
+      tempId: `${parentTempId}-c${i}`,
+      params: {
+        type: child.type,
+        styleId: `${child.type}-default`,
+        style,
+        content: child.content || '',
+      },
+    };
+  });
+}
+
+// ==================== Tool Handler 函数 ====================
+
+export function handleAddText(params: AddTextParams, modules: ResumeModule[]): ToolResult {
+  const cmd: Command = {
+    action: 'addModule',
+    params: {
+      type: 'text',
+      styleId: 'text-default',
+      style: styleToRecord(params.style),
+      content: params.content,
+    },
+  };
+  const result = executeCommands(modules, [cmd]);
+  const newId = result.newModules.length > 0 ? result.newModules[result.newModules.length - 1]?.id : '';
+  return toToolResult(result, modules, JSON.stringify({ id: newId, type: 'text', content: params.content?.slice(0, 60) }));
+}
+
+export function handleAddHeading(params: AddHeadingParams, modules: ResumeModule[]): ToolResult {
+  const cmd: Command = {
+    action: 'addModule',
+    params: {
+      type: 'heading',
+      styleId: 'heading-default',
+      style: {
+        fontSize: '20px',
+        fontWeight: '700',
+        color: '#0f172a',
+        ...styleToRecord(params.style),
+      },
+      content: params.content,
+    },
+  };
+  const result = executeCommands(modules, [cmd]);
+  const newId = result.newModules.length > 0 ? result.newModules[result.newModules.length - 1]?.id : '';
+  return toToolResult(result, modules, JSON.stringify({ id: newId, type: 'heading', content: params.content?.slice(0, 60) }));
+}
+
+export function handleAddList(params: AddListParams, modules: ResumeModule[]): ToolResult {
+  const cmd: Command = {
+    action: 'addModule',
+    params: {
+      type: 'list',
+      styleId: 'list-default',
+      style: styleToRecord(params.style),
+      content: params.content,
+    },
+  };
+  const result = executeCommands(modules, [cmd]);
+  const newId = result.newModules.length > 0 ? result.newModules[result.newModules.length - 1]?.id : '';
+  return toToolResult(result, modules, JSON.stringify({ id: newId, type: 'list', content: params.content?.slice(0, 60) }));
+}
+
+export function handleAddImage(params: AddImageParams, modules: ResumeModule[]): ToolResult {
+  const cmd: Command = {
+    action: 'addModule',
+    params: {
+      type: 'image',
+      styleId: 'image-default',
+      style: {
+        width: '100px',
+        height: '130px',
+        borderRadius: '8px',
+        objectFit: 'cover',
+        ...styleToRecord(params.style),
+      },
+      content: params.content || '',
+    },
+  };
+  const result = executeCommands(modules, [cmd]);
+  const newId = result.newModules.length > 0 ? result.newModules[result.newModules.length - 1]?.id : '';
+  return toToolResult(result, modules, JSON.stringify({ id: newId, type: 'image' }));
+}
+
+export function handleAddFlex(params: AddFlexParams, modules: ResumeModule[]): ToolResult {
+  if (!params.children || params.children.length === 0) {
+    return {
+      success: false,
+      code: 'MISSING_CHILDREN',
+      message: 'add_flex 需要至少一个 children 元素。如需创建新子模块，请使用 add_flex_inline。',
+      fix: '请使用 add_flex_inline 工具，它允许内联定义子控件：add_flex_inline(children: [{type:"text", content:"..."}], direction:"column")',
+      originalModules: modules,
+    };
+  }
+
+  // 查找并收集所有需要包装的模块
+  const findMod = (nodes: ResumeModule[], id: string): ResumeModule | null => {
+    for (const n of nodes) {
+      if (n.id === id) return n;
+      if (n.children) {
+        const found = findMod(n.children, id);
+        if (found) return found;
+      }
+    }
+    return null;
+  };
+
+  const childModules: ResumeModule[] = [];
+  for (const childId of params.children) {
+    const mod = findMod(modules, childId);
+    if (!mod) {
+      return {
+        success: false,
+        code: 'MODULE_NOT_FOUND',
+        message: `add_flex 的子模块 "${childId}" 在当前画布中不存在。`,
+        fix: `请检查 children 中的 id。如需创建新子模块，请使用 add_flex_inline。`,
+        originalModules: modules,
+      };
+    }
+    childModules.push(mod);
+  }
+
+  // 将已有模块转为嵌套 Command（深拷贝内容，保留样式）
+  const flexTempId = 'flex-' + generateId();
+  const childrenCmds: Command[] = childModules.map((mod, i) => ({
+    action: 'addModule' as const,
+    tempId: `${flexTempId}-c${i}`,
+    params: {
+      type: mod.type,
+      styleId: mod.styleId,
+      style: { ...mod.style },
+      content: mod.content,
+      name: mod.name,
+      jobTitle: mod.jobTitle,
+      birth: mod.birth,
+      phone: mod.phone,
+      email: mod.email,
+      title: mod.title,
+    },
+  }));
+
+  // 创建 flex 并删除原模块（一次 executeCommands 调用中完成）
+  const commands: Command[] = [
+    {
+      action: 'addModule',
+      tempId: flexTempId,
+      params: {
+        type: 'flex',
+        styleId: 'flex-default',
+        style: {
+          display: 'flex',
+          flexDirection: params.direction || 'column',
+          gap: params.gap || '12px',
+          ...styleToRecord(params.style),
+        },
+        children: childrenCmds,
+      },
+    },
+    ...params.children.map(childId => ({
+      action: 'removeModule' as const,
+      params: { id: childId },
+    })),
+  ];
+
+  return toToolResult(executeCommands(modules, commands), modules);
+}
+
+export function handleAddGrid(params: AddGridParams, modules: ResumeModule[]): ToolResult {
+  if (!params.children || params.children.length === 0) {
+    return {
+      success: false,
+      code: 'MISSING_CHILDREN',
+      message: 'add_grid 需要至少一个 children 元素。如需创建新子模块，请使用 add_grid_inline。',
+      fix: '请使用 add_grid_inline 工具，它允许内联定义子控件：add_grid_inline(children: [{type:"text", content:"..."}], columns: 2)',
+      originalModules: modules,
+    };
+  }
+
+  const findMod = (nodes: ResumeModule[], id: string): ResumeModule | null => {
+    for (const n of nodes) {
+      if (n.id === id) return n;
+      if (n.children) {
+        const found = findMod(n.children, id);
+        if (found) return found;
+      }
+    }
+    return null;
+  };
+
+  const childModules: ResumeModule[] = [];
+  for (const childId of params.children) {
+    const mod = findMod(modules, childId);
+    if (!mod) {
+      return {
+        success: false,
+        code: 'MODULE_NOT_FOUND',
+        message: `add_grid 的子模块 "${childId}" 在当前画布中不存在。`,
+        fix: `请检查 children 中的 id。如需创建新子模块，请使用 add_grid_inline。`,
+        originalModules: modules,
+      };
+    }
+    childModules.push(mod);
+  }
+
+  const gridTempId = 'grid-' + generateId();
+  const columns = params.columns || 2;
+  const childrenCmds: Command[] = childModules.map((mod, i) => ({
+    action: 'addModule' as const,
+    tempId: `${gridTempId}-c${i}`,
+    params: {
+      type: mod.type,
+      styleId: mod.styleId,
+      style: { ...mod.style },
+      content: mod.content,
+      name: mod.name,
+      jobTitle: mod.jobTitle,
+      birth: mod.birth,
+      phone: mod.phone,
+      email: mod.email,
+      title: mod.title,
+    },
+  }));
+
+  const commands: Command[] = [
+    {
+      action: 'addModule',
+      tempId: gridTempId,
+      params: {
+        type: 'grid',
+        styleId: 'grid-default',
+        style: {
+          display: 'grid',
+          gridTemplateColumns: `repeat(${columns}, 1fr)`,
+          gap: params.gap || '12px',
+          ...styleToRecord(params.style),
+        },
+        children: childrenCmds,
+      },
+    },
+    ...params.children.map(childId => ({
+      action: 'removeModule' as const,
+      params: { id: childId },
+    })),
+  ];
+
+  return toToolResult(executeCommands(modules, commands), modules);
+}
+
+export function handleAddFlexInline(params: AddFlexInlineParams, modules: ResumeModule[]): ToolResult {
+  const tempId = 'flex-inline-' + generateId();
+  const childrenCmds = inlineChildrenToCommands(params.children, tempId);
+
+  const cmd: Command = {
+    action: 'addModule',
+    tempId,
+    params: {
+      type: 'flex',
+      styleId: 'flex-default',
+      style: {
+        display: 'flex',
+        flexDirection: params.direction || 'column',
+        gap: params.gap || '12px',
+        ...styleToRecord(params.style),
+      },
+      children: childrenCmds,
+    },
+  };
+
+  return toToolResult(executeCommands(modules, [cmd]), modules);
+}
+
+export function handleAddGridInline(params: AddGridInlineParams, modules: ResumeModule[]): ToolResult {
+  const tempId = 'grid-inline-' + generateId();
+  const childrenCmds = inlineChildrenToCommands(params.children, tempId);
+  const columns = params.columns || 2;
+
+  const cmd: Command = {
+    action: 'addModule',
+    tempId,
+    params: {
+      type: 'grid',
+      styleId: 'grid-default',
+      style: {
+        display: 'grid',
+        gridTemplateColumns: `repeat(${columns}, 1fr)`,
+        gap: params.gap || '12px',
+        ...styleToRecord(params.style),
+      },
+      children: childrenCmds,
+    },
+  };
+
+  return toToolResult(executeCommands(modules, [cmd]), modules);
+}
+
+export function handleAddHeader(params: AddHeaderParams, modules: ResumeModule[]): ToolResult {
+  const headerTempId = 'header-' + generateId();
+
+  // 从模板中查找对应 header 样式，获取默认结构
+  // 如果找不到，构建通用结构：photo + info flex
+  const cmd: Command = {
+    action: 'addModule',
+    tempId: headerTempId,
+    params: {
+      type: 'header',
+      styleId: params.styleId,
+      style: {
+        display: 'flex',
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: '20px',
+        padding: '24px',
+        backgroundColor: '#ffffff',
+        borderRadius: '12px',
+        border: '1px solid #e8ecf1',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+      },
+      children: [
+        {
+          action: 'addModule' as const,
+          tempId: `${headerTempId}-photo`,
+          params: {
+            type: 'image',
+            styleId: 'image-default',
+            style: { width: '100px', height: '130px', borderRadius: '8px', objectFit: 'cover' },
+            content: '',
+          },
+        },
+        {
+          action: 'addModule' as const,
+          tempId: `${headerTempId}-info`,
+          params: {
+            type: 'flex',
+            styleId: 'flex-default',
+            style: { flexDirection: 'column', gap: '12px', flex: '1' },
+            children: [
+              {
+                action: 'addModule' as const,
+                tempId: `${headerTempId}-name`,
+                params: {
+                  type: 'text',
+                  styleId: 'text-default',
+                  style: { fontSize: '24px', fontWeight: '700', color: '#1a202c' },
+                  content: '姓名',
+                  name: '姓名',
+                },
+              },
+              {
+                action: 'addModule' as const,
+                tempId: `${headerTempId}-grid`,
+                params: {
+                  type: 'grid',
+                  styleId: 'grid-default',
+                  style: { gridTemplateColumns: '1fr 1fr', gap: '12px' },
+                  children: [
+                    {
+                      action: 'addModule' as const,
+                      params: { type: 'text', styleId: 'text-default', content: '求职意向', jobTitle: '求职意向' },
+                    },
+                    {
+                      action: 'addModule' as const,
+                      params: { type: 'text', styleId: 'text-default', content: '出生年月', birth: '出生年月' },
+                    },
+                    {
+                      action: 'addModule' as const,
+                      params: { type: 'text', styleId: 'text-default', content: '📞 电话', phone: '电话' },
+                    },
+                    {
+                      action: 'addModule' as const,
+                      params: { type: 'text', styleId: 'text-default', content: '📧 邮箱', email: '邮箱' },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        },
+      ],
+    },
+  };
+
+  const result = executeCommands(modules, [cmd]);
+  const newId = result.newModules.length > 0 ? result.newModules[result.newModules.length - 1]?.id : '';
+  return toToolResult(result, modules, JSON.stringify({ id: newId, type: 'header', styleId: params.styleId }));
+}
+
+export function handleAddModule(params: AddModuleParams, modules: ResumeModule[]): ToolResult {
+  const modTempId = 'mod-' + generateId();
+
+  const cmd: Command = {
+    action: 'addModule',
+    tempId: modTempId,
+    params: {
+      type: 'module',
+      styleId: params.styleId,
+      style: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '12px',
+        padding: '20px',
+        backgroundColor: '#ffffff',
+        borderRadius: '12px',
+        border: '1px solid #e2e8f0',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+      },
+      children: [
+        {
+          action: 'addModule' as const,
+          tempId: `${modTempId}-heading`,
+          params: {
+            type: 'heading',
+            styleId: 'heading-default',
+            style: { fontSize: '20px', fontWeight: '700', color: '#0f172a', paddingBottom: '8px', borderBottom: '2px solid #f1f5f9' },
+            content: `<p>${esc(params.title)}</p>`,
+            title: params.title,
+          },
+        },
+        {
+          action: 'addModule' as const,
+          tempId: `${modTempId}-text`,
+          params: {
+            type: 'text',
+            styleId: 'text-default',
+            style: { fontSize: '15px', color: '#334155', lineHeight: '1.6' },
+            content: params.content || '<p></p>',
+          },
+        },
+      ],
+    },
+  };
+
+  const result = executeCommands(modules, [cmd]);
+  const newId = result.newModules.length > 0 ? result.newModules[result.newModules.length - 1]?.id : '';
+  return toToolResult(result, modules, JSON.stringify({ id: newId, type: 'module', title: params.title }));
+}
+
+export function handleSetContent(params: SetContentParams, modules: ResumeModule[]): ToolResult {
+  const cmd: Command = {
+    action: 'setContent',
+    params: { id: params.id, content: params.content },
+  };
+  return toToolResult(executeCommands(modules, [cmd]), modules);
+}
+
+export function handleSetStyle(params: SetStyleParams, modules: ResumeModule[]): ToolResult {
+  const cmd: Command = {
+    action: 'setStyle',
+    params: { id: params.id, style: params.style },
+  };
+  return toToolResult(executeCommands(modules, [cmd]), modules);
+}
+
+export function handleSetProperty(params: SetPropertyParams, modules: ResumeModule[]): ToolResult {
+  const cmd: Command = {
+    action: 'setProperty',
+    params: { id: params.id, property: params.property, value: params.value },
+  };
+  return toToolResult(executeCommands(modules, [cmd]), modules);
+}
+
+export function handleRemoveModule(params: RemoveModuleParams, modules: ResumeModule[]): ToolResult {
+  const cmd: Command = {
+    action: 'removeModule',
+    params: { id: params.id },
+  };
+  return toToolResult(executeCommands(modules, [cmd]), modules);
+}
+
+export function handleMoveModule(params: MoveModuleParams, modules: ResumeModule[]): ToolResult {
+  const cmd: Command = {
+    action: 'moveModule',
+    params: { id: params.id, newParentId: params.parent_id || null, index: params.index },
+  };
+  return toToolResult(executeCommands(modules, [cmd]), modules);
+}
+
+export function handleDuplicateModule(params: DuplicateModuleParams, modules: ResumeModule[]): ToolResult {
+  // 查找目标模块
+  const findMod = (nodes: ResumeModule[], id: string): ResumeModule | null => {
+    for (const n of nodes) {
+      if (n.id === id) return n;
+      if (n.children) {
+        const found = findMod(n.children, id);
+        if (found) return found;
+      }
+    }
+    return null;
+  };
+
+  const target = findMod(modules, params.id);
+  if (!target) {
+    return {
+      success: false,
+      code: 'MODULE_NOT_FOUND',
+      message: `复制失败：模块 "${params.id}" 不存在。`,
+      fix: `请检查 id 是否正确。当前画布中可用的模块 id 需来自「当前画布」列表。`,
+      originalModules: modules,
+    };
+  }
+
+  // 深拷贝并生成新 id
+  const newId = generateId();
+  const deepClone = (node: ResumeModule, parentId?: string): ResumeModule => ({
+    ...node,
+    id: node.id === target.id ? newId : generateId(),
+    parentId: parentId || node.parentId,
+    children: (node.children || []).map(c => deepClone(c, node.id === target.id ? newId : c.parentId)),
+  });
+
+  const clone = deepClone(target, target.parentId);
+  const result = executeCommands(modules, [{
+    action: 'addModule',
+    params: {
+      type: clone.type,
+      styleId: clone.styleId,
+      style: clone.style,
+      content: clone.content,
+      name: clone.name,
+      jobTitle: clone.jobTitle,
+      birth: clone.birth,
+      phone: clone.phone,
+      email: clone.email,
+      title: clone.title,
+      parentId: clone.parentId,
+      children: clone.children?.map(c => ({
+        action: 'addModule' as const,
+        params: {
+          type: c.type,
+          styleId: c.styleId,
+          style: c.style,
+          content: c.content,
+          name: c.name,
+          jobTitle: c.jobTitle,
+          birth: c.birth,
+          phone: c.phone,
+          email: c.email,
+          title: c.title,
+          children: c.children?.map(gc => ({
+            action: 'addModule' as const,
+            params: {
+              type: gc.type,
+              styleId: gc.styleId,
+              style: gc.style,
+              content: gc.content,
+            },
+          })),
+        },
+      })),
+    },
+  }]);
+
+  return toToolResult(result, modules);
+}
+
+export function handleApplyTemplate(params: ApplyTemplateParams, modules: ResumeModule[]): ToolResult {
+  const template = loadTemplate(params.name);
+  if (!template) {
+    return {
+      success: false,
+      code: 'TEMPLATE_NOT_FOUND',
+      message: `模板 "${params.name}" 不存在。`,
+      fix: '可用的模板有: simple（简约）、classic（经典）。请使用 apply_template(name: "simple") 或 apply_template(name: "classic")。',
+      originalModules: modules,
+    };
+  }
+
+  // 清空画布并导入模板模块
+  const store = useResumeStore.getState();
+  store.importModules([]);
+
+  const commands: Command[] = template.modules.map(mod => ({
+    action: 'addModule' as const,
+    tempId: mod.tempId,
+    params: {
+      type: mod.type,
+      styleId: mod.styleId,
+      style: mod.style,
+      content: mod.content,
+      name: mod.name,
+      jobTitle: mod.jobTitle,
+      birth: mod.birth,
+      phone: mod.phone,
+      email: mod.email,
+      title: mod.title,
+      children: mod.children?.map(c => ({
+        action: 'addModule' as const,
+        tempId: c.tempId,
+        params: {
+          type: c.type,
+          styleId: c.styleId,
+          style: c.style,
+          content: c.content,
+          name: c.name,
+          jobTitle: c.jobTitle,
+          birth: c.birth,
+          phone: c.phone,
+          email: c.email,
+          title: c.title,
+          children: c.children?.map(gc => ({
+            action: 'addModule' as const,
+            tempId: gc.tempId,
+            params: {
+              type: gc.type,
+              styleId: gc.styleId,
+              style: gc.style,
+              content: gc.content,
+              name: gc.name,
+              jobTitle: gc.jobTitle,
+              birth: gc.birth,
+              phone: gc.phone,
+              email: gc.email,
+              title: gc.title,
+              children: gc.children?.map(ggc => ({
+                action: 'addModule' as const,
+                tempId: ggc.tempId,
+                params: {
+                  type: ggc.type,
+                  styleId: ggc.styleId,
+                  style: ggc.style,
+                  content: ggc.content,
+                  name: ggc.name,
+                  jobTitle: ggc.jobTitle,
+                  birth: ggc.birth,
+                  phone: ggc.phone,
+                  email: ggc.email,
+                  title: ggc.title,
+                },
+              })),
+            },
+          })),
+        },
+      })),
+    },
+  }));
+
+  const result = executeCommands([], commands);
+  store.importModules(result.newModules);
+  return { success: true, newModules: result.newModules, summary: `已应用「${params.name}」模板，共 ${result.newModules.length} 个模块。` };
+}
+
+export function handleExportPdf(_modules: ResumeModule[]): ToolResult {
+  try {
+    exportPDF();
+    return { success: true, newModules: _modules, summary: 'PDF 打印已触发。' };
+  } catch (e: unknown) {
+    const errMsg = e instanceof Error ? e.message : String(e);
+    return {
+      success: false,
+      code: 'EXPORT_ERROR',
+      message: `导出 PDF 失败：${errMsg}`,
+      fix: '请确认画布中有内容，然后重试。如果问题持续，请刷新页面。',
+      originalModules: _modules,
+    };
+  }
+}
+
+export async function handleExecuteSkill(
+  params: ExecuteSkillParams,
+  modules: ResumeModule[],
+  skillCtx: SkillContext,
+): Promise<ToolResult> {
+  try {
+    const resultMsg = await executeSkill(params.name, params.params || {}, skillCtx);
+    // 技能执行后模块可能已通过 ctx.importModules 更新
+    const store = useResumeStore.getState();
+    return { success: true, newModules: store.modules, summary: `技能「${params.name}」执行完成。` };
+  } catch (e: unknown) {
+    const errMsg = e instanceof Error ? e.message : String(e);
+    return {
+      success: false,
+      code: 'SKILL_ERROR',
+      message: `技能 "${params.name}" 执行失败：${errMsg}`,
+      fix: '请检查技能名称和参数是否正确，可用的技能有: generate-resume, polish-text, evaluate-resume, apply-theme, smart-fill, import-resume。',
+      originalModules: modules,
+    };
+  }
+}
+
+// ==================== Tool 路由表 ====================
+
+export type ToolHandler = (params: Record<string, unknown>, modules: ResumeModule[]) => ToolResult | Promise<ToolResult>;
+
+export const toolHandlerMap: Record<string, ToolHandler> = {
+  add_text: (p, m) => handleAddText(p as unknown as AddTextParams, m),
+  add_heading: (p, m) => handleAddHeading(p as unknown as AddHeadingParams, m),
+  add_list: (p, m) => handleAddList(p as unknown as AddListParams, m),
+  add_image: (p, m) => handleAddImage(p as unknown as AddImageParams, m),
+  add_flex: (p, m) => handleAddFlex(p as unknown as AddFlexParams, m),
+  add_grid: (p, m) => handleAddGrid(p as unknown as AddGridParams, m),
+  add_flex_inline: (p, m) => handleAddFlexInline(p as unknown as AddFlexInlineParams, m),
+  add_grid_inline: (p, m) => handleAddGridInline(p as unknown as AddGridInlineParams, m),
+  add_header: (p, m) => handleAddHeader(p as unknown as AddHeaderParams, m),
+  add_module: (p, m) => handleAddModule(p as unknown as AddModuleParams, m),
+  set_content: (p, m) => handleSetContent(p as unknown as SetContentParams, m),
+  set_style: (p, m) => handleSetStyle(p as unknown as SetStyleParams, m),
+  set_property: (p, m) => handleSetProperty(p as unknown as SetPropertyParams, m),
+  remove_module: (p, m) => handleRemoveModule(p as unknown as RemoveModuleParams, m),
+  move_module: (p, m) => handleMoveModule(p as unknown as MoveModuleParams, m),
+  duplicate_module: (p, m) => handleDuplicateModule(p as unknown as DuplicateModuleParams, m),
+  apply_template: (p, m) => handleApplyTemplate(p as unknown as ApplyTemplateParams, m),
+  export_pdf: (p, m) => handleExportPdf(m),
+  // execute_skill and get_uploaded_file handled separately by ChatPanel (async + file access)
+};

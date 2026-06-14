@@ -1,0 +1,378 @@
+import { describe, it, expect, beforeAll } from 'vitest';
+import type { ResumeModule } from '../store/useResumeStore';
+import { initStyles } from '../styleInit';
+import {
+  handleAddText,
+  handleAddHeading,
+  handleAddList,
+  handleAddImage,
+  handleAddFlex,
+  handleAddGrid,
+  handleAddFlexInline,
+  handleAddGridInline,
+  handleAddHeader,
+  handleAddModule,
+  handleSetContent,
+  handleSetStyle,
+  handleSetProperty,
+  handleRemoveModule,
+  handleMoveModule,
+  handleDuplicateModule,
+  handleApplyTemplate,
+  toolHandlerMap,
+  type ToolResult,
+} from './toolHandlers';
+import { useResumeStore } from '../store/useResumeStore';
+
+beforeAll(() => {
+  initStyles();
+});
+
+// ============================================================
+// 辅助：成功断言
+// ============================================================
+function expectSuccess(result: ToolResult): ResumeModule[] {
+  if (!result.success) {
+    throw new Error(`Expected success but got error: ${result.code} - ${result.message}`);
+  }
+  return result.newModules;
+}
+
+function expectError(result: ToolResult): { code: string; message: string; fix: string } {
+  if (result.success) {
+    throw new Error('Expected error but got success');
+  }
+  return { code: result.code, message: result.message, fix: result.fix };
+}
+
+// ============================================================
+// 基础控件 handler
+// ============================================================
+describe('handleAddText', () => {
+  it('创建文本框并返回正确类型和内容', () => {
+    const result = expectSuccess(handleAddText({ content: '<p>Hello</p>' }, []));
+    expect(result).toHaveLength(1);
+    expect(result[0].type).toBe('text');
+    expect(result[0].content).toBe('<p>Hello</p>');
+    expect(result[0].styleId).toBe('text-default');
+  });
+
+  it('自定义样式被应用', () => {
+    const result = expectSuccess(handleAddText({
+      content: 'X',
+      style: { fontSize: '18px', color: '#ff0000' },
+    }, []));
+    expect(result[0].style).toMatchObject({ fontSize: '18px', color: '#ff0000' });
+  });
+});
+
+describe('handleAddHeading', () => {
+  it('创建标题并应用默认样式', () => {
+    const result = expectSuccess(handleAddHeading({ content: '教育背景' }, []));
+    expect(result[0].type).toBe('heading');
+    expect(result[0].content).toBe('教育背景');
+    expect(result[0].style.fontSize).toBe('20px');
+    expect(result[0].style.fontWeight).toBe('700');
+  });
+});
+
+describe('handleAddList', () => {
+  it('创建列表', () => {
+    const result = expectSuccess(handleAddList({
+      content: '<ul><li>A</li><li>B</li></ul>',
+    }, []));
+    expect(result[0].type).toBe('list');
+    expect(result[0].content).toContain('<li>A</li>');
+  });
+});
+
+describe('handleAddImage', () => {
+  it('创建图片（空内容）', () => {
+    const result = expectSuccess(handleAddImage({}, []));
+    expect(result[0].type).toBe('image');
+    expect(result[0].content).toBe('');
+    expect(result[0].style.width).toBe('100px');
+  });
+});
+
+// ============================================================
+// 容器 handler（已有子模块引用）
+// ============================================================
+describe('handleAddFlex', () => {
+  it('空 children 返回 MISSING_CHILDREN 错误', () => {
+    const err = expectError(handleAddFlex({ children: [] }, []));
+    expect(err.code).toBe('MISSING_CHILDREN');
+  });
+
+  it('引用不存在的子模块返回 MODULE_NOT_FOUND', () => {
+    const err = expectError(handleAddFlex({ children: ['nonexistent'] }, []));
+    expect(err.code).toBe('MODULE_NOT_FOUND');
+  });
+
+  it('正确包装已有模块到 flex 容器', () => {
+    // 先创建子模块
+    const withText = expectSuccess(handleAddText({ content: 'A' }, []));
+    const childId = withText[0].id;
+
+    const result = expectSuccess(handleAddFlex({
+      children: [childId],
+      direction: 'row',
+      gap: '16px',
+    }, withText));
+
+    // 应包含一个 flex 容器，内部有子模块
+    const flex = result.find(m => m.type === 'flex');
+    expect(flex).toBeDefined();
+    expect(flex!.children).toHaveLength(1);
+    expect(flex!.children![0].content).toBe('A');
+  });
+});
+
+describe('handleAddGrid', () => {
+  it('正确包装已有模块到 grid 容器', () => {
+    const withText = expectSuccess(handleAddText({ content: 'Grid item' }, []));
+    const childId = withText[0].id;
+
+    const result = expectSuccess(handleAddGrid({
+      children: [childId],
+      columns: 3,
+    }, withText));
+
+    const grid = result.find(m => m.type === 'grid');
+    expect(grid).toBeDefined();
+    expect(grid!.style.gridTemplateColumns).toBe('repeat(3, 1fr)');
+  });
+});
+
+// ============================================================
+// 内联容器 handler
+// ============================================================
+describe('handleAddFlexInline', () => {
+  it('一次调用创建容器和所有子控件', () => {
+    const result = expectSuccess(handleAddFlexInline({
+      children: [
+        { type: 'text', content: '子控件1' },
+        { type: 'heading', content: '标题2' },
+      ],
+      direction: 'column',
+    }, []));
+
+    expect(result).toHaveLength(1);
+    expect(result[0].type).toBe('flex');
+    expect(result[0].children).toHaveLength(2);
+    expect(result[0].children![0].type).toBe('text');
+    expect(result[0].children![1].type).toBe('heading');
+    expect(result[0].children![0].content).toBe('子控件1');
+  });
+
+  it('空 children 仍然创建容器（通过 commandExecutor 校验）', () => {
+    // Inline children 为空数组时，commandExecutor 会在 validateCommands 中拒绝
+    // 但我们的 handler 不提前检查，依赖 commandExecutor
+    const result = handleAddFlexInline({ children: [] }, []);
+    expect(result.success).toBe(false);
+  });
+});
+
+describe('handleAddGridInline', () => {
+  it('创建网格容器并包含内联子控件', () => {
+    const result = expectSuccess(handleAddGridInline({
+      children: [
+        { type: 'text', content: '列1' },
+        { type: 'text', content: '列2' },
+      ],
+      columns: 2,
+    }, []));
+
+    expect(result[0].type).toBe('grid');
+    expect(result[0].children).toHaveLength(2);
+    expect(result[0].style.gridTemplateColumns).toBe('repeat(2, 1fr)');
+  });
+});
+
+// ============================================================
+// 简历头和模块 handler（自动生成 children）
+// ============================================================
+describe('handleAddHeader', () => {
+  it('创建简历头并自动生成 photo + info 子控件', () => {
+    const result = expectSuccess(handleAddHeader({ styleId: 'header-classic' }, []));
+    expect(result).toHaveLength(1);
+    expect(result[0].type).toBe('header');
+    expect(result[0].styleId).toBe('header-classic');
+    // 应包含 photo 和 info 容器
+    const children = result[0].children || [];
+    expect(children.length).toBeGreaterThanOrEqual(1);
+    const imageChild = children.find(c => c.type === 'image');
+    expect(imageChild).toBeDefined();
+  });
+});
+
+describe('handleAddModule', () => {
+  it('创建模块并自动生成 heading + text 子控件', () => {
+    const result = expectSuccess(handleAddModule({
+      styleId: 'module-card',
+      title: '教育背景',
+      content: '<p>清华大学</p>',
+    }, []));
+
+    expect(result).toHaveLength(1);
+    expect(result[0].type).toBe('module');
+    const children = result[0].children || [];
+    expect(children.length).toBe(2);
+    expect(children[0].type).toBe('heading');
+    expect(children[0].content).toContain('教育背景');
+    expect(children[1].type).toBe('text');
+    expect(children[1].content).toBe('<p>清华大学</p>');
+  });
+});
+
+// ============================================================
+// 内容/样式修改 handler
+// ============================================================
+describe('handleSetContent', () => {
+  it('修改已有模块内容', () => {
+    const initial = expectSuccess(handleAddText({ content: '旧内容' }, []));
+    const id = initial[0].id;
+
+    const result = expectSuccess(handleSetContent({ id, content: '新内容' }, initial));
+    expect(result[0].content).toBe('新内容');
+  });
+
+  it('id 不存在返回错误', () => {
+    const err = expectError(handleSetContent({ id: 'nonexistent', content: 'x' }, []));
+    expect(err.code).toBe('MODULE_NOT_FOUND');
+  });
+});
+
+describe('handleSetStyle', () => {
+  it('修改多个样式属性', () => {
+    const initial = expectSuccess(handleAddText({ content: 'x' }, []));
+    const id = initial[0].id;
+
+    const result = expectSuccess(handleSetStyle({
+      id,
+      style: { fontSize: '24px', color: '#ff0000' },
+    }, initial));
+
+    expect(result[0].style.fontSize).toBe('24px');
+    expect(result[0].style.color).toBe('#ff0000');
+  });
+});
+
+describe('handleSetProperty', () => {
+  it('修改单个 CSS 属性', () => {
+    const initial = expectSuccess(handleAddText({ content: 'x' }, []));
+    const id = initial[0].id;
+
+    const result = expectSuccess(handleSetProperty({
+      id,
+      property: 'fontSize',
+      value: '30px',
+    }, initial));
+
+    expect(result[0].style.fontSize).toBe('30px');
+  });
+});
+
+// ============================================================
+// 模块操作 handler
+// ============================================================
+describe('handleRemoveModule', () => {
+  it('删除指定模块', () => {
+    const initial = expectSuccess(handleAddText({ content: '删除我' }, []));
+    const id = initial[0].id;
+
+    const result = expectSuccess(handleRemoveModule({ id }, initial));
+    expect(result).toHaveLength(0);
+  });
+});
+
+describe('handleMoveModule', () => {
+  it('移动模块到顶层指定索引', () => {
+    // 创建两个模块
+    const withA = expectSuccess(handleAddText({ content: 'A' }, []));
+    const withBoth = expectSuccess(handleAddText({ content: 'B' }, withA));
+    // 现在顺序是 [A, B]
+    expect(withBoth[0].content).toBe('A');
+    expect(withBoth[1].content).toBe('B');
+
+    // 把 B 移到 index 0
+    const result = expectSuccess(handleMoveModule({
+      id: withBoth[1].id,
+      index: 0,
+    }, withBoth));
+
+    expect(result[0].content).toBe('B');
+    expect(result[1].content).toBe('A');
+  });
+});
+
+describe('handleDuplicateModule', () => {
+  it('复制模块并生成新 id', () => {
+    const initial = expectSuccess(handleAddText({
+      content: '<p>原文</p>',
+      style: { color: '#333' },
+    }, []));
+    const id = initial[0].id;
+
+    const result = expectSuccess(handleDuplicateModule({ id }, initial));
+    // 应有两个模块
+    expect(result).toHaveLength(2);
+    // 第二个是副本
+    expect(result[1].content).toBe('<p>原文</p>');
+    expect(result[1].style.color).toBe('#333');
+    expect(result[1].id).not.toBe(id);
+  });
+
+  it('复制不存在的模块返回错误', () => {
+    const err = expectError(handleDuplicateModule({ id: 'nonexistent' }, []));
+    expect(err.code).toBe('MODULE_NOT_FOUND');
+  });
+});
+
+// ============================================================
+// 模板 handler
+// ============================================================
+describe('handleApplyTemplate', () => {
+  it('应用 simple 模板清空画布并生成结构', () => {
+    // 先加一个模块，确认会被清空
+    const initial = expectSuccess(handleAddText({ content: '旧数据' }, []));
+
+    const result = expectSuccess(handleApplyTemplate({ name: 'simple' }, initial));
+    expect(result.length).toBeGreaterThanOrEqual(2);
+    // 应有 header 和至少一个 module
+    expect(result.some(m => m.type === 'header')).toBe(true);
+    expect(result.some(m => m.type === 'module')).toBe(true);
+    // 旧数据不应存在
+    expect(result.some(m => m.content === '旧数据')).toBe(false);
+  });
+
+  it('不存在的模板返回 TEMPLATE_NOT_FOUND', () => {
+    const err = expectError(handleApplyTemplate({ name: 'nonexistent' }, []));
+    expect(err.code).toBe('TEMPLATE_NOT_FOUND');
+  });
+});
+
+// ============================================================
+// 路由表
+// ============================================================
+describe('toolHandlerMap', () => {
+  const allTools = [
+    'add_text', 'add_heading', 'add_list', 'add_image',
+    'add_flex', 'add_grid', 'add_flex_inline', 'add_grid_inline',
+    'add_header', 'add_module',
+    'set_content', 'set_style', 'set_property',
+    'remove_module', 'move_module', 'duplicate_module',
+    'apply_template', 'export_pdf',
+  ];
+
+  for (const toolName of allTools) {
+    it(`${toolName} 在路由表中存在且是函数`, () => {
+      expect(toolHandlerMap[toolName]).toBeDefined();
+      expect(typeof toolHandlerMap[toolName]).toBe('function');
+    });
+  }
+
+  it('执行不存在的 tool 返回 undefined', () => {
+    expect(toolHandlerMap['nonexistent_tool']).toBeUndefined();
+  });
+});

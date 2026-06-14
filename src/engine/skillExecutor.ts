@@ -122,7 +122,7 @@ registerSkill('generate-resume', async (params, ctx) => {
   const result = executeCommands(ctx.modules, commands);
   if (result.errors.length > 0) {
     console.error('[SkillSystem] 指令执行错误:', result.errors);
-    return `生成简历时发生错误：${result.errors.join('; ')}`;
+    return `生成简历时发生错误：${result.errors.map((e: {message: string}) => e.message).join('; ')}`;
   }
 
   console.log(`[SkillSystem] 成功生成 ${result.newModules.length} 个顶层模块，准备导入`);
@@ -167,7 +167,7 @@ registerSkill('apply-theme', async (params, ctx) => {
     params: { id: mod.id, style },
   }));
   const result = executeCommands(ctx.modules, commands);
-  if (result.errors.length > 0) return `应用主题出错: ${result.errors.join('; ')}`;
+  if (result.errors.length > 0) return `应用主题出错: ${result.errors.map((e: {message: string}) => e.message).join('; ')}`;
   ctx.importModules(result.newModules);
   return `已应用 ${theme} 主题。`;
 });
@@ -275,7 +275,7 @@ ${labelList}
   if (commands.length === 0) return '没有有效填充指令，请检查标签匹配。';
 
   const result = executeCommands(ctx.modules, commands);
-  if (result.errors.length > 0) return `填充失败：${result.errors.join('; ')}`;
+  if (result.errors.length > 0) return `填充失败：${result.errors.map((e: {message: string}) => e.message).join('; ')}`;
   ctx.importModules(result.newModules);
   return `智能填充完成，已更新 ${commands.length} 个模块。`;
 });
@@ -296,14 +296,14 @@ function translateLayoutTree(tree: LayoutTree, parsed: ParsedResume): Command[] 
     if (modMatch) {
       const idx = parseInt(modMatch[1], 10);
       const field = modMatch[2];
-      const mod = parsed.modules?.[idx];
+      const mod = parsed.data?.modules?.[idx];
       if (!mod) return '';
       if (field === 'content') return mod.content || '';
       if (field === 'title') return mod.title || '';
       return (mod as unknown as Record<string, string>)[field] || '';
     }
-    // top-level field
-    return (parsed as Record<string, unknown>)[ref] as string || '';
+    // top-level field in data
+    return (parsed.data as Record<string, unknown>)?.[ref] as string || '';
   }
 
   function esc(str: string): string {
@@ -388,227 +388,6 @@ function translateLayoutTree(tree: LayoutTree, parsed: ParsedResume): Command[] 
     for (let i = 0; i < tree.modules.length; i++) {
       commands.push(walk(tree.modules[i], 'mod' + i));
     }
-  }
-
-  return commands;
-}
-
-// ===== 原有：从 ParsedResume 动态生成指令（回退方案） =====
-
-// 从 ParsedResume 动态生成指令数组（不依赖模板，有几个字段创建几个控件）
-function buildResumeCommands(parsed: ParsedResume): Command[] {
-  function esc(str: string): string {
-    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-  }
-
-  const commands: Command[] = [];
-
-  // --- 收集 header 信息字段（仅包含有数据的） ---
-  const infoFields: { label: string; value: string }[] = [];
-  if (parsed.jobTitle) infoFields.push({ label: '求职意向', value: parsed.jobTitle });
-  if (parsed.birth) infoFields.push({ label: '出生年月', value: parsed.birth });
-  if (parsed.phone) infoFields.push({ label: '电话', value: parsed.phone });
-  if (parsed.email) infoFields.push({ label: '邮箱', value: parsed.email });
-
-  // --- 构建 header 的 info grid（仅当有字段时） ---
-  const gridChildren: Command[] = infoFields.map((f, i) => ({
-    action: 'addModule' as const,
-    tempId: `h-field-${i}`,
-    params: {
-      type: 'text',
-      styleId: 'text-default',
-      style: { fontSize: '15px', color: '#4a5568' },
-      content: `<p>${esc(f.label)}：${esc(f.value)}</p>`,
-    },
-  }));
-
-  // --- 构建 header 信息容器子控件 ---
-  const infoFlexChildren: Command[] = [];
-
-  if (parsed.name) {
-    infoFlexChildren.push({
-      action: 'addModule' as const,
-      tempId: 'h-name',
-      params: {
-        type: 'text',
-        styleId: 'text-default',
-        style: { fontSize: '24px', fontWeight: '700', color: '#1a202c' },
-        content: `<p>${esc(parsed.name)}</p>`,
-        name: parsed.name,
-      },
-    });
-  }
-
-  if (gridChildren.length > 0) {
-    const cols = gridChildren.length === 1 ? '1fr' : '1fr 1fr';
-    infoFlexChildren.push({
-      action: 'addModule' as const,
-      tempId: 'h-grid',
-      params: {
-        type: 'grid',
-        styleId: 'grid-default',
-        style: { gridTemplateColumns: cols, gap: '4px' },
-        children: gridChildren,
-      },
-    });
-  }
-
-  // --- header 容器（仅在照片数据存在时添加照片控件） ---
-  const headerChildren: Command[] = [];
-  if (parsed.photo) {
-    headerChildren.push({
-      action: 'addModule' as const,
-      tempId: 'h-img',
-      params: {
-        type: 'image',
-        styleId: 'image-default',
-        style: { width: '100px', height: '130px', borderRadius: '8px', objectFit: 'cover' },
-        content: parsed.photo,
-      },
-    });
-  }
-
-  if (infoFlexChildren.length > 0) {
-    headerChildren.push({
-      action: 'addModule' as const,
-      tempId: 'h-info',
-      params: {
-        type: 'flex',
-        styleId: 'flex-default',
-        style: { flexDirection: 'column', gap: '8px', flex: '1' },
-        children: infoFlexChildren,
-      },
-    });
-  }
-
-  // --- 根据 layout 计算 header 样式 ---
-  const ly = parsed.layout || {};
-  const headerBg = ly.pageBackground || '#ffffff';
-  const accent = ly.accentColor || '#3b82f6';
-  const isCentered = ly.headerStyle === 'centered';
-
-  // 仅当有子控件时才添加 header 容器
-  if (headerChildren.length > 0) {
-    commands.push({
-      action: 'addModule',
-      tempId: 'header',
-      params: {
-        type: 'header',
-        styleId: 'header-classic',
-        style: {
-          display: 'flex',
-          flexDirection: isCentered ? 'column' : 'row',
-          alignItems: isCentered ? 'center' : 'flex-start',
-          gap: '8px',
-          padding: '12px',
-          backgroundColor: headerBg,
-          borderRadius: '12px',
-          border: ly.sectionDividers ? '1px solid #e8ecf1' : 'none',
-          boxShadow: ly.sectionDividers ? '0 1px 3px rgba(0,0,0,0.04)' : 'none',
-        },
-        children: headerChildren,
-      },
-    });
-  }
-
-
-
-  // --- 模块容器（每个 parsed.modules 条目一个） ---
-
-  const modules = parsed.modules || [];
-  for (let i = 0; i < modules.length; i++) {
-    const mod = modules[i];
-    const mLayout = mod.layout || {};
-    const raw = (mod.content || '').trim();
-    const isList = raw.startsWith('<ul') || raw.startsWith('<ol') || raw.startsWith('- ') || raw.startsWith('• ');
-
-    // 根据 layout 调整标题样式（背景色用于标题栏装饰）
-    const headingStyle: Record<string, string> = {
-      fontSize: '18px', fontWeight: '700', color: accent,
-      padding: '4px 0',
-      backgroundColor: mLayout.backgroundColor || 'transparent',
-      borderRadius: mLayout.backgroundColor ? '6px' : '0',
-      borderBottom: ly.sectionDividers ? `2px solid ${accent}33` : 'none',
-    };
-
-    // 根据 layout 调整内容样式
-    const contentStyle: Record<string, string> = {
-      fontSize: ly.fontSize === 'large' ? '17px' : ly.fontSize === 'small' ? '13px' : '15px',
-      color: '#334155', lineHeight: '1.4',
-    };
-
-    const modChildren: Command[] = [
-      {
-        action: 'addModule',
-        tempId: `mod-${i}-h`,
-        params: {
-          type: 'heading',
-          styleId: 'heading-default',
-          style: headingStyle,
-          content: `<p>${esc(mod.title)}</p>`,
-        },
-      },
-      {
-        action: 'addModule',
-        tempId: `mod-${i}-t`,
-        params: {
-          type: isList ? 'list' : 'text',
-          styleId: isList ? 'list-default' : 'text-default',
-          style: contentStyle,
-          content: mod.content || '<p></p>',
-        },
-      },
-    ];
-
-    // 如果模块是多栏布局，用 grid 包裹
-    if (mLayout.columns && mLayout.columns > 1) {
-      modChildren.length = 0;
-      modChildren.push({
-        action: 'addModule',
-        tempId: `mod-${i}-grid`,
-        params: {
-          type: 'grid',
-          styleId: 'grid-default',
-          style: { gridTemplateColumns: `repeat(${mLayout.columns}, 1fr)`, gap: '8px' },
-          children: [
-            {
-              action: 'addModule',
-              tempId: `mod-${i}-h`,
-              params: { type: 'heading', styleId: 'heading-default', style: headingStyle, content: `<p>${esc(mod.title)}</p>` },
-            },
-            {
-              action: 'addModule',
-              tempId: `mod-${i}-t`,
-              params: { type: isList ? 'list' : 'text', styleId: isList ? 'list-default' : 'text-default', style: contentStyle, content: mod.content || '<p></p>' },
-            },
-          ],
-        },
-      });
-    }
-
-    // 模块容器样式（背景色已移至标题，容器保持透明）
-    const modContainerStyle: Record<string, string> = {
-      display: 'flex', flexDirection: 'column', gap: '8px',
-      padding: '8px 0',
-      backgroundColor: 'transparent',
-    };
-    if (ly.sectionDividers) {
-      modContainerStyle.borderBottom = `1px solid ${accent}22`;
-    }
-    if (mLayout.hasShadow) {
-      modContainerStyle.boxShadow = '0 2px 8px rgba(0,0,0,0.06)';
-    }
-
-    commands.push({
-      action: 'addModule',
-      tempId: `mod-${i}`,
-      params: {
-        type: 'module',
-        styleId: 'module-card',
-        style: modContainerStyle,
-        children: modChildren,
-      },
-    });
   }
 
   return commands;
@@ -808,12 +587,12 @@ registerSkill('import-resume', async (_params, ctx) => {
 
   // 输出解析摘要，便于诊断
   console.log('[import-resume] 解析结果:', JSON.stringify({
-    name: parsed.name,
-    jobTitle: parsed.jobTitle,
-    phone: parsed.phone,
-    email: parsed.email,
-    moduleCount: parsed.modules?.length || 0,
-    layoutKeys: parsed.layout ? Object.keys(parsed.layout).filter(k => parsed.layout![k as keyof typeof parsed.layout]) : [],
+    name: parsed.data?.name,
+    jobTitle: parsed.data?.jobTitle,
+    phone: parsed.data?.phone,
+    email: parsed.data?.email,
+    moduleCount: parsed.data?.modules?.length || 0,
+    hasLayoutTree: !!parsed.layoutTree,
   }, null, 2));
 
   // 优先使用 AI 输出的布局树，回退到固定模板生成
@@ -823,8 +602,8 @@ registerSkill('import-resume', async (_params, ctx) => {
     console.log('[import-resume] 使用 AI 布局树生成指令');
     commands = translateLayoutTree(parsed.layoutTree, parsed);
   } else {
-    console.log('[import-resume] 回退到默认模板生成指令');
-    commands = buildResumeCommands(parsed);
+    console.error('[import-resume] AI 未输出 LayoutTree，无法重建布局');
+    return `简历解析失败：AI 未输出布局结构信息（LayoutTree），无法忠实复现原版排版。请重试或更换视觉模型。原始 AI 输出：${JSON.stringify(parsed).slice(0, 500)}`;
   }
   console.log('[import-resume] 生成指令数:', commands.length);
 
@@ -843,7 +622,7 @@ registerSkill('import-resume', async (_params, ctx) => {
   const result = executeCommands(ctx.modules, commands);
   console.log('[import-resume] 生成的模块数:', result.newModules.length);
   if (result.errors.length > 0) {
-    return `构建简历时出错：${result.errors.join('; ')}`;
+    return `构建简历时出错：${result.errors.map((e: {message: string}) => e.message).join('; ')}`;
   }
 
   ctx.importModules(result.newModules);

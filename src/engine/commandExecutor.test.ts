@@ -79,3 +79,86 @@ describe('executeCommands', () => {
     expect(result.newModules[0].content).toBe('B');
   });
 });
+
+  // ====== 结构化错误格式测试 ======
+
+  describe('结构化错误格式', () => {
+    it('缺少 children 返回 MISSING_CHILDREN 错误', () => {
+      const result = executeCommands([], [
+        { action: 'addModule', tempId: 'm1', params: { type: 'flex', styleId: 'flex-default' } },
+      ]);
+      expect(result.errors).toHaveLength(1);
+      expect(result.errors[0].code).toBe('MISSING_CHILDREN');
+      expect(result.errors[0].message).toContain('缺少 children');
+      expect(result.errors[0].fix).toBeTruthy();
+      expect(result.rolledBack).toBe(false) // 校验阶段未修改模块，无需回退;
+    });
+
+    it('无效模块类型返回 INVALID_TYPE 错误', () => {
+      const result = executeCommands([], [
+        { action: 'addModule', params: { type: 'invalid_type', styleId: 'text-default' } },
+      ]);
+      expect(result.errors).toHaveLength(1);
+      expect(result.errors[0].code).toBe('INVALID_TYPE');
+      expect(result.errors[0].message).toContain('无效的模块类型');
+      expect(result.errors[0].fix).toContain('text');
+    });
+
+    it('操作不存在的模块返回 MODULE_NOT_FOUND 错误', () => {
+      const modules: ResumeModule[] = [
+        { id: 'a', type: 'text', styleId: 'text-default', children: [] },
+      ];
+      const result = executeCommands(modules, [
+        { action: 'setContent', params: { id: 'nonexistent', content: 'x' } },
+      ]);
+      expect(result.errors).toHaveLength(1);
+      expect(result.errors[0].code).toBe('MODULE_NOT_FOUND');
+      expect(result.errors[0].message).toContain('不存在');
+      expect(result.errors[0].fix).toContain('当前画布');
+    });
+
+    it('JSON 格式错误返回 INVALID_FORMAT 错误', () => {
+      // 构造一个会导致 JSON 序列化失败的场景 — 循环引用
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const circular: any = { action: 'addModule', params: { type: 'text' } };
+      circular.params.self = circular;
+      const result = executeCommands([], [circular]);
+      expect(result.errors).toHaveLength(1);
+      expect(result.errors[0].code).toBe('INVALID_FORMAT');
+      expect(result.errors[0].fix).toBeTruthy();
+    });
+
+    it('执行时异常返回 EXECUTION_ERROR', () => {
+      // buildChildren 中 type 无效会抛出异常
+      const result = executeCommands([], [
+        {
+          action: 'addModule',
+          tempId: 'bad',
+          params: {
+            type: 'flex',
+            styleId: 'flex-default',
+            children: [
+              { action: 'addModule', tempId: 'c1', params: { type: 'bad-type' } },
+            ],
+          },
+        },
+      ]);
+      expect(result.errors).toHaveLength(1);
+      expect(result.errors[0].code).toBe('EXECUTION_ERROR');
+      expect(result.errors[0].message).toContain('异常');
+    });
+
+    it('成功执行时 errors 为空', () => {
+      const result = executeCommands([], [
+        { action: 'addModule', params: { type: 'text', styleId: 'text-default', content: 'OK' } },
+      ]);
+      expect(result.errors).toHaveLength(0);
+    });
+
+    it('rolledBack 在无错误时为 false', () => {
+      const result = executeCommands([], [
+        { action: 'addModule', params: { type: 'text', styleId: 'text-default', content: 'OK' } },
+      ]);
+      expect(result.rolledBack).toBe(false);
+    });
+  });
