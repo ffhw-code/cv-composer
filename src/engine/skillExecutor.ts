@@ -7,6 +7,8 @@ import { useResumeStore } from '../store/useResumeStore';
 import { findModuleById } from '../utils/moduleUtils';
 import type { ParsedResume, LayoutTree, LayoutTreeNode } from '../utils/resumeParser';
 import { getUploadedFile } from '../utils/aiConfig';
+import { normalizeLayoutTree } from './layoutTreeNormalizer';
+import { applyOverflowCompression } from './layoutTreeNormalizer';
 
 export interface SkillContext {
   modules: ResumeModule[];
@@ -291,6 +293,16 @@ function translateLayoutTree(tree: LayoutTree, parsed: ParsedResume): Command[] 
 
   /** 从 parsed 中取 ref 指向的值 */
   function resolveRef(ref: string): string {
+    // modules.N.entries.M.field
+    const entryMatch = ref.match(/^modules\.(\d+)\.entries\.(\d+)\.(.+)$/);
+    if (entryMatch) {
+      const modIdx = parseInt(entryMatch[1], 10);
+      const entryIdx = parseInt(entryMatch[2], 10);
+      const field = entryMatch[3];
+      const mod = parsed.data?.modules?.[modIdx];
+      if (!mod?.entries) return '';
+      return mod.entries[entryIdx]?.[field] || '';
+    }
     // modules.N.field
     const modMatch = ref.match(/^modules\.(\d+)\.(.+)$/);
     if (modMatch) {
@@ -305,6 +317,7 @@ function translateLayoutTree(tree: LayoutTree, parsed: ParsedResume): Command[] 
     // top-level field in data
     return (parsed.data as Record<string, unknown>)?.[ref] as string || '';
   }
+
 
   function esc(str: string): string {
     return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -334,13 +347,29 @@ function translateLayoutTree(tree: LayoutTree, parsed: ParsedResume): Command[] 
       } as Record<string, unknown>,
     };
 
-    // 填充内容
-    if (node.ref) {
+    // 填充内容：优先使用 normalizeLayoutTree 已解析的 node.content，
+    // 仅当 content 为空且有 ref 时才回退到 ref 解析
+    if (node.content) {
+      // 内容已由 normalizeLayoutTree 解析，直接使用
+      if (node.type === 'text' || node.type === 'heading') {
+        const isPlainTextField = node.ref && ['name', 'jobTitle', 'birth', 'phone', 'email'].includes(node.ref);
+        (cmd.params as Record<string, unknown>).content = isPlainTextField
+          ? '<p>' + esc(node.content) + '</p>'
+          : node.content;
+        if (isPlainTextField && node.ref) {
+          (cmd.params as Record<string, unknown>)[node.ref] = node.content;
+        }
+      } else if (node.type === 'list') {
+        (cmd.params as Record<string, unknown>).content = node.content;
+      } else if (node.type === 'image') {
+        (cmd.params as Record<string, unknown>).content = node.content;
+      }
+    } else if (node.ref) {
+      // 回退：ref 解析（normalizeLayoutTree 未找到对应 data）
       const val = resolveRef(node.ref);
       const isPlainTextField = ['name', 'jobTitle', 'birth', 'phone', 'email'].includes(node.ref);
 
       if (node.type === 'text' || node.type === 'heading') {
-        // 个人信息是纯文本需转义；模块内容是 HTML 直接使用
         (cmd.params as Record<string, unknown>).content = isPlainTextField
           ? '<p>' + esc(val) + '</p>'
           : (val || '<p></p>');
@@ -350,24 +379,28 @@ function translateLayoutTree(tree: LayoutTree, parsed: ParsedResume): Command[] 
         (cmd.params as Record<string, unknown>).content = val;
       }
 
-      // 个人信息字段同步到模块属性
       if (isPlainTextField) {
         (cmd.params as Record<string, unknown>)[node.ref] = val;
       }
     }
 
-    // 容器属性
+    // 容器属性：显式字段优先，但不覆盖 AI 在 style 中已设置的值
     if (node.type === 'flex') {
-      baseStyle.display = 'flex';
-      baseStyle.flexDirection = node.direction || 'column';
+      baseStyle.display = baseStyle.display || 'flex';
+      baseStyle.flexDirection = node.direction || baseStyle.flexDirection || 'column';
     }
     if (node.type === 'grid') {
-      baseStyle.display = 'grid';
-      baseStyle.gridTemplateColumns = 'repeat(' + (node.columns || 1) + ', 1fr)';
+      baseStyle.display = baseStyle.display || 'grid';
+      const cols = node.columns || 1;
+      if (!baseStyle.gridTemplateColumns) {
+        baseStyle.gridTemplateColumns = 'repeat(' + cols + ', 1fr)';
+      }
     }
-    if (node.gap) baseStyle.gap = node.gap;
-    if (node.padding) baseStyle.padding = node.padding;
-    if (node.lineHeight) baseStyle.lineHeight = node.lineHeight;
+    // 显式字段不覆盖 style 中已有值（style 由 normalizeLayoutTree 保证完整性）
+    const explicitStyle = baseStyle; // already has node.style + defaults merged
+    if (node.gap) explicitStyle.gap = node.gap;
+    if (node.padding) explicitStyle.padding = node.padding;
+    if (node.lineHeight) explicitStyle.lineHeight = node.lineHeight;
 
     // 递归子节点
     if (node.children && node.children.length > 0) {
@@ -391,152 +424,6 @@ function translateLayoutTree(tree: LayoutTree, parsed: ParsedResume): Command[] 
   }
 
   return commands;
-}
-
-// ===== Overflow detection & compression =====
-
-const A4_HEIGHT_PX = 794;
-
-function estimateCommandHeight(cmd: Command): number {
-  const s = (cmd.params as Record<string, unknown>).style as Record<string, string> | undefined;
-  const type = (cmd.params as Record<string, unknown>).type as string;
-  const content = (cmd.params as Record<string, unknown>).content as string | undefined;
-  const children = (cmd.params as Record<string, unknown>).children as Command[] | undefined;
-  let h = 0;
-
-  const px = (key: string) => {
-    const v = s?.[key];
-    if (!v) return 0;
-    const n = parseFloat(v);
-    return isNaN(n) ? 0 : n;
-  };
-
-  const paddingV = px('paddingTop') || px('padding') || 0;
-  const gap = px('gap') || 0;
-
-  switch (type) {
-    case 'text':
-    case 'heading':
-    case 'list': {
-      const fontSize = px('fontSize') || 15;
-      const lineHeight = parseFloat(s?.lineHeight || '1.5');
-      const text = content?.replace(/<[^>]+>/g, '') || '';
-      const lines = Math.max(1, Math.ceil(text.length / 30));
-      h = fontSize * lineHeight * lines + paddingV * 2;
-      break;
-    }
-    case 'image': {
-      h = px('height') || 100;
-      break;
-    }
-    case 'flex':
-    case 'grid':
-    case 'module':
-    case 'header': {
-      let childrenH = 0;
-      if (children) {
-        for (const c of children) childrenH += estimateCommandHeight(c);
-      }
-      const childCount = children?.length || 1;
-      h = childrenH + gap * (childCount - 1) + paddingV * 2;
-      break;
-    }
-  }
-  return h;
-}
-
-function estimateTotalHeight(commands: Command[], pagePaddingTop: number, pagePaddingBottom: number): number {
-  let total = pagePaddingTop + pagePaddingBottom;
-  for (const cmd of commands) total += estimateCommandHeight(cmd);
-  return total;
-}
-
-function compressCommandTree(cmd: Command, ratio: number): void {
-  const s = (cmd.params as Record<string, unknown>).style as Record<string, string> | undefined;
-  if (!s) return;
-
-  const keys = ['padding', 'paddingTop', 'paddingBottom', 'gap', 'margin', 'marginTop', 'marginBottom'];
-
-  for (const k of keys) {
-    const v = s[k];
-    if (!v) continue;
-    const num = parseFloat(v);
-    if (isNaN(num)) continue;
-
-    const min = 0;
-    const compressed = Math.max(min, Math.round(num * ratio));
-    s[k] = compressed + 'px';
-  }
-
-  const cmdChildren = (cmd.params as Record<string, unknown>).children as Command[] | undefined;
-  if (cmdChildren) {
-    for (const c of cmdChildren) compressCommandTree(c, ratio);
-  }
-}
-
-/** 检查命令树是否还有压缩空间 */
-function canCompressMore(cmd: Command): boolean {
-  const s = (cmd.params as Record<string, unknown>).style as Record<string, string> | undefined;
-  if (!s) {
-    const children = (cmd.params as Record<string, unknown>).children as Command[] | undefined;
-    if (children) return children.some(canCompressMore);
-    return false;
-  }
-
-  const keys = ['padding', 'paddingTop', 'paddingBottom', 'gap', 'margin', 'marginTop', 'marginBottom'];
-  for (const k of keys) {
-    const v = s[k];
-    if (!v) continue;
-    const num = parseFloat(v);
-    if (!isNaN(num) && num > 0) return true;
-  }
-
-  const cmdChildren = (cmd.params as Record<string, unknown>).children as Command[] | undefined;
-  if (cmdChildren) return cmdChildren.some(canCompressMore);
-  return false;
-}
-
-function applyOverflowCompression(
-  commands: Command[],
-  pagePaddingTop: number,
-  pagePaddingBottom: number,
-): { compressed: boolean; ratio: number; newPaddingTop: number; newPaddingBottom: number; gaveUp: boolean } {
-  const MAX_ITERATIONS = 5;
-  let padTop = pagePaddingTop;
-  let padBottom = pagePaddingBottom;
-  let anyCompressed = false;
-  let finalRatio = 1;
-
-  for (let iter = 0; iter < MAX_ITERATIONS; iter++) {
-    const estimated = estimateTotalHeight(commands, padTop, padBottom);
-    console.log('[import-resume] Iteration ' + (iter + 1) + ': estimated ' + estimated.toFixed(0) + 'px / A4=' + A4_HEIGHT_PX + 'px');
-
-    if (estimated <= A4_HEIGHT_PX) break;
-
-    if (!commands.some(canCompressMore) && padTop === 0 && padBottom === 0) {
-      console.log('[import-resume] No more compression possible');
-      break;
-    }
-
-    const ratio = A4_HEIGHT_PX / estimated * 0.95;  // 留 5% 余量避免反复
-    finalRatio = ratio;
-    console.log('[import-resume] Overflow, compressing with ratio: ' + ratio.toFixed(3));
-
-    for (const cmd of commands) compressCommandTree(cmd, ratio);
-    padTop = Math.max(0, Math.round(padTop * ratio));
-    padBottom = Math.max(0, Math.round(padBottom * ratio));
-    anyCompressed = true;
-  }
-
-  // 最后一轮检查是否仍溢出
-  const finalEstimate = estimateTotalHeight(commands, padTop, padBottom);
-  const gaveUp = finalEstimate > A4_HEIGHT_PX && anyCompressed;
-
-  if (gaveUp) {
-    console.warn('[import-resume] Unable to fit content within A4 after compression. Final: ' + finalEstimate.toFixed(0) + 'px');
-  }
-
-  return { compressed: anyCompressed, ratio: finalRatio, newPaddingTop: padTop, newPaddingBottom: padBottom, gaveUp };
 }
 
 // ===== Import skill =====
@@ -595,30 +482,41 @@ registerSkill('import-resume', async (_params, ctx) => {
     hasLayoutTree: !!parsed.layoutTree,
   }, null, 2));
 
-  // 优先使用 AI 输出的布局树，回退到固定模板生成
-  let commands: Command[];
-  if (parsed.layoutTree) {
-    console.log('[import-resume] AI 布局树:', JSON.stringify(parsed.layoutTree, null, 2));
-    console.log('[import-resume] 使用 AI 布局树生成指令');
-    commands = translateLayoutTree(parsed.layoutTree, parsed);
-  } else {
+  // parse → normalize → compress → translate → execute
+  if (!parsed.layoutTree) {
     console.error('[import-resume] AI 未输出 LayoutTree，无法重建布局');
     return `简历解析失败：AI 未输出布局结构信息（LayoutTree），无法忠实复现原版排版。请重试或更换视觉模型。原始 AI 输出：${JSON.stringify(parsed).slice(0, 500)}`;
   }
-  console.log('[import-resume] 生成指令数:', commands.length);
 
-  // 溢出检测（含页边距）
+  console.log('[import-resume] AI 布局树:', JSON.stringify(parsed.layoutTree, null, 2));
+
+  // 1. 规范化 LayoutTree
+  const normalized = normalizeLayoutTree(parsed.layoutTree, parsed.data);
+  console.log('[import-resume] 规范化后模块数:', normalized.modules.length);
+
+  // 2. LayoutTree 层级溢出压缩
   const store = useResumeStore.getState();
   const padTop = parseInt(store.pagePaddingTop || store.pagePadding) || 40;
   const padBottom = parseInt(store.pagePadding) || 40;
-  const overflow = applyOverflowCompression(commands, padTop, padBottom);
+  const overflow = applyOverflowCompression(
+    [normalized.header, ...normalized.modules],
+    padTop,
+    padBottom,
+  );
 
-  // 应用压缩后的页边距
   if (overflow.compressed) {
     useResumeStore.getState().setPagePaddingTop(String(overflow.newPaddingTop) + 'px');
     useResumeStore.getState().setPagePadding(String(overflow.newPaddingBottom) + 'px');
   }
 
+  // 3. 翻译为 Command 数组
+  const commands = translateLayoutTree(
+    { header: normalized.header, modules: normalized.modules },
+    parsed,
+  );
+  console.log('[import-resume] 生成指令数:', commands.length);
+
+  // 4. 执行
   const result = executeCommands(ctx.modules, commands);
   console.log('[import-resume] 生成的模块数:', result.newModules.length);
   if (result.errors.length > 0) {

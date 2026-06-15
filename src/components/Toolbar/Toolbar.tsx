@@ -305,11 +305,16 @@ function Toolbar() {
         {selectedId && selectedModule ? (
           /* ---------- 属性编辑模式 ---------- */
           <div className="flex flex-col gap-1 text-xs py-1 w-full">
-            {/* 第一行：类型标签 + 分组标签 */}
+            {/* 第一行：类型标签 + 常用内联属性 + 分组标签 */}
             <div className="flex items-center gap-1 flex-wrap">
               <span className="text-gray-700 font-bold mr-1">
                 {selectedModule.type === 'header' ? '简历头' : selectedModule.type === 'module' ? '模块' : selectedModule.type}
               </span>
+              {/* 常用属性始终可见 */}
+              <StyleInputWithUnit label="内边距" value={selectedStyle.padding || ''} onChange={(v) => updateStyle('padding', v)} unit="px" options={marginOptions} />
+              <StyleInputWithUnit label="外边距" value={selectedStyle.margin || ''} onChange={(v) => updateStyle('margin', v)} unit="px" options={marginOptions} />
+              <ColorInput label="背景" value={selectedStyle.backgroundColor || ''} onChange={(v) => updateStyle('backgroundColor', v)} />
+              <span className="text-gray-300 text-xs">|</span>
               {(['基本', '背景', '边框', '效果', ...(isContainer ? ['布局'] : [])] as string[]).map((g) => (
                 <button
                   key={g}

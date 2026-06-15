@@ -4,6 +4,7 @@ import { findModuleById, findParentById, getAllModuleIds } from '../../utils/mod
 import EditableModule from '../Module/EditableModule';
 import SortableModule from './SortableModule';
 import ContextMenu from './ContextMenu';
+import InlineToolbar from './InlineToolbar';
 import {
   DndContext,
   closestCenter,
@@ -175,6 +176,9 @@ function CanvasArea({ deleteMode, onExitDeleteMode }: CanvasAreaProps) {
 
       return (
         <SortableModule
+          renderToolbar={isSelected && !deleteMode ? (
+            <InlineToolbar moduleId={mod.id} />
+          ) : null}
           key={mod.id}
           id={mod.id}
           module={mod}
@@ -226,6 +230,9 @@ function CanvasArea({ deleteMode, onExitDeleteMode }: CanvasAreaProps) {
     // 叶子模块
     return (
       <SortableModule
+        renderToolbar={isSelected && !deleteMode ? (
+          <InlineToolbar moduleId={mod.id} />
+        ) : null}
         key={mod.id}
         id={mod.id}
         module={mod}

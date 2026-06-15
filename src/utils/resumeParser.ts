@@ -23,10 +23,17 @@ export interface LayoutTree {
   modules: LayoutTreeNode[];
 }
 
+/** 模块内单条记录（多条目结构） */
+export interface ParsedModuleEntry {
+  [key: string]: string;
+}
+
 /** 模块数据 */
 export interface ParsedModuleData {
   title: string;
-  content: string;
+  content?: string;
+  /** 多条目结构：每个条目是一组独立字段（date、company、role、description 等） */
+  entries?: ParsedModuleEntry[];
 }
 
 /** 简历数据 */
@@ -75,16 +82,20 @@ function buildPrompt(): string {
 **节点公共属性**: type(必填), ref, gap, padding, lineHeight, style(可选 CSS 对象)
 **容器独有属性**: children(子节点数组), direction(flex), columns(grid)
 
-### data — 存放文本数据
-
-通过 ref 关联到 layoutTree 中的节点。顶层字段(name, jobTitle等)和 modules 数组。
-
-modules 中每项包含 title 和 content。content 保留原文格式，用 HTML 标签表达结构(<p><br/><strong><ul><li>)。
-
-## CSS 属性词汇表（仅使用以下属性）
+**CSS 属性词汇表（仅使用以下属性）**:
 fontSize(如 "16px"), fontWeight(如 "bold" 或 "700"), color(如 "#333333"), backgroundColor, padding, margin, borderRadius, border, boxShadow, display, flexDirection, alignItems, justifyContent, gap, gridTemplateColumns, width, height, lineHeight, textAlign, objectFit
 
-## 示例
+**对齐与间距**: 用 justifyContent("space-between"|"space-around"|"flex-start"|"center") 表达元素排列方式，用 gap(如 "0px"|"8px"|"12px") 控制子元素间距，用 padding 控制容器内边距，用固定 height 控制行高。
+
+### data — 存放文本数据
+
+通过 ref 关联到 layoutTree 中的节点。顶层字段(name, jobTitle, birth, phone, email, photo)和 modules 数组。
+
+modules 中每项包含 title，其内容二选一：
+- **单条目**（内容不可再拆分时）：用 content 字段，值用 HTML 标签表达(<p><br/><strong><ul><li>)
+- **多条目**（有多个工作/教育经历时）：用 entries 数组，每项是一组命名字段（字段名根据原图内容命名，如 date、company、role、description），字段值为纯文本
+
+## 示例一：带多条目结构的模块（工作经历/教育经历有多条记录时使用）
 
 {
   "layoutTree": {
@@ -111,6 +122,32 @@ fontSize(如 "16px"), fontWeight(如 "bold" 或 "700"), color(如 "#333333"), ba
           {"type": "heading", "ref": "modules.0.title", "style": {"fontSize": "20px", "fontWeight": "700", "color": "#0f172a"}},
           {"type": "text", "ref": "modules.0.content", "style": {"fontSize": "15px", "color": "#334155", "lineHeight": "1.6"}}
         ]
+      },
+      {
+        "type": "flex", "direction": "column", "gap": "0px", "padding": "16px",
+        "children": [
+          {"type": "heading", "ref": "modules.1.title", "style": {"fontSize": "20px", "fontWeight": "700", "color": "#0f172a"}},
+          {"type": "flex", "direction": "row", "justifyContent": "space-between", "gap": "0px", "style": {"padding": "0px"},
+           "children": [
+             {"type": "flex", "direction": "row", "gap": "12px", "children": [
+               {"type": "text", "ref": "modules.1.entries.0.date", "style": {"fontSize": "15px", "color": "#334155"}},
+               {"type": "text", "ref": "modules.1.entries.0.company", "style": {"fontSize": "15px", "color": "#334155"}}
+             ]},
+             {"type": "text", "ref": "modules.1.entries.0.role", "style": {"fontSize": "15px", "color": "#475569"}}
+           ]
+          },
+          {"type": "text", "ref": "modules.1.entries.0.description", "style": {"fontSize": "15px", "color": "#334155", "lineHeight": "1.6"}},
+          {"type": "flex", "direction": "row", "justifyContent": "space-between", "gap": "0px", "style": {"padding": "0px"},
+           "children": [
+             {"type": "flex", "direction": "row", "gap": "12px", "children": [
+               {"type": "text", "ref": "modules.1.entries.1.date", "style": {"fontSize": "15px", "color": "#334155"}},
+               {"type": "text", "ref": "modules.1.entries.1.company", "style": {"fontSize": "15px", "color": "#334155"}}
+             ]},
+             {"type": "text", "ref": "modules.1.entries.1.role", "style": {"fontSize": "15px", "color": "#475569"}}
+           ]
+          },
+          {"type": "text", "ref": "modules.1.entries.1.description", "style": {"fontSize": "15px", "color": "#334155", "lineHeight": "1.6"}}
+        ]
       }
     ]
   },
@@ -123,18 +160,48 @@ fontSize(如 "16px"), fontWeight(如 "bold" 或 "700"), color(如 "#333333"), ba
     "photo": "",
     "modules": [
       {"title": "教育背景", "content": "<p>清华大学 · 计算机科学与技术 · 2017-2021</p>"},
-      {"title": "工作经历", "content": "<p><strong>某公司</strong> · 产品经理 · 2021-至今</p><ul><li>负责产品规划与迭代</li></ul>"}
+      {"title": "工作经历", "entries": [
+        {"date": "2023.10 - 2025.1", "company": "某科技有限公司", "role": "产品经理", "description": "1.参与新产品的市场调研，协助制定产品方案。2.分析用户需求，协助产品功能设计与优化。"},
+        {"date": "2022.7 - 2023.9", "company": "某广告公司", "role": "产品运营", "description": "1.负责产品上线后的数据分析与用户反馈收集。"}
+      ]}
     ]
+  }
+}
+
+## 示例二：简单模块（单条目，无重复记录）
+
+{
+  "layoutTree": {
+    "header": {
+      "type": "flex", "direction": "row", "gap": "16px", "padding": "20px",
+      "children": [
+        {"type": "text", "ref": "name", "style": {"fontSize": "24px", "fontWeight": "700"}},
+        {"type": "text", "ref": "jobTitle", "style": {"fontSize": "16px", "color": "#475569"}}
+      ]
+    },
+    "modules": [{
+      "type": "flex", "direction": "column", "gap": "8px",
+      "children": [
+        {"type": "heading", "ref": "modules.0.title", "style": {"fontSize": "18px", "fontWeight": "700"}},
+        {"type": "text", "ref": "modules.0.content", "style": {"fontSize": "15px"}}
+      ]
+    }]
+  },
+  "data": {
+    "name": "王五",
+    "jobTitle": "设计师",
+    "modules": [{"title": "个人简介", "content": "<p>10年UI设计经验，精通Figma和Sketch。</p>"}]
   }
 }
 
 ## 规则
 1. photo 永远返回 ""
 2. 不存在的字段填空字符串 ""，禁止填占位文字
-3. 模块内容用 HTML 标签，禁止用空格对齐
-4. 忠实反映原图的排版结构——有几栏就设 columns，有分隔线就设 border，不要简化或套用固定模板
-5. 容器节点(flex/grid)的 children 必须是非空数组
-6. 只返回 JSON，不要任何额外文字`;
+3. 原图的排版结构必须在 LayoutTree 中忠实体现：有几栏就设 columns，有左右分布就用 justifyContent: "space-between" 或 "space-around"，有固定列宽就用 width。禁止统一用 gap 简化间距、禁止套用示例的左右布局
+4. 模块若包含多条记录（多个工作经历、多个教育经历、多个项目经历），必须使用 entries 结构逐条拆分。每条包含独立的 date、company、role、description 等字段（字段名根据原图实际内容命名）
+5. 每条记录的排版细节（日期+公司同行、角色在右、描述在下方等）必须逐层在 LayoutTree 中表达，禁止把所有文本合并到单个 content 字符串
+6. 容器节点(flex/grid)的 children 必须是非空数组
+7. 只返回 JSON，不要任何额外文字`;
 }
 
 // ==================== JSON 提取与解析 ====================

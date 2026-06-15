@@ -6,6 +6,7 @@ import { buildSystemPrompt, aiTools } from '../../engine/aiPrompt';
 import { getFixedConstraints } from '../../engine/ruleBase';
 import { toolHandlerMap } from '../../engine/toolHandlers';
 import { executeSkill, type SkillContext } from '../../engine/skillExecutor';
+import { exportLayoutTree } from '../../utils/moduleUtils';
 import { getApiConfig, setUploadedFile, getUploadedFile } from '../../utils/aiConfig';
 
 interface ChatPanelProps {
@@ -594,6 +595,16 @@ console.log('[AI] 收到工具调用:', msg.tool_calls.map((tc: any) => tc.funct
   }
 };
 
+  // [临时] 导出画布布局树，用于对比 AI 生成 vs 手动复原
+  const handleExportLayout = () => {
+    const modules = useResumeStore.getState().modules;
+    const tree = exportLayoutTree(modules);
+    console.log("=== 画布布局树 ===");
+    console.log(JSON.stringify(tree, null, 2));
+    navigator.clipboard.writeText(JSON.stringify(tree, null, 2)).catch(() => {});
+    setMessages(prev => [...prev, { role: "ai", text: "布局树已导出到控制台并复制到剪贴板" }]);
+  };
+
   // 辅助：canvas 压缩图片
   function compressImage(file: File): Promise<string> {
     return new Promise((resolve, reject) => {
@@ -658,6 +669,7 @@ console.log('[AI] 收到工具调用:', msg.tool_calls.map((tc: any) => tc.funct
             <div className="flex gap-1 overflow-x-auto pb-1" style={{ scrollbarWidth: 'thin' }}>
               <button onClick={() => setApiModalVisible(true)} className="flex-shrink-0 h-8 px-2 text-xs bg-white border border-gray-300 rounded hover:bg-gray-50">API 设置</button>
               <button onClick={handleImportClick} disabled={parsing} className="flex-shrink-0 h-8 px-2 text-xs bg-white border border-gray-300 rounded hover:bg-gray-50">{parsing ? '解析中…' : '导入简历'}</button>
+              <button onClick={handleExportLayout} className="flex-shrink-0 h-8 px-2 text-xs bg-white border border-gray-300 rounded hover:bg-gray-50">导出布局树</button>
             </div>
           </div>
 

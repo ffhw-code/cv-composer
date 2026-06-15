@@ -10,6 +10,7 @@ interface SortableModuleProps {
   isSelected: boolean;
   onSelect: () => void;
   onEditFocus?: () => void;
+  renderToolbar?: React.ReactNode;
   disableDrag?: boolean;
   'data-id'?: string;
   onContextMenu?: (e: React.MouseEvent) => void;
@@ -21,6 +22,7 @@ function SortableModule({
   isSelected,
   onSelect,
   onEditFocus,
+  renderToolbar,
   disableDrag,
   ...rest
 }: SortableModuleProps) {
@@ -33,7 +35,6 @@ function SortableModule({
     isDragging,
   } = useSortable({ id, disabled: disableDrag });
 
-  // 拖拽时全局光标握拳，结束后恢复
   useEffect(() => {
     if (isDragging) {
       document.body.style.cursor = 'grabbing';
@@ -45,7 +46,6 @@ function SortableModule({
     };
   }, [isDragging]);
 
-  // ✨ 修改1：容器在拖拽时同步显示 grabbing 光标
   const containerStyle: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition,
@@ -53,7 +53,8 @@ function SortableModule({
     position: 'relative',
     border: isSelected ? '2px solid #3b82f6' : '2px solid transparent',
     borderRadius: '4px',
-    cursor: isDragging ? 'grabbing' : 'default', // 原来是写死的 default
+    cursor: isDragging ? 'grabbing' : 'default',
+    paddingTop: isSelected && renderToolbar ? '20px' : '0',
   };
 
   const borderHandleStyle: React.CSSProperties = {
@@ -66,8 +67,10 @@ function SortableModule({
 
   return (
     <div ref={setNodeRef} style={containerStyle} {...rest}>
-      {/* 四个边框手柄，仅用于拖拽，也响应点击来选中 */}
-      {/* 上 */}
+      {isSelected && renderToolbar && (
+        <div className="absolute top-0.5 left-0.5 right-0.5 z-20">{renderToolbar}</div>
+      )}
+      {/* 四个边框手柄 */}
       <div
         style={{
           ...borderHandleStyle,
@@ -83,7 +86,6 @@ function SortableModule({
           onSelect();
         }}
       />
-      {/* 下 */}
       <div
         style={{
           ...borderHandleStyle,
@@ -99,7 +101,6 @@ function SortableModule({
           onSelect();
         }}
       />
-      {/* 左 */}
       <div
         style={{
           ...borderHandleStyle,
@@ -115,7 +116,6 @@ function SortableModule({
           onSelect();
         }}
       />
-      {/* 右 */}
       <div
         style={{
           ...borderHandleStyle,
@@ -132,7 +132,6 @@ function SortableModule({
         }}
       />
 
-      {/* ✨ 修改2：内容区域光标跟随拖拽状态，点击空白处可选中模块 */}
       <div
         style={{ cursor: isDragging ? 'grabbing' : 'auto' }}
         onClick={(e) => {
@@ -142,10 +141,8 @@ function SortableModule({
             target.closest('[contenteditable]') ||
             target.closest('.ProseMirror')
           ) {
-            // 点击可编辑区域：取消选中并进入编辑
             onEditFocus?.();
           } else {
-            // 点击其他区域：选中当前模块
             onSelect();
           }
         }}
