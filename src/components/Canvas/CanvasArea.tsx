@@ -171,7 +171,7 @@ function CanvasArea({ deleteMode, onExitDeleteMode }: CanvasAreaProps) {
 
     if (isContainer) {
       const highlightClass = isDropHighlight
-        ? 'ring-2 ring-blue-400 ring-offset-2'
+        ? 'ring-2 ring-blue-400 ring-offset-2 animate-pulse'
         : '';
 
       return (
@@ -221,6 +221,7 @@ function CanvasArea({ deleteMode, onExitDeleteMode }: CanvasAreaProps) {
               ) : (
                 <p className="text-gray-400 text-sm">拖入模块或控件</p>
               )}
+              {isDropHighlight && <div className="absolute inset-0 bg-blue-50/20 flex items-center justify-center z-10 rounded"><span className="text-blue-500 text-xs font-medium bg-white px-2 py-1 rounded shadow">放入此容器</span></div>}
             </EditableModule>
           </div>
         </SortableModule>

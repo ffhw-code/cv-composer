@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getApiConfig, saveApiConfig } from '../../utils/aiConfig';
+import { getApiConfig, saveApiConfig, PROVIDER_PRESETS } from '../../utils/aiConfig';
 
 interface ApiKeyModalProps {
   visible: boolean;
@@ -14,18 +14,14 @@ interface ApiConfig {
   visionModel: string;
 }
 
-const PRESETS: Record<'openai' | 'aliyun', { baseUrl: string; model: string }> = {
-  openai: { baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o' },
-  aliyun: { baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'qwen-max' },
-};
-
 function ApiKeyModal({ visible, onClose }: ApiKeyModalProps) {
+  const defaultPreset = PROVIDER_PRESETS.aliyun;
   const [config, setConfig] = useState<ApiConfig>({
     provider: 'aliyun',
     apiKey: '',
-    model: PRESETS.aliyun.model,
-    baseUrl: PRESETS.aliyun.baseUrl,
-    visionModel: 'qwen-vl-max',
+    model: defaultPreset.model,
+    baseUrl: defaultPreset.baseUrl,
+    visionModel: defaultPreset.visionModel,
   });
   const [saved, setSaved] = useState(false);
 
@@ -34,13 +30,14 @@ function ApiKeyModal({ visible, onClose }: ApiKeyModalProps) {
     if (stored) setConfig(stored);
   }, []);
 
-  const handleProviderChange = (provider: 'openai' | 'aliyun' | 'custom') => {
-    const preset = provider !== 'custom' ? PRESETS[provider] : undefined;
+  const handleProviderChange = (provider: string) => {
+    const preset = PROVIDER_PRESETS[provider];
     setConfig({
       ...config,
       provider,
-      model: preset ? preset.model : config.model,
-      baseUrl: preset ? preset.baseUrl : config.baseUrl,
+      model: preset?.model || config.model,
+      baseUrl: preset?.baseUrl || config.baseUrl,
+      visionModel: preset?.visionModel || config.visionModel,
     });
   };
 
@@ -67,6 +64,11 @@ function ApiKeyModal({ visible, onClose }: ApiKeyModalProps) {
 
   if (!visible) return null;
 
+  const providerOptions = Object.entries(PROVIDER_PRESETS).map(([key, preset]) => ({
+    value: key,
+    label: preset.label + (key === 'aliyun' ? ' (推荐)' : ''),
+  }));
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="bg-white rounded-lg shadow-xl p-6 w-[400px] max-w-[90vw]">
@@ -77,12 +79,12 @@ function ApiKeyModal({ visible, onClose }: ApiKeyModalProps) {
             <label className="block text-sm font-medium text-gray-700 mb-1">提供商</label>
             <select
               value={config.provider}
-              onChange={(e) => handleProviderChange(e.target.value as 'openai' | 'aliyun' | 'custom')}
+              onChange={(e) => handleProviderChange(e.target.value)}
               className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
             >
-              <option value="aliyun">阿里云百炼 (推荐)</option>
-              <option value="openai">OpenAI</option>
-              <option value="custom">自定义接口</option>
+              {providerOptions.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
             </select>
           </div>
 

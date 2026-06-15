@@ -2,7 +2,8 @@
  * @vitest-environment jsdom
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { parseResumeFile, isVisionModel } from './resumeParser';
+import { parseResumeFile } from './resumeParser';
+import { isVisionModel } from './aiConfig';
 import { saveApiConfig } from './aiConfig';
 
 // ============================================================

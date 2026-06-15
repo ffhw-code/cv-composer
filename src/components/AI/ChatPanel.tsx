@@ -7,7 +7,7 @@ import { getFixedConstraints } from '../../engine/ruleBase';
 import { toolHandlerMap } from '../../engine/toolHandlers';
 import { executeSkill, type SkillContext } from '../../engine/skillExecutor';
 import { exportLayoutTree } from '../../utils/moduleUtils';
-import { getApiConfig, setUploadedFile, getUploadedFile } from '../../utils/aiConfig';
+import { getApiConfig, setUploadedFile, getUploadedFile, getProviderQuirks } from '../../utils/aiConfig';
 
 interface ChatPanelProps {
   collapsed: boolean;
@@ -40,11 +40,25 @@ function getCanvasState(): string {
 }
 
 function ChatPanel({ collapsed, onToggle }: ChatPanelProps) {
-  const [messages, setMessages] = useState<{ role: 'user' | 'ai'; text: string }[]>([]);
+  interface Suggestion {
+  title: string;
+  description: string;
+  tool: string;
+  params: Record<string, unknown>;
+}
+
+interface ChatMessage {
+  role: 'user' | 'ai';
+  text: string;
+  suggestions?: Suggestion[];
+}
+
+const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [parsing, setParsing] = useState(false);
   const [apiModalVisible, setApiModalVisible] = useState(false);
   const [waiting, setWaiting] = useState(false);
+  const [toolStatus, setToolStatus] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -117,12 +131,25 @@ const callSmartFill = async (sysPrompt: string, userPrompt: string): Promise<str
       return await callAiWithMessages(polishMsgs);
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    callAiForEvaluate: async (state: any) => {
-      const evalMsgs = [
-        { role: 'system', content: '请根据以下简历状态评估质量，给出优点、改进建议。' },
-        { role: 'user', content: JSON.stringify(state) },
-      ];
-      return await callAiWithMessages(evalMsgs);
+    callAiForEvaluate: async (prompt: string, _state: any) => {
+      const config = getApiConfig();
+      if (!config?.apiKey) throw new Error('API 未配置');
+      const baseUrl = config.baseUrl || 'https://dashscope.aliyuncs.com/compatible-mode/v1';
+      const model = config.model || 'qwen-plus';
+      const messages = [{ role: 'user' as const, content: prompt }];
+      const response = await fetch(`${baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.apiKey}` },
+        body: JSON.stringify({ model, messages, temperature: 0.1 }),
+      });
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`评估 API 请求失败: ${response.status} ${errText}`);
+      }
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content;
+      if (!content) throw new Error('评估未返回有效内容');
+      return content;
     },
     callAiForSmartFill: callSmartFill,
   });
@@ -159,7 +186,7 @@ const callSmartFill = async (sysPrompt: string, userPrompt: string): Promise<str
       replaceImportStatusMessage(result);
     } catch (err: unknown) {
       const importErrMsg = err instanceof Error ? err.message : String(err);
-      replaceImportStatusMessage(`导入失败：${importErrMsg}`);
+      replaceImportStatusMessage(`导入失败：${importErrMsg}\n\n<details><summary>诊断信息</summary>请检查：1. 视觉模型是否支持图片解析 2. API 是否有限流 3. 图片是否清晰可读</details>`);
     }
   };
 
@@ -366,8 +393,11 @@ const callAiWithMessages = async (msgs: any[], retryCount = 0, toolRoundCount = 
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
 console.log('[AI] 收到工具调用:', msg.tool_calls.map((tc: any) => tc.function.name));
-  // 百炼 API 严格要求：当 assistant 返回 tool_calls 时，content 必须为 null
-  delete msg.content; // 避免 JSON 序列化输出 null，阿里 API 不接受 object 类型的 content
+  // Provider 差异：部分 API（如阿里百炼）要求 tool_calls 消息中 content 为 null
+  const quirks = getProviderQuirks(config.provider);
+  if (quirks.nullContentOnToolCalls) {
+    delete msg.content;
+  }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const toolResults: any[] = [];
@@ -450,6 +480,7 @@ console.log('[AI] 收到工具调用:', msg.tool_calls.map((tc: any) => tc.funct
             resultContent = toolResult.summary || '操作已成功执行。';
           } else {
             hasError = true;
+            setToolStatus(`${fnName} ✗`);
             resultContent = JSON.stringify({
               error: toolResult.code,
               message: toolResult.message,
@@ -504,6 +535,7 @@ console.log('[AI] 收到工具调用:', msg.tool_calls.map((tc: any) => tc.funct
     if (!overrideMessage) setInput('');
     setMessages(prev => [...prev, { role: 'user', text: userMsg }]);
     setWaiting(true);
+    setToolStatus(null);
 
     const config = getApiConfig();
     if (!config || !config.apiKey) {
@@ -527,7 +559,27 @@ console.log('[AI] 收到工具调用:', msg.tool_calls.map((tc: any) => tc.funct
       if (!aiReply) {
         setMessages(prev => [...prev, { role: 'ai', text: '未收到有效回复，请重试。' }]);
       } else {
-        setMessages(prev => [...prev, { role: 'ai', text: aiReply }]);
+        // 尝试解析结构化建议
+        let suggestions: Suggestion[] | undefined;
+        let displayText = aiReply;
+        try {
+          // 提取 JSON：先找 { 到 } 的范围，再去掉 markdown 包裹
+          let jsonStr = aiReply.trim();
+          const startIdx = jsonStr.indexOf('{');
+          const endIdx = jsonStr.lastIndexOf('}');
+          if (startIdx !== -1 && endIdx > startIdx) {
+            jsonStr = jsonStr.substring(startIdx, endIdx + 1);
+          }
+          jsonStr = jsonStr.replace(/```json\s*|\s*```/g, '').trim();
+          // 修复尾部逗号
+          jsonStr = jsonStr.replace(/,\s*([}\]])/g, '$1');
+          const parsed = JSON.parse(jsonStr);
+          if (parsed.suggestions && Array.isArray(parsed.suggestions)) {
+            suggestions = parsed.suggestions;
+            displayText = parsed.summary || '评估完成，点击下方建议可直接应用：';
+          }
+        } catch { /* 非结构化回复，按纯文本显示 */ }
+        setMessages(prev => [...prev, { role: 'ai', text: displayText, suggestions }]);
       }
     } catch (err: unknown) {
       const chatErrMsg = err instanceof Error ? err.message : String(err);
@@ -535,6 +587,7 @@ console.log('[AI] 收到工具调用:', msg.tool_calls.map((tc: any) => tc.funct
       setMessages(prev => [...prev, { role: 'ai', text: `出错了: ${chatErrMsg}` }]);
     } finally {
       setWaiting(false);
+      setToolStatus(null);
     }
   };
 
@@ -655,11 +708,49 @@ console.log('[AI] 收到工具调用:', msg.tool_calls.map((tc: any) => tc.funct
           <p className="text-xs text-gray-400 mb-2 flex-shrink-0">AI 助手</p>
 
           <div className="flex-1 overflow-y-auto text-xs text-gray-600 space-y-2 mb-2">
+            {waiting && (
+              <div className="flex items-center gap-2 bg-blue-50 rounded p-2 text-blue-600">
+                <span className="inline-block w-3 h-3 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"></span>
+                <span>{toolStatus || 'AI 思考中…'}</span>
+              </div>
+            )}
             {messages.length === 0 && (
               <div className="bg-white rounded p-2">上传简历文件或输入指令，我可以帮你生成或修改简历。</div>
             )}
             {messages.map((msg, i) => (
-              <div key={i} className={`rounded p-2 ${msg.role === 'user' ? 'bg-blue-50' : 'bg-white'}`}>{msg.text}</div>
+              <div key={i} className={`rounded p-2 ${msg.role === 'user' ? 'bg-blue-50' : 'bg-white'}`}>
+                <div>{msg.text}</div>
+                {msg.suggestions && msg.suggestions.length > 0 && (
+                  <div className="mt-2 space-y-1">
+                    {msg.suggestions.map((s, si) => (
+                      <button
+                        key={si}
+                        onClick={async () => {
+                          try {
+                            const handler = toolHandlerMap[s.tool];
+                            if (!handler) { alert(`未知工具: ${s.tool}`); return; }
+                            const currentModules = useResumeStore.getState().modules;
+                            const result = await handler(s.params as Record<string, unknown>, currentModules);
+                            if (result.success) {
+                              useResumeStore.getState().importModules(result.newModules);
+                              setMessages(prev => [...prev, { role: 'ai', text: `已应用建议：${s.title}` }]);
+                            } else {
+                              setMessages(prev => [...prev, { role: 'ai', text: `应用失败：${result.message}` }]);
+                            }
+                          } catch (err: unknown) {
+                            const errMsg = err instanceof Error ? err.message : String(err);
+                            setMessages(prev => [...prev, { role: 'ai', text: `应用建议出错：${errMsg}` }]);
+                          }
+                        }}
+                        className="block w-full text-left px-2 py-1.5 text-xs bg-gray-50 border border-gray-200 rounded hover:bg-blue-50 hover:border-blue-300 transition-colors"
+                      >
+                        <span className="font-medium">{s.title}</span>
+                        <span className="text-gray-400 ml-2">{s.description}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             ))}
           </div>
 

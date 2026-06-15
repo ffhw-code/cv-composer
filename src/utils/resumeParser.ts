@@ -1,5 +1,5 @@
 // src/utils/resumeParser.ts
-import { getApiConfig } from './aiConfig';
+import { getApiConfig, isVisionModel } from './aiConfig';
 
 // ==================== 类型定义 ====================
 
@@ -353,9 +353,6 @@ async function readFileAsText(file: File): Promise<string> {
 
 // ==================== 视觉模型检测 ====================
 
-export function isVisionModel(model: string): boolean {
-  return /(vl|vision|claude-3|gemini-pro-vision|ocr|gpt-4o)/i.test(model);
-}
 
 // ==================== 主解析入口 ====================
 

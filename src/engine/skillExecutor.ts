@@ -15,7 +15,7 @@ export interface SkillContext {
   importModules: (modules: ResumeModule[]) => void;
   getCanvasState: () => unknown;
   callAiForPolish: (text: string) => Promise<string>;
-  callAiForEvaluate: (state: unknown) => Promise<string>;
+  callAiForEvaluate: (prompt: string, state: unknown) => Promise<string>;
   callAiForSmartFill: (sysPrompt: string, userPrompt: string) => Promise<string>;
 }
 
@@ -153,7 +153,43 @@ registerSkill('polish-text', async (params, ctx) => {
 // 3. 简历评估
 registerSkill('evaluate-resume', async (_params, ctx) => {
   const state = ctx.getCanvasState();
-  return await ctx.callAiForEvaluate(state);
+  const stateStr = JSON.stringify(state, null, 2);
+
+  const evalPrompt = `你是资深简历顾问。请根据以下简历画布状态评估质量，给出改进建议。每条建议必须附带可执行的操作（tool + params），前端会将其渲染为可点击按钮。
+
+画布状态：
+${stateStr}
+
+输出 JSON 对象（不要 markdown 代码块）：
+{
+  "summary": "整体评估（1-3句话）",
+  "suggestions": [
+    {
+      "title": "建议标题（如：统一标题字号）",
+      "description": "建议说明（一句话）",
+      "tool": "set_style",
+      "params": { "id": "模块id", "style": { "fontSize": "18px" } }
+    }
+  ]
+}
+
+可用工具及参数格式：
+- set_style: { id, style: { key: value } }
+- set_content: { id, content }
+- set_property: { id, property, value }
+- add_module: { styleId, title, content }
+- add_text: { content, style? }
+- add_heading: { content, style? }
+- add_flex_inline: { children: [{type,content}], direction?, gap? }
+- add_grid_inline: { children: [{type,content}], columns?, gap? }
+- remove_module: { id }
+- duplicate_module: { id }
+- move_module: { id, parent_id?, index }
+
+id 必须使用画布状态中的实际模块 id。`;
+
+  const evalResult = await ctx.callAiForEvaluate(evalPrompt, stateStr);
+  return evalResult;
 });
 
 // 4. 应用主题
@@ -185,64 +221,129 @@ registerSkill('smart-fill', async (params, ctx) => {
   const userInfo = params.info as string;
   if (!userInfo) return '缺少用户信息参数 (info)';
 
-  const getModuleLabelMap = (): { label: string; id: string; type: string; currentContent: string }[] => {
-    const items: { label: string; id: string; type: string; currentContent: string }[] = [];
-    const usedLabels = new Set<string>();
-    const generateUniqueLabel = (desired: string): string => {
-      let label = desired;
-      let counter = 1;
-      while (usedLabels.has(label)) {
-        label = `${desired} (${counter++})`;
-      }
-      usedLabels.add(label);
-      return label;
-    };
-    interface ParsedNode { id?: string; name?: string; title?: string; content?: string; jobTitle?: string; type?: string; children?: ParsedNode[] }
-    const extract = (nodes: ParsedNode[], parentNode?: ParsedNode) => {
-      for (const n of nodes) {
-        const name = n.name || '';
-        const title = n.title || '';
-        const content = n.content || '';
-        const jobTitle = n.jobTitle || '';
-        // eslint-disable-next-line no-useless-assignment
-        let label = '';
-        if (name && name !== '未命名' && name !== '姓名') label = name;
-        else if (title) label = title;
-        else if (jobTitle && jobTitle !== '求职意向') label = jobTitle;
-        else if (parentNode?.title && (n.type === 'heading' || n.type === 'text'))
-          label = n.type === 'heading' ? `${parentNode.title} 标题` : `${parentNode.title} 内容`;
-        else if (content.trim().length > 0) label = content.trim().substring(0, 20);
-        else label = n.type || '';
-        label = generateUniqueLabel(label);
-        items.push({ label, id: n.id || '', type: n.type || 'text', currentContent: content || name || '' });
-        if (n.children?.length) extract(n.children, n);
-      }
-    };
-    extract(ctx.modules);
-    return items;
-  };
+  const MODULE_STYLES = [
+    { id: 'module-card', label: '卡片样式（通用）' },
+    { id: 'module-timeline', label: '时间线样式（适合经历）' },
+    { id: 'module-list', label: '简洁列表（适合技能）' },
+    { id: 'module-plain', label: '简约无边框（适合简介）' },
+  ];
 
-  const labelMap = getModuleLabelMap();
-  const labelList = labelMap.map(m =>
-    `- [标签] ${m.label}\n  当前内容: ${m.currentContent || '(空)'}\n  类型: ${m.type}`
+  // 遍历画布树，为每个可填充的叶子节点生成唯一路径
+  interface PathEntry { path: string; id: string; type: string; currentContent: string }
+  const entries: PathEntry[] = [];
+
+  function walk(nodes: ResumeModule[], ancestors: string[]) {
+    for (const node of nodes) {
+      let seg: string;
+      const rawText = (node.content || '').replace(/<[^>]+>/g, '').trim();
+      const contentSnippet = rawText.slice(0, 12) || '';
+
+      if (node.type === 'header') {
+        seg = '简历头';
+      } else if (node.type === 'module') {
+        seg = node.title || contentSnippet || '模块';
+        if (!seg || seg === '模块标题') seg = '模块';
+      } else if (node.type === 'heading') {
+        seg = contentSnippet || '标题';
+      } else if (node.type === 'text') {
+        if (node.name && node.name !== '姓名' && node.name !== '未命名') seg = node.name;
+        else if (node.jobTitle && node.jobTitle !== '求职意向') seg = '求职意向';
+        else if (node.phone && node.phone !== '电话') seg = '电话';
+        else if (node.email && node.email !== '邮箱') seg = '邮箱';
+        else if (node.birth && node.birth !== '出生年月') seg = '出生年月';
+        else if (contentSnippet) seg = contentSnippet;
+        else seg = '文本';
+      } else if (node.type === 'list') {
+        seg = contentSnippet || '列表';
+      } else if (node.type === 'image') {
+        seg = '照片';
+      } else {
+        seg = node.type;
+      }
+
+      const rawPath = [...ancestors, seg].join(' > ');
+
+      const isLeaf = ['text', 'heading', 'list', 'image'].includes(node.type) &&
+        (!node.children || node.children.length === 0);
+      if (isLeaf) {
+        entries.push({
+          path: rawPath,
+          id: node.id,
+          type: node.type,
+          currentContent: contentSnippet,
+        });
+      }
+
+      if (node.children && node.children.length > 0) {
+        const nextAncestors = node.type === 'header' || node.type === 'module'
+          ? ancestors
+          : [...ancestors, seg];
+        walk(node.children, nextAncestors);
+      }
+    }
+  }
+
+  walk(ctx.modules, []);
+
+  // 去重
+  const pathCounts = new Map<string, number>();
+  for (const e of entries) {
+    const count = pathCounts.get(e.path) || 0;
+    pathCounts.set(e.path, count + 1);
+    if (count > 0) {
+      e.path = e.path + ' (' + (count + 1) + ')';
+    }
+  }
+
+  // 列出画布中已有模块标题，供 AI 判断是否需要新建
+  const existingTitles: string[] = [];
+  function collectTitles(nodes: ResumeModule[]) {
+    for (const n of nodes) {
+      if (n.type === 'module' && n.title) existingTitles.push(n.title);
+      if (n.children) collectTitles(n.children);
+    }
+  }
+  collectTitles(ctx.modules);
+  const existingTitleList = existingTitles.length > 0
+    ? existingTitles.map(t => `"${t}"`).join(', ')
+    : '（无）';
+
+  const pathList = entries.map(e =>
+    `- [${e.path}] (${e.type})\n  当前: ${e.currentContent || '(空)'}`
   ).join('\n');
 
-  const systemPrompt = `你是简历填充专家。当前画布模块如下：
-${labelList}
+  const systemPrompt = `你是简历填充专家。你需要从用户背景中提取信息，按以下规则操作：
 
-用户信息：${userInfo}
+## 画布中已有的可填充位置
+${pathList}
 
-请生成 JSON 数组：
-[
-  { "label": "模块标签", "content": "新内容" },
-  ...
-]
-只使用上面标签，只输出 JSON。`;
+已有模块标题: ${existingTitleList}
+
+## 用户背景
+${userInfo}
+
+## 输出 JSON 数组，每项二选一：
+
+1. **填充已有位置**: 用 path 匹配上面列表中的位置
+   { "path": "简历头 > 张三", "content": "李四" }
+
+2. **创建新模块**: 当用户信息中没有已有模块能匹配时（如用户提到教育背景但画布无此模块）
+   { "action": "add_module", "title": "教育背景", "styleId": "module-card", "content": "<p>清华大学 · 计算机科学 · 2020年毕业</p>" }
+
+可用 styleId: ${MODULE_STYLES.map(s => s.id + '(' + s.label + ')').join(', ')}
+
+## 严格规则
+- 路径必须完全匹配上面列表中的 path 字符串，不要自己编造
+- 已有模块能匹配的信息 → 必须用 path 填充，不要新建重复模块
+- 已有模块无法匹配的信息 → 必须用 action: "add_module" 新建
+- content 支持 HTML 标签（<p><ul><li><strong>等），多条项目用 <ul><li> 列表
+- 每个 add_module 的 content 应包含完整信息（不需要再拆分 title 和 content——title 已在 action 中指定）
+- 只输出 JSON 数组，不要额外文字`;
 
   const aiReply = await ctx.callAiForSmartFill(systemPrompt, '请生成填充内容');
   const cleaned = aiReply.replace(/```json\s*|\s*```/g, '').trim();
-  // eslint-disable-next-line no-useless-assignment
-  let fillList: { label: string; content: string }[] | null = null;
+
+  let fillList: ({ path: string; content: string } | { action: string; title: string; styleId: string; content: string })[];
   try {
     fillList = JSON5.parse(cleaned);
   } catch {
@@ -261,27 +362,89 @@ ${labelList}
 
   if (!Array.isArray(fillList)) return 'AI 返回格式不正确，请重试。';
 
-  const labelToId = new Map<string, string>();
-  for (const item of labelMap) labelToId.set(item.label, item.id);
+  const pathToId = new Map<string, string>();
+  for (const e of entries) pathToId.set(e.path, e.id);
 
-  const commands: Command[] = [];
-  for (const fill of fillList) {
-    const realId = labelToId.get(fill.label);
-    if (!realId) continue;
-    commands.push({
-      action: 'setContent',
-      params: { id: realId, content: fill.content || '' },
-    });
+  const fillCommands: Command[] = [];
+  const newModuleCommands: Command[] = [];
+  const unmatched: string[] = [];
+
+  for (const item of fillList) {
+    if ('path' in item) {
+      const realId = pathToId.get(item.path);
+      if (!realId) {
+        unmatched.push(item.path);
+        continue;
+      }
+      fillCommands.push({
+        action: 'setContent',
+        params: { id: realId, content: item.content || '' },
+      });
+    } else if ('action' in item && item.action === 'add_module') {
+      // 构造 addModule 指令：创建 module 容器，内含 heading + text
+      const modTempId = 'sf-mod-' + Math.random().toString(36).slice(2, 8);
+      newModuleCommands.push({
+        action: 'addModule',
+        tempId: modTempId,
+        params: {
+          type: 'module',
+          styleId: item.styleId || 'module-card',
+          title: item.title,
+          content: item.content || '',
+          style: {
+            display: 'flex', flexDirection: 'column', gap: '12px',
+            padding: '20px', backgroundColor: '#ffffff',
+            borderRadius: '12px', border: '1px solid #e2e8f0',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+          },
+          children: [
+            {
+              action: 'addModule' as const,
+              tempId: modTempId + '-h',
+              params: {
+                type: 'heading',
+                styleId: 'heading-default',
+                style: { fontSize: '20px', fontWeight: '700', color: '#0f172a', paddingBottom: '8px', borderBottom: '2px solid #f1f5f9' },
+                content: '<p>' + (item.title || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</p>',
+                title: item.title,
+              },
+            },
+            {
+              action: 'addModule' as const,
+              tempId: modTempId + '-t',
+              params: {
+                type: 'text',
+                styleId: 'text-default',
+                style: { fontSize: '15px', color: '#334155', lineHeight: '1.6' },
+                content: item.content || '',
+              },
+            },
+          ],
+        },
+      });
+    }
   }
 
-  if (commands.length === 0) return '没有有效填充指令，请检查标签匹配。';
+  if (unmatched.length > 0) {
+    console.warn('[smart-fill] 未匹配的路径:', unmatched);
+  }
 
-  const result = executeCommands(ctx.modules, commands);
+  const allCommands = [...newModuleCommands, ...fillCommands];
+  if (allCommands.length === 0) {
+    return `未生成任何有效操作。AI 返回的内容无法匹配画布模块。`;
+  }
+
+  const result = executeCommands(ctx.modules, allCommands);
   if (result.errors.length > 0) return `填充失败：${result.errors.map((e: {message: string}) => e.message).join('; ')}`;
   ctx.importModules(result.newModules);
-  return `智能填充完成，已更新 ${commands.length} 个模块。`;
-});
 
+  const newCount = newModuleCommands.length;
+  const fillCount = fillCommands.length;
+  const parts: string[] = [];
+  if (fillCount > 0) parts.push(`填充了 ${fillCount} 个已有模块`);
+  if (newCount > 0) parts.push(`新建了 ${newCount} 个模块`);
+  return (parts.length > 0 ? parts.join('，') : '未执行任何操作') + '。';
+});
 
 // ===== 布局树翻译器 =====
 

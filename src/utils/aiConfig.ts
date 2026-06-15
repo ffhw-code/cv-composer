@@ -6,12 +6,65 @@ export interface ApiConfig {
   visionModel: string;
 }
 
+/** Provider 特有行为差异 */
+export interface ProviderQuirks {
+  /** tool_calls 消息中 content 必须设为 null（阿里百炼） */
+  nullContentOnToolCalls: boolean;
+  /** 视觉模型不支持独立的 vision model，直接复用 FC 模型（gpt-4o 等） */
+  visionReusesFcModel: boolean;
+  /** 错误响应中 message 字段路径 */
+  errorMessagePath: string;
+}
+
 const STORAGE_KEY = 'resume_ai_config';
 
-const DEFAULTS: Record<string, Partial<ApiConfig>> = {
-  openai: { baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o', visionModel: 'gpt-4o' },
-  aliyun: { baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'qwen-plus', visionModel: 'qwen-vl-max' },
+interface ProviderPreset {
+  label: string;
+  baseUrl: string;
+  model: string;
+  visionModel: string;
+  quirks: ProviderQuirks;
+}
+
+export const PROVIDER_PRESETS: Record<string, ProviderPreset> = {
+  aliyun: {
+    label: '阿里云百炼',
+    baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    model: 'qwen-max',
+    visionModel: 'qwen-vl-max',
+    quirks: {
+      nullContentOnToolCalls: true,
+      visionReusesFcModel: false,
+      errorMessagePath: 'error.message',
+    },
+  },
+  openai: {
+    label: 'OpenAI',
+    baseUrl: 'https://api.openai.com/v1',
+    model: 'gpt-4o',
+    visionModel: 'gpt-4o',
+    quirks: {
+      nullContentOnToolCalls: false,
+      visionReusesFcModel: true,
+      errorMessagePath: 'error.message',
+    },
+  },
+  custom: {
+    label: '自定义接口',
+    baseUrl: '',
+    model: '',
+    visionModel: '',
+    quirks: {
+      nullContentOnToolCalls: false,
+      visionReusesFcModel: false,
+      errorMessagePath: 'error.message',
+    },
+  },
 };
+
+export function getProviderQuirks(provider: string): ProviderQuirks {
+  return PROVIDER_PRESETS[provider]?.quirks || PROVIDER_PRESETS.custom.quirks;
+}
 
 export function getApiConfig(): ApiConfig | null {
   try {
@@ -27,15 +80,10 @@ export function saveApiConfig(config: ApiConfig): void {
   sessionStorage.setItem(STORAGE_KEY, JSON.stringify(config));
 }
 
-export function getDefaultConfig(provider: string): Partial<ApiConfig> {
-  return DEFAULTS[provider] || {};
-}
+export const MAX_FILE_SIZE = 5 * 1024 * 1024;
+export const MAX_BASE64_SIZE = 6.8 * 1024 * 1024;
 
-export const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
-export const MAX_BASE64_SIZE = 6.8 * 1024 * 1024; // ~6.8M base64
-
-
-// ---- 上传文件缓存（替换 window globals） ----
+// ---- 上传文件缓存 ----
 
 interface UploadedFileData {
   base64: string;
@@ -61,7 +109,6 @@ export interface RecommendedModel {
   note: string;
 }
 
-/** 经测试确认 function calling 可靠、指令遵循良好的模型 */
 export const RECOMMENDED_MODELS: RecommendedModel[] = [
   { model: 'qwen-max', provider: '阿里云百炼', note: '综合能力最强，function calling 稳定，首选推荐' },
   { model: 'qwen-plus', provider: '阿里云百炼', note: '性价比高，function calling 可靠，日常使用推荐' },
@@ -70,7 +117,11 @@ export const RECOMMENDED_MODELS: RecommendedModel[] = [
   { model: 'deepseek-chat', provider: 'DeepSeek', note: 'OpenAI 兼容接口，function calling 表现好' },
 ];
 
-/** 检查模型是否在推荐列表中 */
 export function isRecommendedModel(model: string): boolean {
   return RECOMMENDED_MODELS.some(m => m.model === model.trim());
+}
+
+/** 检查模型是否支持视觉（通过模型名推断） */
+export function isVisionModel(model: string): boolean {
+  return /(vl|vision|claude-3|gemini-pro-vision|ocr|gpt-4o)/i.test(model);
 }
