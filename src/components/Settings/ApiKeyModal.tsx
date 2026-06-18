@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { getApiConfig, saveApiConfig, PROVIDER_PRESETS } from '../../utils/aiConfig';
 
 interface ApiKeyModalProps {
@@ -16,7 +16,7 @@ interface ApiConfig {
 
 function ApiKeyModal({ visible, onClose }: ApiKeyModalProps) {
   const defaultPreset = PROVIDER_PRESETS.aliyun;
-  const [config, setConfig] = useState<ApiConfig>({
+  const [config, setConfig] = useState<ApiConfig>(() => getApiConfig() || {
     provider: 'aliyun',
     apiKey: '',
     model: defaultPreset.model,
@@ -24,11 +24,6 @@ function ApiKeyModal({ visible, onClose }: ApiKeyModalProps) {
     visionModel: defaultPreset.visionModel,
   });
   const [saved, setSaved] = useState(false);
-
-  useEffect(() => {
-    const stored = getApiConfig();
-    if (stored) setConfig(stored);
-  }, []);
 
   const handleProviderChange = (provider: string) => {
     const preset = PROVIDER_PRESETS[provider];

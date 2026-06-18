@@ -23,6 +23,7 @@ import type {
   SetContentParams,
   SetStyleParams,
   SetPropertyParams,
+  SetStyleByTypeParams,
   RemoveModuleParams,
   MoveModuleParams,
   DuplicateModuleParams,
@@ -563,6 +564,56 @@ export function handleSetProperty(params: SetPropertyParams, modules: ResumeModu
   return toToolResult(executeCommands(modules, [cmd]), modules);
 }
 
+
+export function handleSetStyleByType(params: SetStyleByTypeParams, modules: ResumeModule[]): ToolResult {
+  const includeTypes = params.type ? new Set(params.type) : null;
+  const excludeTypes = params.except ? new Set(params.except) : null;
+
+  const matchedIds: string[] = [];
+
+  const walk = (nodes: ResumeModule[]) => {
+    for (const node of nodes) {
+      // Skip excluded types
+      if (excludeTypes?.has(node.type)) {
+        if (node.children) walk(node.children);
+        continue;
+      }
+      // Match by type filter
+      if (!includeTypes || includeTypes.has(node.type)) {
+        matchedIds.push(node.id);
+      }
+      if (node.children) walk(node.children);
+    }
+  };
+
+  walk(modules);
+
+  if (matchedIds.length === 0) {
+    const filterDesc = params.type ? `类型 ${params.type.join(', ')}` : '所有类型';
+    const exceptDesc = params.except ? `（排除 ${params.except.join(', ')}）` : '';
+    return {
+      success: false,
+      code: 'NO_MATCH',
+      message: `没有找到匹配的模块：${filterDesc}${exceptDesc}`,
+      fix: '请检查 type/except 参数是否正确，或先确认画布上有相应类型的模块。',
+      originalModules: modules,
+    };
+  }
+
+  const commands: Command[] = matchedIds.map(id => ({
+    action: 'setStyle',
+    params: { id, style: params.style },
+  }));
+
+  const result = executeCommands(modules, commands);
+
+  return toToolResult(
+    result,
+    modules,
+    `已将 ${matchedIds.length} 个模块的样式更新为 ${JSON.stringify(params.style)}`,
+  );
+}
+
 export function handleRemoveModule(params: RemoveModuleParams, modules: ResumeModule[]): ToolResult {
   const cmd: Command = {
     action: 'removeModule',
@@ -765,7 +816,7 @@ export async function handleExecuteSkill(
   skillCtx: SkillContext,
 ): Promise<ToolResult> {
   try {
-    const resultMsg = await executeSkill(params.name, params.params || {}, skillCtx);
+    await executeSkill(params.name, params.params || {}, skillCtx);
     // 技能执行后模块可能已通过 ctx.importModules 更新
     const store = useResumeStore.getState();
     return { success: true, newModules: store.modules, summary: `技能「${params.name}」执行完成。` };
@@ -786,7 +837,7 @@ export async function handleExecuteSkill(
 export type ToolHandler = (params: Record<string, unknown>, modules: ResumeModule[]) => ToolResult | Promise<ToolResult>;
 
 export const toolHandlerMap: Record<string, ToolHandler> = {
-  add_text: (p, m) => handleAddText(p as unknown as AddTextParams, m),
+  add_text: (_p, m) => handleAddText(_p as unknown as AddTextParams, m),
   add_heading: (p, m) => handleAddHeading(p as unknown as AddHeadingParams, m),
   add_list: (p, m) => handleAddList(p as unknown as AddListParams, m),
   add_image: (p, m) => handleAddImage(p as unknown as AddImageParams, m),
@@ -798,11 +849,12 @@ export const toolHandlerMap: Record<string, ToolHandler> = {
   add_module: (p, m) => handleAddModule(p as unknown as AddModuleParams, m),
   set_content: (p, m) => handleSetContent(p as unknown as SetContentParams, m),
   set_style: (p, m) => handleSetStyle(p as unknown as SetStyleParams, m),
+  set_style_by_type: (p, m) => handleSetStyleByType(p as unknown as SetStyleByTypeParams, m),
   set_property: (p, m) => handleSetProperty(p as unknown as SetPropertyParams, m),
   remove_module: (p, m) => handleRemoveModule(p as unknown as RemoveModuleParams, m),
   move_module: (p, m) => handleMoveModule(p as unknown as MoveModuleParams, m),
   duplicate_module: (p, m) => handleDuplicateModule(p as unknown as DuplicateModuleParams, m),
   apply_template: (p, m) => handleApplyTemplate(p as unknown as ApplyTemplateParams, m),
-  export_pdf: (p, m) => handleExportPdf(m),
+  export_pdf: (_p, m) => handleExportPdf(m),
   // execute_skill and get_uploaded_file handled separately by ChatPanel (async + file access)
 };

@@ -3,7 +3,18 @@ import { useEditor, EditorContent } from '@tiptap/react';
 import { getTextExtensions } from '../../tiptap/editorExtensions';
 import { useResumeStore } from '../../store/useResumeStore';
 import { useActiveEditor } from '../../hooks/useActiveEditor';
+import { useOverflowGuard } from '../../hooks/useOverflowGuard';
 import type { ResumeModule } from '../../store/useResumeStore';
+
+/** 清理 HTML 中所有尾部空块 */
+const cleanTrailing = (html: string): string => {
+  let result = html;
+  const trailingRe = /(?:<p><\/p>|<li><p><\/p><\/li>|<br\s*\/?>)\s*$/g;
+  while (trailingRe.test(result)) {
+    result = result.replace(trailingRe, '');
+  }
+  return result;
+};
 
 function TextControl({ module }: { module: ResumeModule }) {
   const updateModule = useResumeStore((s) => s.updateModule);
@@ -19,7 +30,7 @@ function TextControl({ module }: { module: ResumeModule }) {
       },
     },
     onUpdate: ({ editor }) => {
-      const html = editor.getHTML();
+      const html = cleanTrailing(editor.getHTML());
       updateModule(module.id, { content: html });
     },
     onFocus: ({ editor }) => {
@@ -28,7 +39,10 @@ function TextControl({ module }: { module: ResumeModule }) {
   });
 
   useEffect(() => {
-    if (editor && module.content !== editor.getHTML()) {
+    if (!editor) return;
+    const editorHtml = cleanTrailing(editor.getHTML());
+    const storedHtml = cleanTrailing(module.content || '');
+    if (storedHtml !== editorHtml) {
       editor.commands.setContent(module.content || '<p>请在此输入文本...</p>');
     }
   }, [module.content, editor]);
@@ -47,20 +61,19 @@ function TextControl({ module }: { module: ResumeModule }) {
     dom.style.fontWeight = style.fontWeight || '';
     dom.style.lineHeight = style.lineHeight || '';
     dom.style.letterSpacing = style.letterSpacing || '';
-    // 注意：编辑器内部可能有背景，我们也可以直接在外层 div 设置背景
   }, [editor, module.style]);
 
-  // 布局属性放到外层容器
+  const { ref, heightStyle, isOverflowing } = useOverflowGuard(module.style?.height);
   const containerStyle: React.CSSProperties = {
     width: module.style?.width || 'auto',
-    height: module.style?.height || 'auto',
+    ...heightStyle,
     margin: module.style?.margin || '0',
     padding: module.style?.padding || '0',
     backgroundColor: module.style?.backgroundColor || 'transparent',
   };
 
   return (
-    <div style={containerStyle}>
+    <div ref={ref} style={containerStyle} className={isOverflowing ? 'ring-2 ring-red-300 rounded' : ''}>
       <EditorContent editor={editor} />
     </div>
   );

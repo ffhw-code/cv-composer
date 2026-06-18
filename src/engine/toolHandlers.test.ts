@@ -15,6 +15,7 @@ import {
   handleSetContent,
   handleSetStyle,
   handleSetProperty,
+  handleSetStyleByType,
   handleRemoveModule,
   handleMoveModule,
   handleDuplicateModule,
@@ -22,7 +23,6 @@ import {
   toolHandlerMap,
   type ToolResult,
 } from './toolHandlers';
-import { useResumeStore } from '../store/useResumeStore';
 
 beforeAll(() => {
   initStyles();
@@ -52,9 +52,9 @@ describe('handleAddText', () => {
   it('创建文本框并返回正确类型和内容', () => {
     const result = expectSuccess(handleAddText({ content: '<p>Hello</p>' }, []));
     expect(result).toHaveLength(1);
-    expect(result[0].type).toBe('text');
-    expect(result[0].content).toBe('<p>Hello</p>');
-    expect(result[0].styleId).toBe('text-default');
+    expect(result[0]!.type).toBe('text');
+    expect(result[0]!.content).toBe('<p>Hello</p>');
+    expect(result[0]!.styleId).toBe('text-default');
   });
 
   it('自定义样式被应用', () => {
@@ -62,17 +62,17 @@ describe('handleAddText', () => {
       content: 'X',
       style: { fontSize: '18px', color: '#ff0000' },
     }, []));
-    expect(result[0].style).toMatchObject({ fontSize: '18px', color: '#ff0000' });
+    expect(result[0]!.style).toMatchObject({ fontSize: '18px', color: '#ff0000' });
   });
 });
 
 describe('handleAddHeading', () => {
   it('创建标题并应用默认样式', () => {
     const result = expectSuccess(handleAddHeading({ content: '教育背景' }, []));
-    expect(result[0].type).toBe('heading');
-    expect(result[0].content).toBe('教育背景');
-    expect(result[0].style.fontSize).toBe('20px');
-    expect(result[0].style.fontWeight).toBe('700');
+    expect(result[0]!.type).toBe('heading');
+    expect(result[0]!.content).toBe('教育背景');
+    expect(result[0]!.style!.fontSize).toBe('20px');
+    expect(result[0]!.style!.fontWeight).toBe('700');
   });
 });
 
@@ -81,17 +81,17 @@ describe('handleAddList', () => {
     const result = expectSuccess(handleAddList({
       content: '<ul><li>A</li><li>B</li></ul>',
     }, []));
-    expect(result[0].type).toBe('list');
-    expect(result[0].content).toContain('<li>A</li>');
+    expect(result[0]!.type).toBe('list');
+    expect(result[0]!.content).toContain('<li>A</li>');
   });
 });
 
 describe('handleAddImage', () => {
   it('创建图片（空内容）', () => {
     const result = expectSuccess(handleAddImage({}, []));
-    expect(result[0].type).toBe('image');
-    expect(result[0].content).toBe('');
-    expect(result[0].style.width).toBe('100px');
+    expect(result[0]!.type).toBe('image');
+    expect(result[0]!.content).toBe('');
+    expect(result[0]!.style!.width).toBe('100px');
   });
 });
 
@@ -112,7 +112,7 @@ describe('handleAddFlex', () => {
   it('正确包装已有模块到 flex 容器', () => {
     // 先创建子模块
     const withText = expectSuccess(handleAddText({ content: 'A' }, []));
-    const childId = withText[0].id;
+    const childId = withText[0]!.id;
 
     const result = expectSuccess(handleAddFlex({
       children: [childId],
@@ -131,7 +131,7 @@ describe('handleAddFlex', () => {
 describe('handleAddGrid', () => {
   it('正确包装已有模块到 grid 容器', () => {
     const withText = expectSuccess(handleAddText({ content: 'Grid item' }, []));
-    const childId = withText[0].id;
+    const childId = withText[0]!.id;
 
     const result = expectSuccess(handleAddGrid({
       children: [childId],
@@ -140,7 +140,7 @@ describe('handleAddGrid', () => {
 
     const grid = result.find(m => m.type === 'grid');
     expect(grid).toBeDefined();
-    expect(grid!.style.gridTemplateColumns).toBe('repeat(3, 1fr)');
+    expect(grid!.style!.gridTemplateColumns).toBe('repeat(3, 1fr)');
   });
 });
 
@@ -158,11 +158,11 @@ describe('handleAddFlexInline', () => {
     }, []));
 
     expect(result).toHaveLength(1);
-    expect(result[0].type).toBe('flex');
-    expect(result[0].children).toHaveLength(2);
-    expect(result[0].children![0].type).toBe('text');
-    expect(result[0].children![1].type).toBe('heading');
-    expect(result[0].children![0].content).toBe('子控件1');
+    expect(result[0]!.type).toBe('flex');
+    expect(result[0]!.children).toHaveLength(2);
+    expect(result[0]!.children![0].type).toBe('text');
+    expect(result[0]!.children![1].type).toBe('heading');
+    expect(result[0]!.children![0].content).toBe('子控件1');
   });
 
   it('空 children 仍然创建容器（通过 commandExecutor 校验）', () => {
@@ -183,9 +183,9 @@ describe('handleAddGridInline', () => {
       columns: 2,
     }, []));
 
-    expect(result[0].type).toBe('grid');
-    expect(result[0].children).toHaveLength(2);
-    expect(result[0].style.gridTemplateColumns).toBe('repeat(2, 1fr)');
+    expect(result[0]!.type).toBe('grid');
+    expect(result[0]!.children).toHaveLength(2);
+    expect(result[0]!.style!.gridTemplateColumns).toBe('repeat(2, 1fr)');
   });
 });
 
@@ -196,10 +196,10 @@ describe('handleAddHeader', () => {
   it('创建简历头并自动生成 photo + info 子控件', () => {
     const result = expectSuccess(handleAddHeader({ styleId: 'header-classic' }, []));
     expect(result).toHaveLength(1);
-    expect(result[0].type).toBe('header');
-    expect(result[0].styleId).toBe('header-classic');
+    expect(result[0]!.type).toBe('header');
+    expect(result[0]!.styleId).toBe('header-classic');
     // 应包含 photo 和 info 容器
-    const children = result[0].children || [];
+    const children = result[0]!.children || [];
     expect(children.length).toBeGreaterThanOrEqual(1);
     const imageChild = children.find(c => c.type === 'image');
     expect(imageChild).toBeDefined();
@@ -215,8 +215,8 @@ describe('handleAddModule', () => {
     }, []));
 
     expect(result).toHaveLength(1);
-    expect(result[0].type).toBe('module');
-    const children = result[0].children || [];
+    expect(result[0]!.type).toBe('module');
+    const children = result[0]!.children || [];
     expect(children.length).toBe(2);
     expect(children[0].type).toBe('heading');
     expect(children[0].content).toContain('教育背景');
@@ -231,10 +231,10 @@ describe('handleAddModule', () => {
 describe('handleSetContent', () => {
   it('修改已有模块内容', () => {
     const initial = expectSuccess(handleAddText({ content: '旧内容' }, []));
-    const id = initial[0].id;
+    const id = initial[0]!.id;
 
     const result = expectSuccess(handleSetContent({ id, content: '新内容' }, initial));
-    expect(result[0].content).toBe('新内容');
+    expect(result[0]!.content).toBe('新内容');
   });
 
   it('id 不存在返回错误', () => {
@@ -246,22 +246,22 @@ describe('handleSetContent', () => {
 describe('handleSetStyle', () => {
   it('修改多个样式属性', () => {
     const initial = expectSuccess(handleAddText({ content: 'x' }, []));
-    const id = initial[0].id;
+    const id = initial[0]!.id;
 
     const result = expectSuccess(handleSetStyle({
       id,
       style: { fontSize: '24px', color: '#ff0000' },
     }, initial));
 
-    expect(result[0].style.fontSize).toBe('24px');
-    expect(result[0].style.color).toBe('#ff0000');
+    expect(result[0]!.style!.fontSize).toBe('24px');
+    expect(result[0]!.style!.color).toBe('#ff0000');
   });
 });
 
 describe('handleSetProperty', () => {
   it('修改单个 CSS 属性', () => {
     const initial = expectSuccess(handleAddText({ content: 'x' }, []));
-    const id = initial[0].id;
+    const id = initial[0]!.id;
 
     const result = expectSuccess(handleSetProperty({
       id,
@@ -269,7 +269,7 @@ describe('handleSetProperty', () => {
       value: '30px',
     }, initial));
 
-    expect(result[0].style.fontSize).toBe('30px');
+    expect(result[0]!.style!.fontSize).toBe('30px');
   });
 });
 
@@ -279,7 +279,7 @@ describe('handleSetProperty', () => {
 describe('handleRemoveModule', () => {
   it('删除指定模块', () => {
     const initial = expectSuccess(handleAddText({ content: '删除我' }, []));
-    const id = initial[0].id;
+    const id = initial[0]!.id;
 
     const result = expectSuccess(handleRemoveModule({ id }, initial));
     expect(result).toHaveLength(0);
@@ -292,17 +292,17 @@ describe('handleMoveModule', () => {
     const withA = expectSuccess(handleAddText({ content: 'A' }, []));
     const withBoth = expectSuccess(handleAddText({ content: 'B' }, withA));
     // 现在顺序是 [A, B]
-    expect(withBoth[0].content).toBe('A');
-    expect(withBoth[1].content).toBe('B');
+    expect(withBoth[0]!.content).toBe('A');
+    expect(withBoth[1]!.content).toBe('B');
 
     // 把 B 移到 index 0
     const result = expectSuccess(handleMoveModule({
-      id: withBoth[1].id,
+      id: withBoth[1]!.id,
       index: 0,
     }, withBoth));
 
-    expect(result[0].content).toBe('B');
-    expect(result[1].content).toBe('A');
+    expect(result[0]!.content).toBe('B');
+    expect(result[1]!.content).toBe('A');
   });
 });
 
@@ -312,15 +312,15 @@ describe('handleDuplicateModule', () => {
       content: '<p>原文</p>',
       style: { color: '#333' },
     }, []));
-    const id = initial[0].id;
+    const id = initial[0]!.id;
 
     const result = expectSuccess(handleDuplicateModule({ id }, initial));
     // 应有两个模块
     expect(result).toHaveLength(2);
     // 第二个是副本
-    expect(result[1].content).toBe('<p>原文</p>');
-    expect(result[1].style.color).toBe('#333');
-    expect(result[1].id).not.toBe(id);
+    expect(result[1]!.content).toBe('<p>原文</p>');
+    expect(result[1]!.style!.color).toBe('#333');
+    expect(result[1]!.id).not.toBe(id);
   });
 
   it('复制不存在的模块返回错误', () => {
@@ -352,6 +352,70 @@ describe('handleApplyTemplate', () => {
   });
 });
 
+
+// ============================================================
+// set_style_by_type 批量样式
+// ============================================================
+describe('handleSetStyleByType', () => {
+  it('按类型匹配批量修改样式', () => {
+    // 创建 3 个 text + 1 个 heading
+    const withAll = expectSuccess(handleAddText({ content: 'text1' }, []));
+    const withMore = expectSuccess(handleAddText({ content: 'text2' }, withAll));
+    const withEvenMore = expectSuccess(handleAddText({ content: 'text3' }, withMore));
+    const withHeading = expectSuccess(handleAddHeading({ content: '标题' }, withEvenMore));
+
+    const result = expectSuccess(handleSetStyleByType({
+      type: ['text'],
+      style: { color: '#ff0000' },
+    }, withHeading));
+
+    // heading 不受影响
+    const heading = result.find(m => m.type === 'heading');
+    expect(heading).toBeDefined();
+    // heading 的 style 可能为 undefined（默认值在 styleRegistry 中）
+    expect(heading!.style!.color).toBe('#0f172a');
+
+    // text 全部变成红色
+    const texts = result.filter(m => m.type === 'text');
+    expect(texts).toHaveLength(3);
+    for (const t of texts) {
+      expect(t.style!.color).toBe('#ff0000');
+    }
+  });
+
+  it('except 排除指定类型', () => {
+    const withAll = expectSuccess(handleAddText({ content: 't' }, []));
+    const withHeading = expectSuccess(handleAddHeading({ content: 'h' }, withAll));
+
+    const result = expectSuccess(handleSetStyleByType({
+      except: ['heading'],
+      style: { backgroundColor: '#ffffff' },
+    }, withHeading));
+
+    // heading 不应被改
+    const heading = result.find(m => m.type === 'heading');
+    expect(heading!.style?.backgroundColor).toBeUndefined();
+
+    // text 被改了
+    const text = result.find(m => m.type === 'text');
+    expect(text!.style!.backgroundColor).toBe('#ffffff');
+  });
+
+  it('无匹配模块返回 NO_MATCH', () => {
+    const withHeading = expectSuccess(handleAddHeading({ content: 'h' }, []));
+
+    const result = handleSetStyleByType({
+      type: ['text'],
+      style: { color: '#ff0' },
+    }, withHeading);
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.code).toBe('NO_MATCH');
+    }
+  });
+});
+
 // ============================================================
 // 路由表
 // ============================================================
@@ -362,7 +426,7 @@ describe('toolHandlerMap', () => {
     'add_header', 'add_module',
     'set_content', 'set_style', 'set_property',
     'remove_module', 'move_module', 'duplicate_module',
-    'apply_template', 'export_pdf',
+    'apply_template', 'export_pdf', 'set_style_by_type',
   ];
 
   for (const toolName of allTools) {

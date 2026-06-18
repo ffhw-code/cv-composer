@@ -10,7 +10,6 @@ interface ContextMenuProps {
 }
 
 function findLastByType(nodes: ResumeModule[], type: string): ResumeModule | null {
-  let result: ResumeModule | null = null;
   for (let i = nodes.length - 1; i >= 0; i--) {
     if (nodes[i].type === type) return nodes[i];
     if (nodes[i].children) {
@@ -18,7 +17,7 @@ function findLastByType(nodes: ResumeModule[], type: string): ResumeModule | nul
       if (found) return found;
     }
   }
-  return result;
+  return null;
 }
 
 function ContextMenu({ x, y, module, onClose }: ContextMenuProps) {

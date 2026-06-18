@@ -77,8 +77,32 @@ const LetterSpacing = Extension.create({
   },
 });
 
+
+// 扩展：自动清理尾部空白块（Button/Delete/Backspace 无法删除的空 <p></p>/<li><p></p></li>）
+const CleanEmptyBlocks = Extension.create({
+  name: 'cleanEmptyBlocks',
+  addKeyboardShortcuts() {
+    return {
+      // 在空段落或空列表项中按 Backspace 时，如果前面有兄弟节点则删除当前块
+      Backspace: () => {
+        const { $from, empty } = this.editor.state.selection;
+        if (!empty) return false;
+        const node = $from.parent;
+        const isEmptyBlock = node.type.name === 'paragraph' && node.content.size === 0;
+        const isEmptyListItem = node.type.name === 'listItem' && node.content.size === 2; // listItem 只含一个空 paragraph
+        if (!isEmptyBlock && !isEmptyListItem) return false;
+        // 如果是文档中唯一的块，不处理
+        const docSize = this.editor.state.doc.content.content.length;
+        if (docSize <= 1 && !isEmptyListItem) return false;
+        return this.editor.commands.deleteNode(node.type);
+      },
+    };
+  },
+});
+
 export function getTextExtensions() {
   return [
+    CleanEmptyBlocks,
     StarterKit.configure({ heading: false, link: false }),
     Highlight.configure({ multicolor: true }),
     TextAlign.configure({ types: ['paragraph'] }),
@@ -95,6 +119,7 @@ export function getTextExtensions() {
 
 export function getHeadingExtensions() {
   return [
+    CleanEmptyBlocks,
     StarterKit.configure({ heading: { levels: [1, 2] }, link: false }),
     Highlight.configure({ multicolor: true }),
     TextAlign.configure({ types: ['heading', 'paragraph'] }),
@@ -111,6 +136,7 @@ export function getHeadingExtensions() {
 
 export function getListExtensions() {
   return [
+    CleanEmptyBlocks,
     StarterKit.configure({ heading: false, link: false }),
     Highlight.configure({ multicolor: true }),
     TextAlign.configure({ types: ['paragraph', 'listItem'] }),
@@ -127,6 +153,7 @@ export function getListExtensions() {
 
 export function getInlineExtensions() {
   return [
+    CleanEmptyBlocks,
     StarterKit.configure({ heading: false, link: false }),
     Highlight.configure({ multicolor: true }),
     TextAlign.configure({ types: ['paragraph'] }),

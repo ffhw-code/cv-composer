@@ -1,6 +1,7 @@
 import { useResumeStore } from '../../store/useResumeStore';
 import type { ResumeModule } from '../../store/useResumeStore';
 import { buildContainerStyle, hasCustomBorder } from '../../utils/styleHelpers';
+import { useOverflowGuard } from '../../hooks/useOverflowGuard';
 
 interface MinimalContainerProps {
   module: ResumeModule;
@@ -9,24 +10,41 @@ interface MinimalContainerProps {
 
 function MinimalContainer({ module, children }: MinimalContainerProps) {
   const addModule = useResumeStore((s) => s.addModule);
-  const custom = hasCustomBorder(module.style);
-  const inline = buildContainerStyle(module.style);
+
+  const styleForBuild = module.style ? { ...module.style } : undefined;
+  const userHeight = styleForBuild?.height;
+  if (styleForBuild) delete styleForBuild.height;
+
+  const custom = hasCustomBorder(styleForBuild);
+  const inline = buildContainerStyle(styleForBuild);
+  const { ref, heightStyle, isOverflowing } = useOverflowGuard(userHeight);
 
   const mergedStyle: React.CSSProperties = {
     ...inline,
-    minHeight: '60px',
+    ...heightStyle,
+    minHeight: '0px',
   };
 
+  const overflowClass = isOverflowing ? 'ring-2 ring-red-300 rounded' : '';
   const borderClass = custom ? '' : 'border border-dashed border-gray-300 ';
+  const bgClass = custom ? 'bg-gray-50/60' : 'bg-gray-50/40';
 
   if (children) {
-    return <div style={mergedStyle} className={borderClass + 'p-2'}>{children}</div>;
+    return (
+      <div
+        ref={ref}
+        style={{ ...mergedStyle, width: mergedStyle.width || '100%' }}
+        className={`${borderClass}p-0 rounded ${bgClass} ${overflowClass}`}
+      >
+        {children}
+      </div>
+    );
   }
 
   const btnClass = 'px-2 py-0.5 text-[10px] bg-white border border-gray-300 rounded hover:bg-gray-100 hover:border-blue-400 transition-colors';
 
   return (
-    <div style={mergedStyle} className={borderClass + 'p-2 flex flex-col items-center justify-center gap-1.5 text-gray-400 text-[11px]'}>
+    <div ref={ref} style={mergedStyle} className={`${borderClass}p-0 flex flex-col items-center justify-center gap-0 text-gray-400 text-[11px] ${overflowClass}`}>
       <span>拖入控件或快速添加：</span>
       <div className="flex gap-1 flex-wrap justify-center">
         <button

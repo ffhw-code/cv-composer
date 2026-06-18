@@ -15,12 +15,12 @@ const MOCK_API_KEY = 'sk-test';
 
 // 模拟成功的 AI 响应
 function mockFetchResponse(body: unknown, status = 200) {
-  return Promise.resolve({
+  return {
     ok: status >= 200 && status < 300,
     status,
     text: () => Promise.resolve(JSON.stringify(body)),
     json: () => Promise.resolve(body),
-  } as Response);
+  } as Response;
 }
 
 function buildMockResumeResponse(layoutTree: unknown, data: unknown) {
@@ -144,7 +144,6 @@ describe('parseResumeFile', () => {
   });
 
   it('JSON 解析失败时发起一次修正重试并成功', async () => {
-    const badJson = '{ "layoutTree": { "header": { "type": "flex", } } }'; // 尾部逗号 — 部分可修复
     const fixedJson = JSON.stringify({ layoutTree: validLayoutTree, data: validData });
 
     vi.spyOn(globalThis, 'fetch')

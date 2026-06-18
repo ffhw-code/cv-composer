@@ -5,7 +5,7 @@ import ApiKeyModal from '../Settings/ApiKeyModal';
 import { buildSystemPrompt, aiTools } from '../../engine/aiPrompt';
 import { getFixedConstraints } from '../../engine/ruleBase';
 import { toolHandlerMap } from '../../engine/toolHandlers';
-import { executeSkill, type SkillContext } from '../../engine/skillExecutor';
+import { executeSkill } from '../../engine/skillExecutor';
 import { exportLayoutTree } from '../../utils/moduleUtils';
 import { getApiConfig, setUploadedFile, getUploadedFile, getProviderQuirks } from '../../utils/aiConfig';
 
@@ -130,8 +130,8 @@ const callSmartFill = async (sysPrompt: string, userPrompt: string): Promise<str
       ];
       return await callAiWithMessages(polishMsgs);
     },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    callAiForEvaluate: async (prompt: string, _state: any) => {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    callAiForEvaluate: async (prompt: string, _state: unknown) => {
       const config = getApiConfig();
       if (!config?.apiKey) throw new Error('API 未配置');
       const baseUrl = config.baseUrl || 'https://dashscope.aliyuncs.com/compatible-mode/v1';
@@ -229,7 +229,6 @@ function translateApiError(status: number, body: string, model: string): string 
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const getCanvasStateSummary = (): string => {
   const modules = useResumeStore.getState().modules;
   if (modules.length === 0) return '（画布为空）';
@@ -313,6 +312,7 @@ function repairTruncatedJson(raw: string): string {
   return s;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const callAiWithMessages = async (msgs: any[], retryCount = 0, toolRoundCount = 0, createdIds?: Set<string>): Promise<string> => {
   const config = getApiConfig();
   if (!config || !config.apiKey) return '请先配置 API 服务。';
@@ -409,7 +409,6 @@ console.log('[AI] 收到工具调用:', msg.tool_calls.map((tc: any) => tc.funct
     const fnName = toolCall.function.name;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let args: any = {};
-    let parseError = '';
     try {
       args = JSON.parse(toolCall.function.arguments || '{}');
     } catch {
@@ -420,12 +419,12 @@ console.log('[AI] 收到工具调用:', msg.tool_calls.map((tc: any) => tc.funct
         args = JSON.parse(repaired);
         console.warn('[Tool Call] JSON 已修复，原参数不完整:', raw.slice(0, 100));
       } catch {
-        parseError = `参数 JSON 不合法且无法修复: ${raw.slice(0, 200)}`;
+        const parseError = `参数 JSON 不合法且无法修复: ${raw.slice(0, 200)}`;
         console.error(`[Tool Call] ${parseError}`);
       }
     }
 
-    let resultContent = '';
+    let resultContent: string;
     try {
       if (fnName === 'execute_skill') {
         const skillResult = await executeSkill(args.name, args.params || {}, buildSkillContext());
@@ -446,8 +445,9 @@ console.log('[AI] 收到工具调用:', msg.tool_calls.map((tc: any) => tc.funct
           resultContent = '没有待处理的文件';
         }
       } else {
-        // 拦截冗余样式修改：禁止对本轮刚创建的模块调 set_style/set_property
-        if ((fnName === 'set_style' || fnName === 'set_property' || fnName === 'set_content') && createdIds_.has(args.id)) {
+        // 拦截冗余样式修改：set_style/set_content 会整体替换，同一轮重复调用无意义
+        // set_property 只改一个属性，允许多次调用不同属性
+        if ((fnName === 'set_style' || fnName === 'set_content') && createdIds_.has(args.id)) {
           hasError = true;
           resultContent = JSON.stringify({
             error: 'REDUNDANT_STYLE',
@@ -472,8 +472,8 @@ console.log('[AI] 收到工具调用:', msg.tool_calls.map((tc: any) => tc.funct
                 if (parsed.id) createdIds_.add(parsed.id);
               } catch { /* summary 非 JSON 格式时忽略 */ }
             }
-            // 也追踪被修改的模块，防止同一轮内重复 set_style/set_content
-            if (fnName === 'set_style' || fnName === 'set_property' || fnName === 'set_content') {
+            // 追踪被 set_style/set_content 修改的模块，防止同一轮内重复
+            if (fnName === 'set_style' || fnName === 'set_content') {
               if (args.id) createdIds_.add(args.id);
             }
             useResumeStore.getState().importModules(toolResult.newModules);
@@ -517,10 +517,16 @@ console.log('[AI] 收到工具调用:', msg.tool_calls.map((tc: any) => tc.funct
     return callAiWithMessages(newMsgs, retryCount + 1, toolRoundCount + 1, createdIds_);
   }
 
-  // 重试次数已尽，返回最终错误（不再递归）
+  // 重试次数已尽，汇总结果返回（不再递归）
   if (hasError) {
-    const finalContent = toolResults.map(t => t.content).join('\n') || '多次尝试后工具调用仍失败，请简化指令或稍后重试。';
-    return finalContent;
+    const errorCount = toolResults.filter(t => {
+      try { const p = JSON.parse(t.content); return p.error; } catch { return false; }
+    }).length;
+    const successCount = toolResults.length - errorCount;
+    const parts: string[] = [];
+    if (successCount > 0) parts.push(`${successCount} 个操作已成功执行`);
+    if (errorCount > 0) parts.push(`${errorCount} 个操作失败`);
+    return parts.join('，') + '。请简化指令后重试。';
   }
 
   const newMsgs = [...msgs, msg, ...toolResults, trailingUserMsg];

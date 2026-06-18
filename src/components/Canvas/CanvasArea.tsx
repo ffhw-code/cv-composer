@@ -26,6 +26,11 @@ interface CanvasAreaProps {
   onExitDeleteMode: () => void;
 }
 
+interface DropTarget {
+  id: string;
+  index: number;
+}
+
 function CanvasArea({ deleteMode, onExitDeleteMode }: CanvasAreaProps) {
   const modules = useResumeStore((s) => s.modules);
   const selectedId = useResumeStore((s) => s.selectedId);
@@ -39,7 +44,7 @@ function CanvasArea({ deleteMode, onExitDeleteMode }: CanvasAreaProps) {
   const [scale, setScale] = useState(1);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [contextMenu, setContextMenu] = useState<{ module: ResumeModule; x: number; y: number } | null>(null);
-  const [dropTargetId, setDropTargetId] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
 
   useEffect(() => {
     if (!deleteMode) {
@@ -72,26 +77,50 @@ function CanvasArea({ deleteMode, onExitDeleteMode }: CanvasAreaProps) {
   );
 
   const handleDragOver = (event: DragOverEvent) => {
-    const { over } = event;
-    if (!over) {
-      setDropTargetId(null);
+    const { active, over } = event;
+    if (!over || active.id === over.id) {
+      setDropTarget(null);
       return;
     }
     const overModule = findModuleById(modules, over.id as string);
-    if (
-      overModule &&
-      (overModule.type === 'flex' || overModule.type === 'grid') &&
-      overModule.children.length > 0
-    ) {
-      setDropTargetId(over.id as string);
-    } else {
-      setDropTargetId(null);
+    if (!overModule) {
+      setDropTarget(null);
+      return;
     }
+
+    const isContainer =
+      overModule.type === 'flex' ||
+      overModule.type === 'grid' ||
+      (overModule.children && overModule.children.length > 0);
+
+    if (!isContainer) {
+      setDropTarget(null);
+      return;
+    }
+
+    const activeRect = active.rect.current.translated;
+    const overRect = over.rect;
+    const childrenCount = overModule.children?.length || 0;
+
+    let newIndex: number;
+    if (activeRect && overRect) {
+      const activeCenterY = activeRect.top + activeRect.height / 2;
+      const overTop = overRect.top;
+      const overHeight = overRect.height;
+      const relativeY = (activeCenterY - overTop) / overHeight;
+      newIndex = Math.round(relativeY * childrenCount);
+      if (newIndex < 0) newIndex = 0;
+      if (newIndex > childrenCount) newIndex = childrenCount;
+    } else {
+      newIndex = childrenCount;
+    }
+
+    setDropTarget({ id: over.id as string, index: newIndex });
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
-    setDropTargetId(null);
+    setDropTarget(null);
     if (!over || active.id === over.id) return;
 
     const activeIdStr = active.id as string;
@@ -160,9 +189,19 @@ function CanvasArea({ deleteMode, onExitDeleteMode }: CanvasAreaProps) {
   };
   const closeContextMenu = () => setContextMenu(null);
 
+  function renderInsertIndicator() {
+    return (
+      <div className="relative h-1 my-0.5">
+        <div className="absolute inset-0 bg-blue-400 rounded-full opacity-70 animate-pulse" />
+        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-2 h-2 bg-blue-500 rounded-full shadow-[0_0_8px_rgba(59,130,246,0.6)]" />
+      </div>
+    );
+  }
+
   function renderModuleRecursive(mod: ResumeModule): React.ReactNode {
     const isSelected = selectedId === mod.id;
-    const isDropHighlight = mod.id === dropTargetId;
+    const isDropTarget = dropTarget?.id === mod.id;
+    const insertIndex = isDropTarget ? dropTarget!.index : -1;
 
     const isContainer =
       mod.type === 'flex' ||
@@ -170,8 +209,8 @@ function CanvasArea({ deleteMode, onExitDeleteMode }: CanvasAreaProps) {
       (mod.children && mod.children.length > 0);
 
     if (isContainer) {
-      const highlightClass = isDropHighlight
-        ? 'ring-2 ring-blue-400 ring-offset-2 animate-pulse'
+      const highlightClass = isDropTarget
+        ? 'ring-2 ring-blue-400 ring-offset-1 shadow-[0_0_12px_rgba(59,130,246,0.3)]'
         : '';
 
       return (
@@ -216,12 +255,27 @@ function CanvasArea({ deleteMode, onExitDeleteMode }: CanvasAreaProps) {
             <EditableModule module={mod}>
               {mod.children && mod.children.length > 0 ? (
                 <SortableContext items={mod.children.map((c) => c.id)} strategy={verticalListSortingStrategy}>
-                  {mod.children.map((child) => renderModuleRecursive(child))}
+                  {mod.children.flatMap((child, i) => {
+                    const elements: React.ReactNode[] = [];
+                    if (isDropTarget && i === insertIndex) {
+                      elements.push(
+                        <div key={`insert-${i}`}>
+                          {renderInsertIndicator()}
+                        </div>
+                      );
+                    }
+                    elements.push(renderModuleRecursive(child));
+                    return elements;
+                  })}
+                  {isDropTarget && insertIndex >= (mod.children?.length || 0) && (
+                    <div key="insert-end">
+                      {renderInsertIndicator()}
+                    </div>
+                  )}
                 </SortableContext>
               ) : (
                 <p className="text-gray-400 text-sm">拖入模块或控件</p>
               )}
-              {isDropHighlight && <div className="absolute inset-0 bg-blue-50/20 flex items-center justify-center z-10 rounded"><span className="text-blue-500 text-xs font-medium bg-white px-2 py-1 rounded shadow">放入此容器</span></div>}
             </EditableModule>
           </div>
         </SortableModule>
@@ -305,7 +359,7 @@ function CanvasArea({ deleteMode, onExitDeleteMode }: CanvasAreaProps) {
           <DndContext
             sensors={sensors}
             collisionDetection={closestCenter}
-            onDragStart={() => setDropTargetId(null)}
+            onDragStart={() => setDropTarget(null)}
             onDragOver={handleDragOver}
             onDragEnd={handleDragEnd}
           >

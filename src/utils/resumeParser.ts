@@ -10,6 +10,8 @@ export interface LayoutTreeNode {
   ref?: string;
   direction?: 'row' | 'column';
   columns?: number;
+  /** 解析后填充的文本内容（由 normalizeLayoutTree 根据 ref 解析） */
+  content?: string;
   gap?: string;
   padding?: string;
   lineHeight?: string;
@@ -308,13 +310,13 @@ async function callApi(
     });
 
     if (!fixResponse.ok) {
-      throw new Error(`JSON 修正请求失败: ${fixResponse.status}`);
+      throw new Error(`JSON 修正请求失败: ${fixResponse.status}`, { cause: parseError });
     }
 
     const fixData = await fixResponse.json();
     const fixContent = fixData.choices?.[0]?.message?.content;
     if (!fixContent) {
-      throw new Error(`JSON 解析失败（修正后无输出）。原始错误: ${errMsg}`);
+      throw new Error(`JSON 解析失败（修正后无输出）。原始错误: ${errMsg}`, { cause: parseError });
     }
 
     const fixJsonStr = extractJson(fixContent);
@@ -322,7 +324,7 @@ async function callApi(
       return tryParseJson(fixJsonStr);
     } catch (retryError: unknown) {
       const retryErrMsg = retryError instanceof Error ? retryError.message : String(retryError);
-      throw new Error(`JSON 解析失败（修正后仍不合法）: ${retryErrMsg}。原始 AI 输出: ${content.slice(0, 300)}`);
+      throw new Error(`JSON 解析失败（修正后仍不合法）: ${retryErrMsg}。原始 AI 输出: ${content.slice(0, 300)}`, { cause: retryError });
     }
   }
 }

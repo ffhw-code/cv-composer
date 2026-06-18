@@ -132,27 +132,26 @@ function updateModuleInTree(
   });
 }
 
-const VALID_TYPES = ['header', 'module', 'text', 'heading', 'list', 'image', 'flex', 'grid'];
+const VALID_TYPES: ResumeModule['type'][] = ['header', 'module', 'text', 'heading', 'list', 'image', 'flex', 'grid'];
 
-function correctType(raw: string): string | null {
+function correctType(raw: string): ResumeModule['type'] | null {
   const lower = raw.toLowerCase().trim();
-  if (VALID_TYPES.includes(lower)) return lower;
+  if ((VALID_TYPES as readonly string[]).includes(lower)) return lower as ResumeModule['type'];
   const alias: Record<string, string> = {
     'paragraph': 'text', 'photo': 'image', '简历头': 'header', '模块': 'module',
     '文本框': 'text', '标题': 'heading', '列表': 'list', '图片': 'image',
     '弹性容器': 'flex', '网格容器': 'grid',
     // divider/shape 已移除，装饰通过 CSS 属性实现
   };
-  if (alias[lower]) return alias[lower];
+  if (alias[lower]) return alias[lower] as ResumeModule['type'];
   for (const vt of VALID_TYPES) {
-    if (lower.startsWith(vt) || vt.startsWith(lower)) return vt;
+    if (lower.startsWith(vt) || vt.startsWith(lower)) return vt as ResumeModule['type'];
   }
   return null;
 }
 
 function matchStyleId(type: string, requested: string): string | null {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const styles = getStylesByType(type as any);
+  const styles = getStylesByType(type as ResumeModule['type']);
   if (!styles.length) return null;
   const exact = styles.find(s => s.style === requested);
   if (exact) return exact.style;
@@ -181,8 +180,7 @@ function buildChildren(childrenCmds: Command[], parentId: string, idMap: IdMap):
       const resolvedStyleId = childParams.styleId ? matchStyleId(resolvedType, childParams.styleId) : null;
       const childMod: ResumeModule = {
         id: childId,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        type: resolvedType as any,
+        type: resolvedType,
         styleId: resolvedStyleId || childParams.styleId,
         style: childParams.style || {},
         content: childParams.content || '',
@@ -267,8 +265,7 @@ export function executeCommands(
 
           const newMod: ResumeModule = {
             id: realId,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        type: resolvedType as any,
+        type: resolvedType,
             styleId: resolvedStyleId,
             style: params.style || {},
             content: params.content || '',
@@ -313,8 +310,7 @@ export function executeCommands(
 
           const newMod: ResumeModule = {
             id: realId,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            type: type as any,
+            type: type,
             styleId: resolvedStyleId,
             style: params.style || {},
             content: params.content || '',

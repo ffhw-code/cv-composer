@@ -87,6 +87,15 @@ export interface SetPropertyParams {
   value: string;
 }
 
+export interface SetStyleByTypeParams {
+  /** 限定模块类型，不传则匹配所有类型 */
+  type?: string[];
+  /** 排除的模块类型，如 ["heading"] 表示跳过所有标题 */
+  except?: string[];
+  /** 要应用的 CSS 样式 */
+  style: Record<string, string>;
+}
+
 export interface RemoveModuleParams {
   id: string;
 }
@@ -343,6 +352,22 @@ export const aiTools = [
           value: { type: 'string', description: 'CSS 属性值，如 "16px"、"#333"' },
         },
         required: ['id', 'property', 'value'],
+      },
+    },
+  },
+  {
+    type: 'function' as const,
+    function: {
+      name: 'set_style_by_type',
+      description: '按模块类型批量修改样式。适合“所有文本改成蓝色”“除标题外统一白色背景”等批量操作。比逐个调用 set_style 效率高得多。',
+      parameters: {
+        type: 'object',
+        properties: {
+          type: { type: 'array', items: { type: 'string' }, description: '限定修改的模块类型，如 ["text","list","flex"]。不传则匹配所有类型。' },
+          except: { type: 'array', items: { type: 'string' }, description: '排除的模块类型，如 ["heading","image"]。配合 type 或单独使用。' },
+          style: { type: 'object', description: 'CSS 样式键值对，如 {"backgroundColor":"#ffffff","fontSize":"16px"}', required: ['style'] },
+        },
+        required: ['style'],
       },
     },
   },

@@ -2,8 +2,19 @@ import { useEffect} from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import { getListExtensions } from '../../tiptap/editorExtensions';
 import { useResumeStore } from '../../store/useResumeStore';
+import { useOverflowGuard } from '../../hooks/useOverflowGuard';
 import { useActiveEditor } from '../../hooks/useActiveEditor';
 import type { ResumeModule } from '../../store/useResumeStore';
+
+/** 清理 HTML 中所有尾部空块 */
+const cleanTrailing = (html: string): string => {
+  let result = html;
+  const trailingRe = /(?:<p><\/p>|<li><p><\/p><\/li>|<br\s*\/?>)\s*$/g;
+  while (trailingRe.test(result)) {
+    result = result.replace(trailingRe, '');
+  }
+  return result;
+};
 
 function ListControl({ module }: { module: ResumeModule }) {
   const updateModule = useResumeStore((s) => s.updateModule);
@@ -18,7 +29,7 @@ function ListControl({ module }: { module: ResumeModule }) {
       },
     },
     onUpdate: ({ editor }) => {
-      const html = editor.getHTML();
+      const html = cleanTrailing(editor.getHTML());
       updateModule(module.id, { content: html });
     },
     onFocus: ({ editor }) => {
@@ -27,7 +38,10 @@ function ListControl({ module }: { module: ResumeModule }) {
   });
 
   useEffect(() => {
-    if (editor && module.content !== editor.getHTML()) {
+    if (!editor) return;
+    const editorHtml = cleanTrailing(editor.getHTML());
+    const storedHtml = cleanTrailing(module.content || '');
+    if (storedHtml !== editorHtml) {
       editor.commands.setContent(module.content || '<ul><li>列表项</li></ul>');
     }
   }, [module.content, editor]);
@@ -46,16 +60,17 @@ function ListControl({ module }: { module: ResumeModule }) {
     dom.style.letterSpacing = style.letterSpacing || '';
   }, [editor, module.style]);
 
+  const { ref, heightStyle, isOverflowing } = useOverflowGuard(module.style?.height);
   const containerStyle: React.CSSProperties = {
     width: module.style?.width || 'auto',
-    height: module.style?.height || 'auto',
+    ...heightStyle,
     margin: module.style?.margin || '0',
     padding: module.style?.padding || '0',
     backgroundColor: module.style?.backgroundColor || 'transparent',
   };
 
   return (
-    <div style={containerStyle}>
+    <div ref={ref} style={containerStyle} className={isOverflowing ? 'ring-2 ring-red-300 rounded' : ''}>
       <EditorContent editor={editor} />
     </div>
   );

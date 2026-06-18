@@ -100,7 +100,7 @@ describe('normalizeLayoutTree', () => {
 
     const result = normalizeLayoutTree(tree);
     expect(result.header.children).toHaveLength(1);
-    expect(result.header.children![0]._placeholder).toBe(true);
+    expect((result.header.children![0] as NormalizedNode)._placeholder).toBe(true);
     expect(result.header.children![0].type).toBe('text');
   });
 
@@ -133,8 +133,8 @@ describe('normalizeLayoutTree', () => {
 
     const result = normalizeLayoutTree(tree);
     const textPlaceholder = result.header.children![0];
-    expect(textPlaceholder.style.fontSize).toBe('15px');
-    expect(textPlaceholder.style.color).toBe('#334155');
+    expect(textPlaceholder.style!.fontSize).toBe('15px');
+    expect(textPlaceholder.style!.color).toBe('#334155');
   });
 
   it('已有样式值不被默认值覆盖', () => {
@@ -148,10 +148,10 @@ describe('normalizeLayoutTree', () => {
     };
 
     const result = normalizeLayoutTree(tree);
-    expect(result.header.style.gap).toBe('24px'); // AI 设的值
-    expect(result.header.style.backgroundColor).toBe('#ff0000'); // AI 设的值
-    expect(result.header.style.display).toBe('flex'); // 默认值补全
-    expect(result.header.style.flexDirection).toBe('column'); // 默认值补全
+    expect(result.header.style!.gap).toBe('24px'); // AI 设的值
+    expect(result.header.style!.backgroundColor).toBe('#ff0000'); // AI 设的值
+    expect(result.header.style!.display).toBe('flex'); // 默认值补全
+    expect(result.header.style!.flexDirection).toBe('column'); // 默认值补全
   });
 
   it('单子 flex 无有意义样式时被合并', () => {
@@ -172,7 +172,7 @@ describe('normalizeLayoutTree', () => {
     // 中间那层无样式的 flex 应被合并掉
     expect(result.header.children).toHaveLength(1);
     expect(result.header.children![0].type).toBe('text');
-    expect(result.header.children![0].content).toBe('张三');
+    expect(result.header.children![0]!.content).toBe('张三');
   });
 
   it('单子 flex 带有 padding/backgroundColor 等有意义样式时不合并', () => {
@@ -196,9 +196,9 @@ describe('normalizeLayoutTree', () => {
     // 中间层有 padding + backgroundColor，不应被合并
     expect(result.header.children).toHaveLength(1);
     expect(result.header.children![0].type).toBe('flex');
-    expect(result.header.children![0].style.padding).toBe('16px');
+    expect(result.header.children![0]!.style!.padding).toBe('16px');
     // 内层 text 仍在
-    expect(result.header.children![0].children![0].type).toBe('text');
+    expect(result.header.children![0]!.children![0]!.type).toBe('text');
   });
 
   it('无效子节点被裁剪掉', () => {
@@ -254,7 +254,7 @@ describe('applyOverflowCompression', () => {
       style: { fontSize: '15px', color: '#334155' },
     };
 
-    const result = applyOverflowCompression([node], 40, 40);
+    const result = applyOverflowCompression([node], 40, 40, 16);
     expect(result.compressed).toBe(false);
     expect(result.gaveUp).toBe(false);
     expect(result.ratio).toBe(1);
@@ -274,7 +274,7 @@ describe('applyOverflowCompression', () => {
       });
     }
 
-    const result = applyOverflowCompression(nodes, 40, 40);
+    const result = applyOverflowCompression(nodes, 40, 40, 16);
     expect(result.compressed).toBe(true);
     // 间距应被压缩
     const firstPadding = parseFloat(nodes[0].style?.padding || '0');
@@ -292,7 +292,7 @@ describe('applyOverflowCompression', () => {
       });
     }
 
-    const result = applyOverflowCompression(nodes, 0, 0);
+    const result = applyOverflowCompression(nodes, 0, 0, 0);
     // 没有 padding/gap/margin 可压缩，且页边距已为 0
     expect(result.gaveUp).toBe(true);
   });
@@ -307,10 +307,10 @@ describe('applyOverflowCompression', () => {
       });
     }
 
-    const result = applyOverflowCompression(nodes, 80, 80);
+    const result = applyOverflowCompression(nodes, 80, 80, 16);
     if (result.compressed) {
       expect(result.newPaddingTop).toBeLessThan(80);
-      expect(result.newPaddingBottom).toBeLessThan(80);
+      expect(result.newPaddingBottom).toBe(80)  // bottom 不再被压缩;
     }
   });
 });

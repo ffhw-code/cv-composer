@@ -2,8 +2,19 @@ import { useEffect} from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import { getHeadingExtensions } from '../../tiptap/editorExtensions';
 import { useResumeStore } from '../../store/useResumeStore';
+import { useOverflowGuard } from '../../hooks/useOverflowGuard';
 import { useActiveEditor } from '../../hooks/useActiveEditor';
 import type { ResumeModule } from '../../store/useResumeStore';
+
+/** 清理 HTML 中所有尾部空块 */
+const cleanTrailing = (html: string): string => {
+  let result = html;
+  const trailingRe = /(?:<p><\/p>|<li><p><\/p><\/li>|<br\s*\/?>)\s*$/g;
+  while (trailingRe.test(result)) {
+    result = result.replace(trailingRe, '');
+  }
+  return result;
+};
 
 function HeadingControl({ module }: { module: ResumeModule }) {
   const updateModule = useResumeStore((s) => s.updateModule);
@@ -18,7 +29,7 @@ function HeadingControl({ module }: { module: ResumeModule }) {
       },
     },
     onUpdate: ({ editor }) => {
-      const html = editor.getHTML();
+      const html = cleanTrailing(editor.getHTML());
       updateModule(module.id, { content: html });
     },
     onFocus: ({ editor }) => {
@@ -27,12 +38,14 @@ function HeadingControl({ module }: { module: ResumeModule }) {
   });
 
   useEffect(() => {
-    if (editor && module.content !== editor.getHTML()) {
+    if (!editor) return;
+    const editorHtml = cleanTrailing(editor.getHTML());
+    const storedHtml = cleanTrailing(module.content || '');
+    if (storedHtml !== editorHtml) {
       editor.commands.setContent(module.content || '<h2>标题</h2>');
     }
   }, [module.content, editor]);
 
-  // 应用样式到编辑器根元素
   useEffect(() => {
     if (!editor) return;
     const dom = editor.view.dom;
@@ -48,16 +61,17 @@ function HeadingControl({ module }: { module: ResumeModule }) {
     /* eslint-enable react-hooks/immutability */
   }, [editor, module.style]);
 
+  const { ref, heightStyle, isOverflowing } = useOverflowGuard(module.style?.height);
   const containerStyle: React.CSSProperties = {
     width: module.style?.width || 'auto',
-    height: module.style?.height || 'auto',
+    ...heightStyle,
     margin: module.style?.margin || '0',
     padding: module.style?.padding || '0',
     backgroundColor: module.style?.backgroundColor || 'transparent',
   };
 
   return (
-    <div style={containerStyle}>
+    <div ref={ref} style={containerStyle} className={isOverflowing ? 'ring-2 ring-red-300 rounded' : ''}>
       <EditorContent editor={editor} />
     </div>
   );

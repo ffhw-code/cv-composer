@@ -1,6 +1,5 @@
 import { useResumeStore } from '../../store/useResumeStore';
 import { findModuleById, findParentById } from '../../utils/moduleUtils';
-import type { ResumeModule } from '../../store/useResumeStore';
 
 interface InlineToolbarProps {
   moduleId: string;

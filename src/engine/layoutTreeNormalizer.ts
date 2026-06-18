@@ -30,22 +30,7 @@ const STYLE_DEFAULTS: Record<string, Record<string, string>> = {
   grid: { display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' },
 };
 
-/** 判断 flex 节点是否有"有意义"的样式（不应被合并） */
-const SIGNIFICANT_STYLE_KEYS = new Set([
-  'padding', 'paddingTop', 'paddingBottom', 'paddingLeft', 'paddingRight',
-  'margin', 'marginTop', 'marginBottom', 'marginLeft', 'marginRight',
-  'backgroundColor', 'border', 'borderRadius', 'boxShadow',
-  'alignItems', 'justifyContent', 'gap', 'width', 'height',
-  'display', 'flexDirection',
-]);
 
-function hasSignificantStyle(node: LayoutTreeNode): boolean {
-  if (!node.style) return false;
-  for (const key of Object.keys(node.style)) {
-    if (SIGNIFICANT_STYLE_KEYS.has(key)) return true;
-  }
-  return false;
-}
 
 // ==================== Ref 解析 ====================
 
@@ -149,15 +134,17 @@ export function normalizeLayoutTree(tree: LayoutTree, data?: ResumeData): Normal
       type: 'flex',
       direction: 'column',
       style: STYLE_DEFAULTS.flex,
-      children: [{ type: 'text', content: '', style: STYLE_DEFAULTS.text, _placeholder: true }],
+      children: [{ type: 'text', content: '', style: STYLE_DEFAULTS.text, _placeholder: true }] as NormalizedNode[],
     },
     modules: (tree.modules || []).map(m => normalizeNode(m, data)).filter(Boolean) as NormalizedNode[],
   };
 }
 
+
+
 // ==================== LayoutTree 层级溢出压缩 ====================
 
-const A4_HEIGHT_PX = 794;
+const A4_HEIGHT_PX = 1123;
 
 function estimateNodeHeight(node: NormalizedNode): number {
   const s = node.style;
@@ -181,8 +168,8 @@ function estimateNodeHeight(node: NormalizedNode): number {
       const fontSize = px('fontSize') || 15;
       const lineHeight = parseFloat(s?.lineHeight || '1.5');
       const text = (node.content || '').replace(/<[^>]+>/g, '');
-      const charWidth = 14; // 中文字符约 14px 宽
-      const containerWidth = 650; // A4 可用宽度
+      const charWidth = 14;
+      const containerWidth = 650;
       const charsPerLine = Math.max(1, Math.floor(containerWidth / charWidth));
       const lines = Math.max(1, Math.ceil(text.length / charsPerLine));
       h = fontSize * lineHeight * lines + paddingTop + paddingBottom;
@@ -206,25 +193,23 @@ function estimateNodeHeight(node: NormalizedNode): number {
   return h;
 }
 
+const COMPRESS_KEYS = ['padding', 'paddingTop', 'paddingBottom', 'gap', 'margin', 'marginTop', 'marginBottom'];
+
 function canCompress(node: NormalizedNode): boolean {
   const s = node.style;
   if (!s) return false;
-
-  const keys = ['padding', 'paddingTop', 'paddingBottom', 'gap', 'margin', 'marginTop', 'marginBottom'];
-  for (const k of keys) {
+  for (const k of COMPRESS_KEYS) {
     const v = s[k];
     if (!v) continue;
     const num = parseFloat(v);
     if (!isNaN(num) && num > 0) return true;
   }
-
   if (node.children) return node.children.some(canCompress);
   return false;
 }
 
 function compressNode(node: NormalizedNode, ratio: number): void {
-  const keys = ['padding', 'paddingTop', 'paddingBottom', 'gap', 'margin', 'marginTop', 'marginBottom'];
-  for (const k of keys) {
+  for (const k of COMPRESS_KEYS) {
     const v = node.style?.[k];
     if (!v) continue;
     const num = parseFloat(v);
@@ -242,41 +227,82 @@ export interface CompressionResult {
   ratio: number;
   newPaddingTop: number;
   newPaddingBottom: number;
+  newPageGap: number;
   gaveUp: boolean;
 }
 
+/**
+ * 分阶段溢出压缩，优先级：内部间距 → 模块间距 → 页面上边距
+ * 压缩强度与溢出程度成正比，每阶段均可降至 0
+ */
 export function applyOverflowCompression(
   nodes: NormalizedNode[],
   pagePaddingTop: number,
   pagePaddingBottom: number,
+  pageGap: number,
 ): CompressionResult {
-  const MAX_ITERATIONS = 8;
+  const MAX_ITER_PER_STAGE = 5;
   let padTop = pagePaddingTop;
-  let padBottom = pagePaddingBottom;
+  const padBottom = pagePaddingBottom;
+  let gap = pageGap;
   let compressed = false;
   let finalRatio = 1;
 
-  for (let iter = 0; iter < MAX_ITERATIONS; iter++) {
-    let total = padTop + padBottom;
-    for (const node of nodes) total += estimateNodeHeight(node);
+  function currentTotal(): number {
+    let h = padTop + padBottom;
+    for (const node of nodes) h += estimateNodeHeight(node);
+    h += gap * Math.max(0, nodes.length - 1);
+    return h;
+  }
 
-    if (total <= A4_HEIGHT_PX) break;
+  // Stage 1: 仅压缩内部间距（可降至 0）
+  for (let iter = 0; iter < MAX_ITER_PER_STAGE; iter++) {
+    if (currentTotal() <= A4_HEIGHT_PX) break;
+    if (!nodes.some(canCompress)) break;
 
-    if (!nodes.some(canCompress) && padTop === 0 && padBottom === 0) break;
-
-    const ratio = A4_HEIGHT_PX / total * 0.92;  // 留 8% 余量
+    const ratio = A4_HEIGHT_PX / currentTotal() * 0.95;
     finalRatio = ratio;
-
     for (const node of nodes) compressNode(node, ratio);
-    padTop = Math.max(0, Math.round(padTop * ratio));
-    padBottom = Math.max(0, Math.round(padBottom * ratio));
     compressed = true;
   }
 
-  let total = padTop + padBottom;
-  for (const node of nodes) total += estimateNodeHeight(node);
-  // 内容仍超 A4 且无可压缩项，或压缩后仍超 A4
-  const gaveUp = total > A4_HEIGHT_PX;
+  // Stage 2: 再加上模块间距 pageGap
+  if (currentTotal() > A4_HEIGHT_PX && (nodes.some(canCompress) || gap > 0)) {
+    for (let iter = 0; iter < MAX_ITER_PER_STAGE; iter++) {
+      if (currentTotal() <= A4_HEIGHT_PX) break;
+      if (!nodes.some(canCompress) && gap === 0) break;
 
-  return { compressed, ratio: finalRatio, newPaddingTop: padTop, newPaddingBottom: padBottom, gaveUp };
+      const ratio = A4_HEIGHT_PX / currentTotal() * 0.95;
+      finalRatio = ratio;
+      for (const node of nodes) compressNode(node, ratio);
+      gap = Math.max(0, Math.round(gap * ratio));
+      compressed = true;
+    }
+  }
+
+  // Stage 3: 再加上页面上边距
+  if (currentTotal() > A4_HEIGHT_PX && (nodes.some(canCompress) || gap > 0 || padTop > 0)) {
+    for (let iter = 0; iter < MAX_ITER_PER_STAGE; iter++) {
+      if (currentTotal() <= A4_HEIGHT_PX) break;
+      if (!nodes.some(canCompress) && gap === 0 && padTop === 0) break;
+
+      const ratio = A4_HEIGHT_PX / currentTotal() * 0.95;
+      finalRatio = ratio;
+      for (const node of nodes) compressNode(node, ratio);
+      gap = Math.max(0, Math.round(gap * ratio));
+      padTop = Math.max(0, Math.round(padTop * ratio));
+      compressed = true;
+    }
+  }
+
+  const stillOverflows = currentTotal() > A4_HEIGHT_PX;
+
+  return {
+    compressed,
+    ratio: finalRatio,
+    newPaddingTop: padTop,
+    newPaddingBottom: padBottom,
+    newPageGap: gap,
+    gaveUp: stillOverflows,
+  };
 }

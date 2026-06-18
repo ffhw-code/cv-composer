@@ -1,6 +1,7 @@
 import { useResumeStore } from '../../store/useResumeStore';
 import type { ResumeModule } from '../../store/useResumeStore';
 import { buildContainerStyle, hasCustomBorder } from '../../utils/styleHelpers';
+import { useOverflowGuard } from '../../hooks/useOverflowGuard';
 
 interface FlexContainerProps {
   module: ResumeModule;
@@ -10,23 +11,32 @@ interface FlexContainerProps {
 function FlexContainer({ module, children }: FlexContainerProps) {
   const addModule = useResumeStore((s) => s.addModule);
   const direction = (module.style?.flexDirection as 'row' | 'column') || 'column';
-  const gap = module.style?.gap || '16px';
+  const gap = module.style?.gap || '0px';
 
-  const custom = hasCustomBorder(module.style);
-  const inline = buildContainerStyle(module.style);
+  const styleForBuild = module.style ? { ...module.style } : undefined;
+  const userHeight = styleForBuild?.height;
+  if (styleForBuild) delete styleForBuild.height;
+
+  const custom = hasCustomBorder(styleForBuild);
+  const inline = buildContainerStyle(styleForBuild);
+  const { ref, heightStyle, isOverflowing } = useOverflowGuard(userHeight);
 
   const containerStyle: React.CSSProperties = {
     display: 'flex',
     flexDirection: direction,
     gap,
     ...inline,
+    ...heightStyle,
   };
+
+  const overflowClass = isOverflowing ? 'ring-2 ring-red-300 rounded' : '';
 
   if (children) {
     return (
       <div
-        className={custom ? 'min-h-[60px] p-2' : 'border border-dashed border-gray-300 min-h-[60px] p-2'}
-        style={containerStyle}
+        ref={ref}
+        className={`${custom ? 'min-h-[20px] p-0 bg-gray-50/60' : 'border border-dashed border-gray-300 min-h-[20px] p-0 bg-gray-50/40'} rounded ${overflowClass}`}
+        style={{ ...containerStyle, width: containerStyle.width || '100%' }}
         data-id={module.id}
       >
         {children}
@@ -38,7 +48,8 @@ function FlexContainer({ module, children }: FlexContainerProps) {
 
   return (
     <div
-      className="border border-dashed border-gray-300 min-h-[60px] p-2 flex flex-col items-center justify-center gap-1.5"
+      ref={ref}
+      className={`border border-dashed border-gray-300 min-h-[60px] p-0 flex flex-col items-center justify-center gap-0 ${overflowClass}`}
       style={containerStyle}
       data-id={module.id}
     >

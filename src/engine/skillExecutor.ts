@@ -661,15 +661,18 @@ registerSkill('import-resume', async (_params, ctx) => {
   const store = useResumeStore.getState();
   const padTop = parseInt(store.pagePaddingTop || store.pagePadding) || 40;
   const padBottom = parseInt(store.pagePadding) || 40;
+  const gap = parseInt(store.pageGap) || 16;
   const overflow = applyOverflowCompression(
     [normalized.header, ...normalized.modules],
     padTop,
     padBottom,
+    gap,
   );
 
   if (overflow.compressed) {
     useResumeStore.getState().setPagePaddingTop(String(overflow.newPaddingTop) + 'px');
     useResumeStore.getState().setPagePadding(String(overflow.newPaddingBottom) + 'px');
+    useResumeStore.getState().setPageGap(String(overflow.newPageGap) + 'px');
   }
 
   // 3. 翻译为 Command 数组

@@ -3,6 +3,16 @@ import { useEditor, EditorContent } from '@tiptap/react';
 import { getInlineExtensions } from '../../tiptap/editorExtensions';
 import { useActiveEditor } from '../../hooks/useActiveEditor';
 
+/** 清理 HTML 中所有尾部空块 */
+const cleanTrailing = (html: string): string => {
+  let result = html;
+  const trailingRe = /(?:<p><\/p>|<li><p><\/p><\/li>|<br\s*\/?>)\s*$/g;
+  while (trailingRe.test(result)) {
+    result = result.replace(trailingRe, '');
+  }
+  return result;
+};
+
 interface InlineEditorProps {
   content: string;
   onUpdate: (html: string) => void;
@@ -21,16 +31,18 @@ export default function InlineEditor({ content, onUpdate, className = '' }: Inli
       },
     },
     onUpdate: ({ editor }) => {
-      onUpdate(editor.getHTML());
+      onUpdate(cleanTrailing(editor.getHTML()));
     },
     onFocus: ({ editor }) => {
       setActiveEditor(editor);
     },
   });
 
-  // 外部内容变化时同步（例如撤销/重做）
   useEffect(() => {
-    if (editor && content !== editor.getHTML()) {
+    if (!editor) return;
+    const editorHtml = cleanTrailing(editor.getHTML());
+    const storedHtml = cleanTrailing(content || '');
+    if (storedHtml !== editorHtml) {
       editor.commands.setContent(content || '');
     }
   }, [content, editor]);
