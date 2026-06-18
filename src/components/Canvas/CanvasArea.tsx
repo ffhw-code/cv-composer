@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useResumeStore, type ResumeModule } from '../../store/useResumeStore';
 import { findModuleById, findParentById, getAllModuleIds } from '../../utils/moduleUtils';
 import EditableModule from '../Module/EditableModule';
@@ -45,6 +45,10 @@ function CanvasArea({ deleteMode, onExitDeleteMode }: CanvasAreaProps) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [contextMenu, setContextMenu] = useState<{ module: ResumeModule; x: number; y: number } | null>(null);
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
+  // 框选状态
+  const [isDragging, setIsDragging] = useState(false);
+  const [selectRect, setSelectRect] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
+  const dragStartRef = useRef<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
     if (!deleteMode) {
@@ -338,6 +342,50 @@ function CanvasArea({ deleteMode, onExitDeleteMode }: CanvasAreaProps) {
           select(null);
         }
       }}
+      onMouseDown={deleteMode ? (e) => {
+        // 只在点击画布空白区域时开始框选
+        if ((e.target as HTMLElement).closest('[data-id]')) return;
+        const container = e.currentTarget as HTMLElement;
+        const rect = container.getBoundingClientRect();
+        dragStartRef.current = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+        setSelectRect({ x1: e.clientX, y1: e.clientY, x2: e.clientX, y2: e.clientY });
+        setIsDragging(true);
+      } : undefined}
+      onMouseMove={deleteMode && isDragging ? (e) => {
+        if (!dragStartRef.current) return;
+        setSelectRect((prev) => prev ? { ...prev, x2: e.clientX, y2: e.clientY } : null);
+      } : undefined}
+      onMouseUp={deleteMode && isDragging ? () => {
+        setIsDragging(false);
+        // 查找被框选到的所有模块
+        if (selectRect) {
+          const r = selectRect;
+          const minX = Math.min(r.x1, r.x2);
+          const maxX = Math.max(r.x1, r.x2);
+          const minY = Math.min(r.y1, r.y2);
+          const maxY = Math.max(r.y1, r.y2);
+          const moduleEls = document.querySelectorAll('[data-id]');
+          const idsInRect: string[] = [];
+          moduleEls.forEach((el) => {
+            const id = el.getAttribute('data-id');
+            if (!id) return;
+            const rect = el.getBoundingClientRect();
+            // 检查元素是否与选框相交
+            if (rect.right > minX && rect.left < maxX && rect.bottom > minY && rect.top < maxY) {
+              idsInRect.push(id);
+            }
+          });
+          if (idsInRect.length > 0) {
+            setSelectedIds((prev) => {
+              const next = new Set(prev);
+              idsInRect.forEach((id) => next.add(id));
+              return next;
+            });
+          }
+        }
+        setSelectRect(null);
+        dragStartRef.current = null;
+      } : undefined}
     >
       <div className="h-full overflow-y-auto p-6 flex justify-center">
         <div
@@ -369,6 +417,19 @@ function CanvasArea({ deleteMode, onExitDeleteMode }: CanvasAreaProps) {
           </DndContext>
         </div>
       </div>
+
+      {/* 框选矩形 */}
+      {selectRect && (
+        <div
+          className="fixed pointer-events-none z-50 border-2 border-blue-400 bg-blue-100/20"
+          style={{
+            left: Math.min(selectRect.x1, selectRect.x2),
+            top: Math.min(selectRect.y1, selectRect.y2),
+            width: Math.abs(selectRect.x2 - selectRect.x1),
+            height: Math.abs(selectRect.y2 - selectRect.y1),
+          }}
+        />
+      )}
 
       {contextMenu && (
         <ContextMenu x={contextMenu.x} y={contextMenu.y} module={contextMenu.module} onClose={closeContextMenu} />

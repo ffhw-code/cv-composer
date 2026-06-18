@@ -25,6 +25,8 @@ import type {
   SetPropertyParams,
   SetStyleByTypeParams,
   RemoveModuleParams,
+  DeleteModulesParams,
+  ClearCanvasParams,
   MoveModuleParams,
   DuplicateModuleParams,
   ApplyTemplateParams,
@@ -622,6 +624,65 @@ export function handleRemoveModule(params: RemoveModuleParams, modules: ResumeMo
   return toToolResult(executeCommands(modules, [cmd]), modules);
 }
 
+
+export function handleDeleteModules(params: DeleteModulesParams, modules: ResumeModule[]): ToolResult {
+  if (!params.ids || params.ids.length === 0) {
+    return {
+      success: false,
+      code: 'MISSING_IDS',
+      message: 'delete_modules: ids 参数为空或缺失',
+      fix: '请提供至少一个模块 ID',
+      originalModules: modules,
+    };
+  }
+
+  const existingIds = new Set<string>();
+  const collectIds = (nodes: ResumeModule[]) => {
+    for (const n of nodes) {
+      existingIds.add(n.id);
+      if (n.children) collectIds(n.children);
+    }
+  };
+  collectIds(modules);
+
+  const missing = params.ids.filter((id) => !existingIds.has(id));
+  if (missing.length > 0) {
+    return {
+      success: false,
+      code: 'MODULE_NOT_FOUND',
+      message: `delete_modules: 以下模块不存在: ${missing.join(', ')}`,
+      fix: '请检查模块 ID，确保它们来自当前画布。',
+      originalModules: modules,
+    };
+  }
+
+  const commands: Command[] = params.ids.map((id) => ({
+    action: 'removeModule',
+    params: { id },
+  }));
+
+  const result = executeCommands(modules, commands);
+  return toToolResult(result, modules, `已删除 ${params.ids.length} 个模块`);
+}
+
+export function handleClearCanvas(_params: ClearCanvasParams, modules: ResumeModule[]): ToolResult {
+  if (modules.length === 0) {
+    return toToolResult(
+      { newModules: [], errors: [] },
+      modules,
+      '画布已经为空，无需清空。',
+    );
+  }
+
+  const commands: Command[] = modules.map((m) => ({
+    action: 'removeModule',
+    params: { id: m.id },
+  }));
+
+  const result = executeCommands(modules, commands);
+  return toToolResult(result, modules, '画布已清空');
+}
+
 export function handleMoveModule(params: MoveModuleParams, modules: ResumeModule[]): ToolResult {
   const cmd: Command = {
     action: 'moveModule',
@@ -852,6 +913,8 @@ export const toolHandlerMap: Record<string, ToolHandler> = {
   set_style_by_type: (p, m) => handleSetStyleByType(p as unknown as SetStyleByTypeParams, m),
   set_property: (p, m) => handleSetProperty(p as unknown as SetPropertyParams, m),
   remove_module: (p, m) => handleRemoveModule(p as unknown as RemoveModuleParams, m),
+  delete_modules: (p, m) => handleDeleteModules(p as unknown as DeleteModulesParams, m),
+  clear_canvas: (p, m) => handleClearCanvas(p as unknown as ClearCanvasParams, m),
   move_module: (p, m) => handleMoveModule(p as unknown as MoveModuleParams, m),
   duplicate_module: (p, m) => handleDuplicateModule(p as unknown as DuplicateModuleParams, m),
   apply_template: (p, m) => handleApplyTemplate(p as unknown as ApplyTemplateParams, m),

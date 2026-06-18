@@ -28,6 +28,7 @@ function ModulePanel({
   onEnterDeleteMode,
 }: ModulePanelProps) {
   const addModule = useResumeStore((s) => s.addModule);
+  const importModules = useResumeStore((s) => s.importModules);
   const selectedId = useResumeStore((s) => s.selectedId);
   const modules = useResumeStore((s) => s.modules);
 
@@ -53,6 +54,14 @@ function ModulePanel({
     'shadow-[inset_0_1px_3px_rgba(0,0,0,0.1)] ' +
     'translate-y-[2px] ' +
     'transition-all duration-75 truncate';
+
+  const handleClearCanvas = () => {
+    const confirmed = window.confirm('确定要清空画布吗？所有模块将被删除，此操作不可撤销。');
+    if (confirmed) {
+      importModules([]);
+      onSelectControl('');
+    }
+  };
 
   const handleExportPDF = () => {
     exportPDF();
@@ -158,6 +167,14 @@ function ModulePanel({
         className={deleteMode ? keycapActiveStyle : keycapStyle}
       >
         删除控件
+      </button>
+
+      {/* 清空画布按钮 */}
+      <button
+        onClick={handleClearCanvas}
+        className={keycapStyle}
+      >
+        清空画布
       </button>
 
       {/* 导出按钮 */}

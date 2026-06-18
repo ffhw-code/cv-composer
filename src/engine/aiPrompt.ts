@@ -100,6 +100,13 @@ export interface RemoveModuleParams {
   id: string;
 }
 
+export interface DeleteModulesParams {
+  /** 要删除的模块 ID 列表 */
+  ids: string[];
+}
+
+export type ClearCanvasParams = Record<string, never>;
+
 export interface MoveModuleParams {
   id: string;
   parent_id?: string;
@@ -426,6 +433,31 @@ export const aiTools = [
           name: { type: 'string', description: '模板名称：simple（简约）或 classic（经典）' },
         },
         required: ['name'],
+      },
+    },
+  },
+  {
+    type: 'function' as const,
+    function: {
+      name: 'delete_modules',
+      description: '批量删除多个模块。ids 必须来自当前画布上的模块 ID。比逐个调用 remove_module 效率高得多。',
+      parameters: {
+        type: 'object',
+        properties: {
+          ids: { type: 'array', items: { type: 'string' }, description: '要删除的模块 ID 数组' },
+        },
+        required: ['ids'],
+      },
+    },
+  },
+  {
+    type: 'function' as const,
+    function: {
+      name: 'clear_canvas',
+      description: '清空画布，删除所有模块。慎用——不可撤销。',
+      parameters: {
+        type: 'object',
+        properties: {},
       },
     },
   },

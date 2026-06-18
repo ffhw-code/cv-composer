@@ -17,6 +17,8 @@ import {
   handleSetProperty,
   handleSetStyleByType,
   handleRemoveModule,
+  handleDeleteModules,
+  handleClearCanvas,
   handleMoveModule,
   handleDuplicateModule,
   handleApplyTemplate,
@@ -416,6 +418,62 @@ describe('handleSetStyleByType', () => {
   });
 });
 
+
+// ============================================================
+// delete_modules 批量删除
+// ============================================================
+describe('handleDeleteModules', () => {
+  it('批量删除多个模块', () => {
+    const withA = expectSuccess(handleAddText({ content: 'A' }, []));
+    const withB = expectSuccess(handleAddText({ content: 'B' }, withA));
+    const withC = expectSuccess(handleAddText({ content: 'C' }, withB));
+
+    const result = expectSuccess(handleDeleteModules({
+      ids: [withC[0].id, withC[2].id],
+    }, withC));
+
+    // 删除 A 和 C，只剩 B
+    expect(result).toHaveLength(1);
+    expect(result[0]!.content).toBe('B');
+  });
+
+  it('ids 为空返回错误', () => {
+    const withA = expectSuccess(handleAddText({ content: 'A' }, []));
+    const result = handleDeleteModules({ ids: [] }, withA);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.code).toBe('MISSING_IDS');
+    }
+  });
+
+  it('id 不存在返回错误', () => {
+    const withA = expectSuccess(handleAddText({ content: 'A' }, []));
+    const result = handleDeleteModules({ ids: ['nonexistent'] }, withA);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.code).toBe('MODULE_NOT_FOUND');
+    }
+  });
+});
+
+// ============================================================
+// clear_canvas 清空画布
+// ============================================================
+describe('handleClearCanvas', () => {
+  it('清空所有模块', () => {
+    const withA = expectSuccess(handleAddText({ content: 'A' }, []));
+    const withB = expectSuccess(handleAddText({ content: 'B' }, withA));
+
+    const result = expectSuccess(handleClearCanvas({}, withB));
+    expect(result).toHaveLength(0);
+  });
+
+  it('空画布不报错', () => {
+    const result = expectSuccess(handleClearCanvas({}, []));
+    expect(result).toHaveLength(0);
+  });
+});
+
 // ============================================================
 // 路由表
 // ============================================================
@@ -426,7 +484,7 @@ describe('toolHandlerMap', () => {
     'add_header', 'add_module',
     'set_content', 'set_style', 'set_property',
     'remove_module', 'move_module', 'duplicate_module',
-    'apply_template', 'export_pdf', 'set_style_by_type',
+    'apply_template', 'export_pdf', 'set_style_by_type', 'delete_modules', 'clear_canvas',
   ];
 
   for (const toolName of allTools) {
