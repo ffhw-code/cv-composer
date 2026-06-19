@@ -10,7 +10,7 @@ export function buildContainerStyle(
   const specialKeys = new Set([
     'borderScope', 'borderStyle', 'borderColor', 'borderWidth',
     'gradientDirection', 'gradientFrom', 'gradientTo',
-    'boxShadow', 'opacity',
+    'boxShadow', 'opacity', 'backgroundColor',
   ]);
 
   for (const [key, val] of Object.entries(style)) {
@@ -57,6 +57,10 @@ export function buildContainerStyle(
     const from = style.gradientFrom || '#ffffff';
     const to = style.gradientTo || '#e2e8f0';
     css['background'] = `linear-gradient(${gd}, ${from}, ${to})`;
+  } else {
+    // 无渐变时才单独设置背景色，避免与 background 简写属性冲突
+    const bg = style.backgroundColor;
+    if (bg) css['backgroundColor'] = bg;
   }
 
   // ---- 阴影 ----

@@ -1,0 +1,608 @@
+[
+  {
+    "id": "a961db06-2a85-4b56-965d-fc41a1d7064c",
+    "type": "flex",
+    "styleId": "flex-default",
+    "style": {
+      "display": "flex",
+      "flexDirection": "row",
+      "gap": "0",
+      "padding": "0",
+      "justifyContent": "space-between",
+      "margin": "0"
+    },
+    "content": "",
+    "children": [
+      {
+        "id": "e025d424-e0a2-470d-93d1-d4310da16795",
+        "type": "flex",
+        "styleId": "flex-default",
+        "style": {
+          "padding": "0",
+          "margin": "0"
+        },
+        "children": [
+          {
+            "id": "539f1562-99c0-454b-8a51-98b7e758a91b",
+            "type": "text",
+            "styleId": "text-default",
+            "style": {
+              "padding": "0",
+              "margin": "0"
+            },
+            "content": "<p><span style=\"font-family: &quot;思源黑体 Bold&quot;; color: black; font-weight: bold; font-size: 16pt;\"><strong>张梓萌</strong></span></p>",
+            "children": [],
+            "parentId": "e025d424-e0a2-470d-93d1-d4310da16795"
+          },
+          {
+            "id": "1e9c0e73-f47b-48ce-9d27-78779b441bf7",
+            "type": "grid",
+            "styleId": "grid-default",
+            "style": {
+              "padding": "0",
+              "margin": "0",
+              "gap": "0"
+            },
+            "children": [
+              {
+                "id": "de9be6d7-e609-4f8b-90b7-07ede69208b1",
+                "type": "text",
+                "styleId": "text-default",
+                "style": {
+                  "padding": "0",
+                  "margin": "0"
+                },
+                "content": "<p style=\"text-align: left;\"><span style=\"font-family: 思源黑体; color: rgb(38, 38, 38); font-size: 11pt;\">电话：15503812689</span></p>",
+                "children": [],
+                "parentId": "1e9c0e73-f47b-48ce-9d27-78779b441bf7"
+              },
+              {
+                "id": "eaa122c6-3fb8-40e1-a648-f23c0fd806c5",
+                "type": "text",
+                "styleId": "text-default",
+                "style": {
+                  "padding": "0",
+                  "margin": "0"
+                },
+                "content": "<p style=\"text-align: left;\"><span style=\"font-family: 思源黑体; color: rgb(38, 38, 38); font-size: 11pt;\">出生年月：2003-09</span></p>",
+                "children": [],
+                "parentId": "1e9c0e73-f47b-48ce-9d27-78779b441bf7"
+              },
+              {
+                "id": "a790ceb1-2dfd-4eca-a90a-1ba651f03216",
+                "type": "text",
+                "styleId": "text-default",
+                "style": {
+                  "padding": "0",
+                  "margin": "0"
+                },
+                "content": "<p><a target=\"_blank\" rel=\"noopener noreferrer\" href=\"mailto:邮箱：3498139556@qq.com\"><span style=\"font-family: 思源黑体; color: rgb(38, 38, 38); font-size: 11pt;\">邮箱：3498139556@qq.com</span></a></p>",
+                "children": [],
+                "parentId": "1e9c0e73-f47b-48ce-9d27-78779b441bf7"
+              },
+              {
+                "id": "866a9113-ec4b-4e00-852d-636e76d2090f",
+                "type": "text",
+                "styleId": "text-default",
+                "style": {
+                  "padding": "0",
+                  "margin": "0"
+                },
+                "content": "<p><span style=\"font-family: 思源黑体; color: rgb(38, 38, 38); font-size: 11pt;\">GitHub：</span><a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://github.com/ffhw-code\"><span style=\"font-family: 思源黑体; color: rgb(38, 38, 38); font-size: 11pt;\">ffhw-code</span></a></p>",
+                "children": [],
+                "parentId": "1e9c0e73-f47b-48ce-9d27-78779b441bf7"
+              }
+            ],
+            "parentId": "e025d424-e0a2-470d-93d1-d4310da16795"
+          }
+        ],
+        "parentId": "a961db06-2a85-4b56-965d-fc41a1d7064c"
+      },
+      {
+        "id": "0309f4b5-18df-4b2e-b410-6684ef27601c",
+        "type": "image",
+        "styleId": "image-default",
+        "style": {
+          "padding": "0",
+          "margin": "0"
+        },
+        "content": "",
+        "children": [],
+        "parentId": "a961db06-2a85-4b56-965d-fc41a1d7064c"
+      }
+    ]
+  },
+  {
+    "id": "66b2b342-bde1-4382-9dfa-d8dcf194a9dd",
+    "type": "flex",
+    "styleId": "flex-default",
+    "style": {
+      "display": "flex",
+      "flexDirection": "column",
+      "gap": "0",
+      "padding": "0",
+      "margin": "0"
+    },
+    "content": "",
+    "children": [
+      {
+        "id": "823ad586-eb22-4aeb-840b-809b3ab82097",
+        "type": "heading",
+        "styleId": "heading-default",
+        "style": {
+          "fontSize": "18px",
+          "fontWeight": "700",
+          "color": "#ffffff",
+          "backgroundColor": "#1e40af",
+          "padding": "0",
+          "borderRadius": "4px",
+          "margin": "0"
+        },
+        "content": "专业技能",
+        "children": [],
+        "parentId": "66b2b342-bde1-4382-9dfa-d8dcf194a9dd"
+      },
+      {
+        "id": "ddf72cd2-16ff-4877-a7a8-9ab6762a0643",
+        "type": "flex",
+        "styleId": "flex-default",
+        "style": {
+          "display": "flex",
+          "flexDirection": "column",
+          "gap": "0",
+          "padding": "0",
+          "margin": "0"
+        },
+        "content": "",
+        "children": [
+          {
+            "id": "091e47a9-6d83-4baa-a643-a9dd5f396f78",
+            "type": "flex",
+            "styleId": "flex-default",
+            "style": {
+              "display": "flex",
+              "flexDirection": "row",
+              "gap": "0",
+              "padding": "0",
+              "margin": "0"
+            },
+            "content": "",
+            "children": [
+              {
+                "id": "f14e58c8-b439-4395-800a-4c97ea1169c0",
+                "type": "text",
+                "styleId": "text-default",
+                "style": {
+                  "fontSize": "15px",
+                  "color": "#0f172a",
+                  "lineHeight": "1.6",
+                  "fontWeight": "600",
+                  "padding": "0",
+                  "margin": "0"
+                },
+                "content": "2023.9 - 2027.6",
+                "children": [],
+                "parentId": "091e47a9-6d83-4baa-a643-a9dd5f396f78"
+              },
+              {
+                "id": "b8af0703-1d50-40e7-bce5-f3842db82881",
+                "type": "text",
+                "styleId": "text-default",
+                "style": {
+                  "fontSize": "15px",
+                  "color": "#0f172a",
+                  "lineHeight": "1.6",
+                  "fontWeight": "600",
+                  "padding": "0",
+                  "margin": "0"
+                },
+                "content": "商丘工学院（本科）",
+                "children": [],
+                "parentId": "091e47a9-6d83-4baa-a643-a9dd5f396f78"
+              },
+              {
+                "id": "c6a04b28-5731-4578-8a31-034ca43c7d8d",
+                "type": "text",
+                "styleId": "text-default",
+                "style": {
+                  "fontSize": "15px",
+                  "color": "#0f172a",
+                  "lineHeight": "1.6",
+                  "fontWeight": "600",
+                  "padding": "0",
+                  "margin": "0"
+                },
+                "content": "<p>计算机科学与技术</p>",
+                "children": [],
+                "parentId": "091e47a9-6d83-4baa-a643-a9dd5f396f78"
+              }
+            ],
+            "parentId": "ddf72cd2-16ff-4877-a7a8-9ab6762a0643"
+          },
+          {
+            "id": "4ed1728c-ac51-4a65-831e-faee26e1c8d2",
+            "type": "text",
+            "styleId": "text-default",
+            "style": {
+              "fontSize": "14px",
+              "color": "#334155",
+              "lineHeight": "1.6",
+              "padding": "0",
+              "margin": "0"
+            },
+            "content": "<p>专业成绩排名前10% </p><p>主修课程：数据结构、数据库系统、计算机网络、操作系统（含Linux）、计算机组成原理、JavaWeb程序设计、移动应用开发、面向对象编程 </p><p>语言能力：大学英语四级、普通话二级甲等</p>",
+            "children": [],
+            "parentId": "ddf72cd2-16ff-4877-a7a8-9ab6762a0643"
+          }
+        ],
+        "parentId": "66b2b342-bde1-4382-9dfa-d8dcf194a9dd"
+      }
+    ]
+  },
+  {
+    "id": "abe9376d-80e5-4c99-81a4-1df9c03b74b7",
+    "type": "flex",
+    "styleId": "flex-default",
+    "style": {
+      "display": "flex",
+      "flexDirection": "column",
+      "gap": "0",
+      "padding": "0",
+      "margin": "0"
+    },
+    "content": "",
+    "children": [
+      {
+        "id": "5dd85609-7efa-43e8-b836-bbabdc78d10f",
+        "type": "heading",
+        "styleId": "heading-default",
+        "style": {
+          "fontSize": "18px",
+          "fontWeight": "700",
+          "color": "#ffffff",
+          "backgroundColor": "#1e40af",
+          "padding": "0",
+          "borderRadius": "4px",
+          "margin": "0"
+        },
+        "content": "项目经历",
+        "children": [],
+        "parentId": "abe9376d-80e5-4c99-81a4-1df9c03b74b7"
+      },
+      {
+        "id": "80b5142e-d9bc-4a8c-99b9-852b9446c974",
+        "type": "flex",
+        "styleId": "flex-default",
+        "style": {
+          "display": "flex",
+          "flexDirection": "column",
+          "gap": "0",
+          "padding": "0",
+          "margin": "0"
+        },
+        "content": "",
+        "children": [
+          {
+            "id": "4a13cab3-21d8-4ff4-9c23-d457e377c972",
+            "type": "flex",
+            "styleId": "flex-default",
+            "style": {
+              "display": "flex",
+              "flexDirection": "column",
+              "gap": "0",
+              "padding": "0",
+              "margin": "0"
+            },
+            "content": "",
+            "children": [
+              {
+                "id": "6f4d1e40-1d8a-4ecc-88a3-54ff3587128e",
+                "type": "flex",
+                "styleId": "flex-default",
+                "style": {
+                  "display": "flex",
+                  "flexDirection": "row",
+                  "gap": "0",
+                  "padding": "0",
+                  "margin": "0"
+                },
+                "content": "",
+                "children": [
+                  {
+                    "id": "95a55478-cee8-44e2-aa1c-3b658f6f3ff1",
+                    "type": "text",
+                    "styleId": "text-default",
+                    "style": {
+                      "fontSize": "15px",
+                      "color": "#0f172a",
+                      "lineHeight": "1.6",
+                      "fontWeight": "600",
+                      "padding": "0",
+                      "margin": "0"
+                    },
+                    "content": "2026.4.22 – 至今",
+                    "children": [],
+                    "parentId": "6f4d1e40-1d8a-4ecc-88a3-54ff3587128e"
+                  },
+                  {
+                    "id": "2b1ea351-78cf-4674-b3cd-404f6ab06e88",
+                    "type": "text",
+                    "styleId": "text-default",
+                    "style": {
+                      "fontSize": "15px",
+                      "color": "#0f172a",
+                      "lineHeight": "1.6",
+                      "fontWeight": "600",
+                      "padding": "0",
+                      "margin": "0"
+                    },
+                    "content": "智能文档问答助手（全栈开发 / RAG应用）",
+                    "children": [],
+                    "parentId": "6f4d1e40-1d8a-4ecc-88a3-54ff3587128e"
+                  }
+                ],
+                "parentId": "4a13cab3-21d8-4ff4-9c23-d457e377c972"
+              },
+              {
+                "id": "e53060c1-da55-400e-bdf7-a1793ad22ab6",
+                "type": "text",
+                "styleId": "text-default",
+                "style": {
+                  "padding": "0",
+                  "margin": "0"
+                },
+                "content": "<p><span style=\"font-family: 思源黑体; color: rgb(13, 13, 13); font-weight: bold; font-size: 11pt;\"><strong>开发语言：</strong></span><span style=\"font-family: 思源黑体; color: rgb(38, 38, 38); font-size: 10.5pt;\">Python</span></p><p style=\"text-align: left;\"><span style=\"font-family: 思源黑体; color: rgb(13, 13, 13); font-weight: bold; font-size: 11pt;\"><strong>开发环境：</strong></span><span style=\"font-family: 思源黑体; color: rgb(38, 38, 38); font-size: 10.5pt;\">VS Code、Python 3.9、</span><span style=\"font-family: &quot;思源黑体 Bold&quot;; color: rgb(38, 38, 38); font-weight: bold; font-size: 11pt;\"><strong>Streamlit</strong></span><span style=\"font-family: 思源黑体; color: rgb(38, 38, 38); font-size: 10.5pt;\">、</span><span style=\"font-family: &quot;思源黑体 Bold&quot;; color: rgb(38, 38, 38); font-weight: bold; font-size: 11pt;\"><strong>ChromaDB</strong></span><span style=\"font-family: 思源黑体; color: rgb(38, 38, 38); font-size: 10.5pt;\">、</span><span style=\"font-family: &quot;思源黑体 Bold&quot;; color: rgb(38, 38, 38); font-weight: bold; font-size: 11pt;\"><strong>OpenAI API</strong></span></p><p style=\"text-align: left;\"><span style=\"font-family: 思源黑体; color: rgb(13, 13, 13); font-weight: bold; font-size: 11pt;\"><strong>开发内容：</strong></span><span style=\"font-family: 思源黑体; color: rgb(38, 38, 38); font-size: 10.5pt;\">基于</span><span style=\"font-family: &quot;思源黑体 Bold&quot;; color: rgb(38, 38, 38); font-weight: bold; font-size: 11pt;\"><strong> RAG技术</strong></span><span style=\"font-family: 思源黑体; color: rgb(38, 38, 38); font-size: 10.5pt;\">实现智能文档问答系统。使用 PyPDF2、python-docx</span></p><p style=\"text-align: left;\"><span style=\"font-family: 思源黑体; color: rgb(38, 38, 38); font-size: 10.5pt;\">&nbsp;&nbsp;&nbsp; 实现 TXT/PDF/Word 文档解析及编码兼容；设计文本分块与本地多语言嵌入模</span></p><p style=\"text-align: left;\"><span style=\"font-family: 思源黑体; color: rgb(38, 38, 38); font-size: 10.5pt;\">&nbsp;&nbsp;&nbsp; 型， 并利用 ChromaDB 向量数据库实现语义检索；集成 OpenAI 兼容接口调用</span></p><p style=\"text-align: left;\"><span style=\"font-family: 思源黑体; color: rgb(38, 38, 38); font-size: 10.5pt;\">&nbsp;&nbsp;&nbsp; 通义千问大模型，构建包含文档去重、结果溯源的问答流程；采用 Streamlit 搭</span></p><p style=\"text-align: left;\"><span style=\"font-family: 思源黑体; color: rgb(38, 38, 38); font-size: 10.5pt;\">&nbsp;&nbsp;&nbsp; 建交互式 Web 界面，支持检索依据可视化</span></p><p style=\"text-align: left;\"><span style=\"font-family: &quot;思源黑体 Bold&quot;; color: black; font-weight: bold; font-size: 10.5pt;\"><strong>项目链接：</strong></span><a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://www.modelscope.cn/studios/zm2389238/Smart-Doc-Chat\"><span style=\"font-family: &quot;思源黑体 Bold&quot;; color: black; font-weight: bold; font-size: 10.5pt;\"><strong>https://www.modelscope.cn/studios/zm2389238/Smart-Doc-Chat</strong></span></a></p>",
+                "children": [],
+                "parentId": "4a13cab3-21d8-4ff4-9c23-d457e377c972"
+              }
+            ],
+            "parentId": "80b5142e-d9bc-4a8c-99b9-852b9446c974"
+          },
+          {
+            "id": "5d3dfb6a-ad35-4889-9e9f-5b1b6654175d",
+            "type": "flex",
+            "styleId": "flex-default",
+            "style": {
+              "display": "flex",
+              "flexDirection": "column",
+              "gap": "0",
+              "padding": "0",
+              "margin": "0"
+            },
+            "content": "",
+            "children": [
+              {
+                "id": "b03d4fc6-3cd7-4cb7-ae9e-2de9476c2943",
+                "type": "flex",
+                "styleId": "flex-default",
+                "style": {
+                  "display": "flex",
+                  "flexDirection": "row",
+                  "gap": "0",
+                  "padding": "0",
+                  "margin": "0"
+                },
+                "content": "",
+                "children": [
+                  {
+                    "id": "001eab23-edc0-40a7-8437-1e88c9a789a0",
+                    "type": "text",
+                    "styleId": "text-default",
+                    "style": {
+                      "fontSize": "15px",
+                      "color": "#0f172a",
+                      "lineHeight": "1.6",
+                      "fontWeight": "600",
+                      "padding": "0",
+                      "margin": "0"
+                    },
+                    "content": "2025.12 - 2026.1",
+                    "children": [],
+                    "parentId": "b03d4fc6-3cd7-4cb7-ae9e-2de9476c2943"
+                  },
+                  {
+                    "id": "b4425636-f1a8-43d1-bd82-c3bfc1c036f7",
+                    "type": "text",
+                    "styleId": "text-default",
+                    "style": {
+                      "fontSize": "15px",
+                      "color": "#0f172a",
+                      "lineHeight": "1.6",
+                      "fontWeight": "600",
+                      "padding": "0",
+                      "margin": "0"
+                    },
+                    "content": "校园流浪猫管理系统（后端/数据库）",
+                    "children": [],
+                    "parentId": "b03d4fc6-3cd7-4cb7-ae9e-2de9476c2943"
+                  }
+                ],
+                "parentId": "5d3dfb6a-ad35-4889-9e9f-5b1b6654175d"
+              },
+              {
+                "id": "1c2c5f50-1b96-4342-8fc9-c3d93340c82e",
+                "type": "text",
+                "styleId": "text-default",
+                "style": {
+                  "padding": "0",
+                  "margin": "0"
+                },
+                "content": "<p><span style=\"font-family: 思源黑体; color: rgb(13, 13, 13); font-weight: bold; font-size: 11pt;\"><strong>开发语言：</strong></span><span style=\"font-family: &quot;思源黑体 Bold&quot;; color: rgb(38, 38, 38); font-weight: bold; font-size: 10.5pt;\"><strong>Java</strong></span><span style=\"font-family: 思源黑体; color: rgb(38, 38, 38); font-size: 10.5pt;\">、</span><span style=\"font-family: &quot;思源黑体 Bold&quot;; color: rgb(38, 38, 38); font-weight: bold; font-size: 10.5pt;\"><strong>SQL</strong></span></p><p style=\"text-align: left;\"><span style=\"font-family: 思源黑体; color: rgb(13, 13, 13); font-weight: bold; font-size: 11pt;\"><strong>开发环境：</strong></span><span style=\"font-family: 思源黑体; color: rgb(38, 38, 38); font-size: 11pt;\">IntelliJ IDEA、JDK、</span><span style=\"font-family: &quot;思源黑体 Bold&quot;; color: rgb(38, 38, 38); font-weight: bold; font-size: 11pt;\"><strong>MySQL</strong></span><span style=\"font-family: 思源黑体; color: rgb(38, 38, 38); font-size: 11pt;\">、Swing、</span><span style=\"font-family: &quot;思源黑体 Bold&quot;; color: rgb(38, 38, 38); font-weight: bold; font-size: 11pt;\"><strong>JDBC</strong></span><span style=\"font-family: 思源黑体; color: rgb(38, 38, 38); font-size: 11pt;\">、</span><span style=\"font-family: &quot;思源黑体 Bold&quot;; color: rgb(38, 38, 38); font-weight: bold; font-size: 11pt;\"><strong>SQLyog</strong></span></p><p style=\"text-align: left;\"><span style=\"font-family: 思源黑体; color: rgb(13, 13, 13); font-weight: bold; font-size: 11pt;\"><strong>开发内容：</strong></span><span style=\"font-family: 思源黑体; color: rgb(38, 38, 38); font-size: 10.5pt;\">完成</span><span style=\"font-family: &quot;思源黑体 Bold&quot;; color: rgb(38, 38, 38); font-weight: bold; font-size: 10.5pt;\"><strong>后端</strong></span><span style=\"font-family: 思源黑体; color: rgb(38, 38, 38); font-size: 10.5pt;\">逻辑与</span><span style=\"font-family: &quot;思源黑体 Bold&quot;; color: rgb(38, 38, 38); font-weight: bold; font-size: 10.5pt;\"><strong>数据库设计</strong></span><span style=\"font-family: 思源黑体; color: rgb(38, 38, 38); font-size: 10.5pt;\">，实现管理员仪表板、用户管理、猫咪管理、</span></p><p style=\"text-align: left;\"><span style=\"font-family: 思源黑体; color: rgb(38, 38, 38); font-size: 10.5pt;\">&nbsp;&nbsp;&nbsp;&nbsp; 领养申请审核、操作日志等功能；设计7张关系表，利用</span><span style=\"font-family: &quot;思源黑体 Bold&quot;; color: rgb(38, 38, 38); font-weight: bold; font-size: 10.5pt;\"><strong>外键</strong></span><span style=\"font-family: 思源黑体; color: rgb(38, 38, 38); font-size: 10.5pt;\">与</span><span style=\"font-family: &quot;思源黑体 Bold&quot;; color: rgb(38, 38, 38); font-weight: bold; font-size: 10.5pt;\"><strong>事务</strong></span><span style=\"font-family: 思源黑体; color: rgb(38, 38, 38); font-size: 10.5pt;\">确保领养审核</span></p><p style=\"text-align: left;\"><span style=\"font-family: 思源黑体; color: rgb(38, 38, 38); font-size: 10.5pt;\">&nbsp;&nbsp;&nbsp;&nbsp; 时</span><span style=\"font-family: &quot;思源黑体 Bold&quot;; color: rgb(38, 38, 38); font-weight: bold; font-size: 10.5pt;\"><strong>数据一致性</strong></span><span style=\"font-family: 思源黑体; color: rgb(38, 38, 38); font-size: 10.5pt;\">；编写复杂SQL完成数据统计（总数、待处理、新增等），实现操作</span></p><p style=\"text-align: left;\"><span style=\"font-family: 思源黑体; color: rgb(38, 38, 38); font-size: 10.5pt;\">&nbsp;&nbsp;&nbsp;&nbsp; 日志自动记录与导出</span></p>",
+                "children": [],
+                "parentId": "5d3dfb6a-ad35-4889-9e9f-5b1b6654175d"
+              }
+            ],
+            "parentId": "80b5142e-d9bc-4a8c-99b9-852b9446c974"
+          },
+          {
+            "id": "cfabbb62-b289-4695-8d60-1bc801cc21e9",
+            "type": "flex",
+            "styleId": "flex-default",
+            "style": {
+              "display": "flex",
+              "flexDirection": "column",
+              "gap": "0",
+              "padding": "0",
+              "margin": "0"
+            },
+            "content": "",
+            "children": [
+              {
+                "id": "11b690f3-508d-4963-a2a8-2660a99b2367",
+                "type": "flex",
+                "styleId": "flex-default",
+                "style": {
+                  "display": "flex",
+                  "flexDirection": "row",
+                  "gap": "0",
+                  "padding": "0",
+                  "margin": "0"
+                },
+                "content": "",
+                "children": [
+                  {
+                    "id": "3332a096-925b-4f72-92da-11a3ab495d41",
+                    "type": "text",
+                    "styleId": "text-default",
+                    "style": {
+                      "fontSize": "15px",
+                      "color": "#0f172a",
+                      "lineHeight": "1.6",
+                      "fontWeight": "600",
+                      "padding": "0",
+                      "margin": "0"
+                    },
+                    "content": "2025.6.9 - 6.20",
+                    "children": [],
+                    "parentId": "11b690f3-508d-4963-a2a8-2660a99b2367"
+                  },
+                  {
+                    "id": "3b28413c-8056-4a4a-b9cb-82324294cb5b",
+                    "type": "text",
+                    "styleId": "text-default",
+                    "style": {
+                      "fontSize": "15px",
+                      "color": "#0f172a",
+                      "lineHeight": "1.6",
+                      "fontWeight": "600",
+                      "padding": "0",
+                      "margin": "0"
+                    },
+                    "content": "读书网站设计与实现（全栈参与）",
+                    "children": [],
+                    "parentId": "11b690f3-508d-4963-a2a8-2660a99b2367"
+                  }
+                ],
+                "parentId": "cfabbb62-b289-4695-8d60-1bc801cc21e9"
+              },
+              {
+                "id": "ea1371ed-d039-4fba-b951-240f46c92055",
+                "type": "text",
+                "styleId": "text-default",
+                "style": {
+                  "padding": "0",
+                  "margin": "0"
+                },
+                "content": "<p><span style=\"font-family: 思源黑体; color: rgb(13, 13, 13); font-weight: bold; font-size: 11pt;\"><strong>开发语言：</strong></span><span style=\"font-family: &quot;思源黑体 Bold&quot;; color: rgb(38, 38, 38); font-weight: bold; font-size: 11pt;\"><strong>Python</strong></span><span style=\"font-family: 思源黑体; color: rgb(38, 38, 38); font-size: 11pt;\">、SQL</span></p><p style=\"text-align: left;\"><span style=\"font-family: 思源黑体; color: rgb(13, 13, 13); font-weight: bold; font-size: 11pt;\"><strong>开发环境：</strong></span><span style=\"font-family: 思源黑体; color: rgb(38, 38, 38); font-size: 11pt;\">PyCharm、Python 3.9、Tkinter、</span><span style=\"font-family: &quot;思源黑体 Bold&quot;; color: rgb(38, 38, 38); font-weight: bold; font-size: 11pt;\"><strong>PyMySQL</strong></span><span style=\"font-family: 思源黑体; color: rgb(38, 38, 38); font-size: 11pt;\">、MySQL、SQLyog</span></p><p style=\"text-align: left;\"><span style=\"font-family: 思源黑体; color: rgb(13, 13, 13); font-weight: bold; font-size: 11pt;\"><strong>开发内容：</strong></span><span style=\"font-family: 思源黑体; color: rgb(38, 38, 38); font-size: 11pt;\">参与</span><span style=\"font-family: &quot;思源黑体 Bold&quot;; color: rgb(38, 38, 38); font-weight: bold; font-size: 11pt;\"><strong>全流程开发</strong></span><span style=\"font-family: 思源黑体; color: rgb(38, 38, 38); font-size: 11pt;\">，负责用户</span><span style=\"font-family: &quot;思源黑体 Bold&quot;; color: rgb(38, 38, 38); font-weight: bold; font-size: 11pt;\"><strong>登录注册</strong></span><span style=\"font-family: 思源黑体; color: rgb(38, 38, 38); font-size: 11pt;\">、图书浏览、</span><span style=\"font-family: &quot;思源黑体 Bold&quot;; color: rgb(38, 38, 38); font-weight: bold; font-size: 11pt;\"><strong>购物车</strong></span><span style=\"font-family: 思源黑体; color: rgb(38, 38, 38); font-size: 11pt;\">及</span><span style=\"font-family: &quot;思源黑体 Bold&quot;; color: rgb(38, 38, 38); font-weight: bold; font-size: 11pt;\"><strong>订单</strong></span><span style=\"font-family: 思源黑体; color: rgb(38, 38, 38); font-size: 11pt;\">模块</span></p><p style=\"text-align: left;\"><span style=\"font-family: 思源黑体; color: rgb(38, 38, 38); font-size: 11pt;\">&nbsp;&nbsp;&nbsp;&nbsp; 的前后端实现；基于Tkinter构建图形界面，使用PyMySQL连接MySQL数据库，</span></p><p style=\"text-align: left;\"><span style=\"font-family: 思源黑体; color: rgb(38, 38, 38); font-size: 11pt;\">&nbsp;&nbsp;&nbsp;&nbsp; 遵循MVC架构分层开发；</span><span style=\"font-family: &quot;思源黑体 Bold&quot;; color: rgb(38, 38, 38); font-weight: bold; font-size: 11pt;\"><strong>设计数据库表结构</strong></span><span style=\"font-family: 思源黑体; color: rgb(38, 38, 38); font-size: 11pt;\">（用户表、图书表、订单表、评价</span></p><p style=\"text-align: left;\"><span style=\"font-family: 思源黑体; color: rgb(38, 38, 38); font-size: 11pt;\">&nbsp;&nbsp;&nbsp;&nbsp; 表），通过事务保证订单数据安全；实现管理员后台的图书信息管理与订单处</span></p><p style=\"text-align: left;\"><span style=\"font-family: 思源黑体; color: rgb(38, 38, 38); font-size: 11pt;\">&nbsp;&nbsp;&nbsp;&nbsp; 理功能</span></p>",
+                "children": [],
+                "parentId": "cfabbb62-b289-4695-8d60-1bc801cc21e9"
+              }
+            ],
+            "parentId": "80b5142e-d9bc-4a8c-99b9-852b9446c974"
+          }
+        ],
+        "parentId": "abe9376d-80e5-4c99-81a4-1df9c03b74b7"
+      }
+    ]
+  },
+  {
+    "id": "1b3b0ff1-3e49-4b80-b8a3-0d2dd3a57343",
+    "type": "flex",
+    "styleId": "flex-default",
+    "style": {
+      "display": "flex",
+      "flexDirection": "column",
+      "gap": "0",
+      "padding": "0",
+      "margin": "0"
+    },
+    "content": "",
+    "children": [
+      {
+        "id": "86a32738-905d-4303-be56-fd442a62ae61",
+        "type": "heading",
+        "styleId": "heading-default",
+        "style": {
+          "fontSize": "18px",
+          "fontWeight": "700",
+          "color": "#ffffff",
+          "backgroundColor": "#1e40af",
+          "padding": "0",
+          "borderRadius": "4px",
+          "margin": "0"
+        },
+        "content": "荣誉奖项",
+        "children": [],
+        "parentId": "1b3b0ff1-3e49-4b80-b8a3-0d2dd3a57343"
+      },
+      {
+        "id": "0d036749-4ec4-44ab-8d8d-2d732a935031",
+        "type": "list",
+        "styleId": "list-default",
+        "style": {
+          "padding": "0",
+          "margin": "0",
+          "width": "686px",
+          "height": "98px"
+        },
+        "content": "<ul><li><p><span style=\"font-family: Arial; font-size: 12pt;\">•</span><span style=\"font-family: 思源黑体; color: rgb(13, 13, 13); font-weight: bold; font-size: 12pt;\"><strong>第十七届蓝桥杯全国大学生软件和信息技术大赛（Python程序设计）省级一等奖</strong></span></p><p><span style=\"font-family: Arial; font-size: 11pt;\">•</span><span style=\"font-family: 思源黑体; color: rgb(13, 13, 13); font-size: 11pt;\">商丘工学院“创新杯”学科竞赛Java“码力突围”程序设计大赛三等奖</span></p><p><span style=\"font-family: Arial; font-size: 11pt;\">•</span><span style=\"font-family: 思源黑体; color: rgb(13, 13, 13); font-size: 11pt;\">商丘工学院“创新杯”学科竞赛“Web创想”大学生Web程序设计大赛三等奖</span></p></li></ul>",
+        "children": [],
+        "parentId": "1b3b0ff1-3e49-4b80-b8a3-0d2dd3a57343"
+      }
+    ]
+  },
+  {
+    "id": "a408f28f-7e7b-452c-ab16-d2359e0b52a7",
+    "type": "flex",
+    "styleId": "flex-default",
+    "style": {
+      "display": "flex",
+      "flexDirection": "column",
+      "gap": "0",
+      "padding": "0",
+      "margin": "0"
+    },
+    "content": "",
+    "children": [
+      {
+        "id": "2ec38898-b54b-4b2f-a385-e55c58a4e326",
+        "type": "heading",
+        "styleId": "heading-default",
+        "style": {
+          "fontSize": "18px",
+          "fontWeight": "700",
+          "color": "#ffffff",
+          "backgroundColor": "#1e40af",
+          "padding": "0",
+          "borderRadius": "4px",
+          "margin": "0"
+        },
+        "content": "专业技能",
+        "children": [],
+        "parentId": "a408f28f-7e7b-452c-ab16-d2359e0b52a7"
+      },
+      {
+        "id": "a8ab7d20-5812-4ec5-8fe3-86534b854364",
+        "type": "list",
+        "styleId": "list-default",
+        "style": {
+          "padding": "0",
+          "margin": "0"
+        },
+        "content": "<ul><li><p><span style=\"font-family: Arial; font-size: 11pt;\">•</span><span style=\"font-family: 思源黑体; color: rgb(13, 13, 13); font-weight: bold; font-size: 11pt;\"><strong>编程语言：</strong></span><span style=\"font-family: 思源黑体; color: rgb(13, 13, 13); font-size: 11pt;\">熟悉 Python、Java，具备扎实的编程能力和良好的算法基础</span></p><p><span style=\"font-family: Arial; font-size: 11pt;\">•</span><span style=\"font-family: 思源黑体; color: rgb(13, 13, 13); font-weight: bold; font-size: 11pt;\"><strong>数据库：</strong></span><span style=\"font-family: 思源黑体; color: rgb(13, 13, 13); font-size: 11pt;\">熟练掌握 MySQL、SQL Server，能编写复杂 SQL 语句与事务控制，了解 ChromaDB 向量数据库及语义检索原理</span></p><p><span style=\"font-family: Arial; font-size: 11pt;\">•</span><span style=\"font-family: 思源黑体; color: rgb(13, 13, 13); font-weight: bold; font-size: 11pt;\"><strong>AI 应用开发：</strong></span><span style=\"font-family: 思源黑体; color: rgb(13, 13, 13); font-size: 11pt;\">掌握 RAG（检索增强生成）全流程开发，包括文本分块、嵌入模型调用、向量检索；具备大模型应用集成经验，能通过 OpenAI 兼容接口调用云端模型</span></p><p><span style=\"font-family: Arial; font-size: 11pt;\">•</span><span style=\"font-family: 思源黑体; color: rgb(13, 13, 13); font-weight: bold; font-size: 11pt;\"><strong>Linux 环境：</strong></span><span style=\"font-family: 思源黑体; color: rgb(13, 13, 13); font-size: 11pt;\">熟悉 Linux 命令行操作，可独立搭建 VMware 虚拟机及 WSL / Ubuntu 开发环境</span></p><p><span style=\"font-family: Arial; font-size: 11pt;\">•</span><span style=\"font-family: 思源黑体; color: rgb(13, 13, 13); font-weight: bold; font-size: 11pt;\"><strong>版本控制：</strong></span><span style=\"font-family: 思源黑体; color: rgb(13, 13, 13); font-size: 11pt;\">熟练使用 </span><span style=\"font-family: &quot;思源黑体 Bold&quot;; color: rgb(38, 38, 38); font-weight: bold; font-size: 11pt;\"><strong>Git</strong></span><span style=\"font-family: 思源黑体; color: rgb(13, 13, 13); font-size: 11pt;\"> 进行版本控制与分支管理</span></p><p><span style=\"font-family: Arial; font-size: 11pt;\">•</span><span style=\"font-family: 思源黑体; color: rgb(13, 13, 13); font-weight: bold; font-size: 11pt;\"><strong>Web 应用部署：</strong></span><span style=\"font-family: 思源黑体; color: rgb(13, 13, 13); font-size: 11pt;\">熟悉 Tomcat 部署，了解 Maven 依赖管理</span></p><p><span style=\"font-family: Arial; font-size: 11pt;\">•</span><span style=\"font-family: 思源黑体; color: rgb(13, 13, 13); font-weight: bold; font-size: 11pt;\"><strong>框架与文档处理：</strong></span><span style=\"font-family: 思源黑体; color: rgb(13, 13, 13); font-size: 11pt;\">掌握 Streamlit 框架快速构建交互式应用，了解 PyPDF2、python-docx 等文档解析技术</span></p></li></ul>",
+        "children": [],
+        "parentId": "a408f28f-7e7b-452c-ab16-d2359e0b52a7"
+      }
+    ]
+  }
+]

@@ -15,6 +15,7 @@ import {
   handleSetContent,
   handleSetStyle,
   handleSetProperty,
+  handleSetField,
   handleSetStyleByType,
   handleRemoveModule,
   handleDeleteModules,
@@ -418,6 +419,67 @@ describe('handleSetStyleByType', () => {
   });
 });
 
+
+
+// ============================================================
+// set_field 模块元数据
+// ============================================================
+describe('handleSetField', () => {
+  it('设置 name 字段', () => {
+    const withText = expectSuccess(handleAddText({ content: '姓名' }, []));
+    const id = withText[0]!.id;
+
+    const result = expectSuccess(handleSetField({
+      id,
+      field: 'name',
+      value: '张三',
+    }, withText));
+
+    expect(result[0]!.name).toBe('张三');
+  });
+
+  it('设置 jobTitle 字段', () => {
+    const withText = expectSuccess(handleAddText({ content: '求职意向' }, []));
+    const id = withText[0]!.id;
+
+    const result = expectSuccess(handleSetField({
+      id,
+      field: 'jobTitle',
+      value: '前端工程师',
+    }, withText));
+
+    expect(result[0]!.jobTitle).toBe('前端工程师');
+  });
+
+  it('无效字段返回错误', () => {
+    const withText = expectSuccess(handleAddText({ content: 'x' }, []));
+    const id = withText[0]!.id;
+
+    const result = handleSetField({
+      id,
+      field: 'invalidField',
+      value: 'x',
+    }, withText);
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.code).toBe('INVALID_FIELD');
+    }
+  });
+
+  it('不存在的模块返回错误', () => {
+    const result = handleSetField({
+      id: 'nonexistent',
+      field: 'name',
+      value: 'x',
+    }, []);
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.code).toBe('MODULE_NOT_FOUND');
+    }
+  });
+});
 
 // ============================================================
 // delete_modules 批量删除

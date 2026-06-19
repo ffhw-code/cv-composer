@@ -38,6 +38,8 @@ function CanvasArea({ deleteMode, onExitDeleteMode }: CanvasAreaProps) {
   const pagePaddingTop = useResumeStore((s) => s.pagePaddingTop);
   const pageGap = useResumeStore((s) => s.pageGap);
   const select = useResumeStore((s) => s.select);
+  const formatPainterSourceId = useResumeStore((s) => s.formatPainterSourceId);
+  const setFormatPainterSourceId = useResumeStore((s) => s.setFormatPainterSourceId);
   const removeModule = useResumeStore((s) => s.removeModule);
   const moveModule = useResumeStore((s) => s.moveModule);
 
@@ -73,6 +75,70 @@ function CanvasArea({ deleteMode, onExitDeleteMode }: CanvasAreaProps) {
     }
   };
   const handleExit = () => onExitDeleteMode();
+
+  // 格式刷辅助：在模块树中递归查找
+  const findModuleInTree = (ns: ResumeModule[], id: string): ResumeModule | null => {
+    for (const n of ns) {
+      if (n.id === id) return n;
+      if (n.children) { const f = findModuleInTree(n.children, id); if (f) return f; }
+    }
+    return null;
+  };
+
+  const applyFormatPainter = (targetId: string) => {
+    const store = useResumeStore.getState();
+    const src = findModuleInTree(store.modules, formatPainterSourceId!);
+    if (!src) { setFormatPainterSourceId(null); return; }
+    const target = findModuleInTree(store.modules, targetId);
+    if (!target) { setFormatPainterSourceId(null); return; }
+
+    // 模块类型分类
+    const CONTROLS = new Set(['text', 'heading', 'list']);
+    const COMPONENTS = new Set(['flex', 'grid']);
+    const srcType = src.type;
+    const targetType = target.type;
+    const isSameType = srcType === targetType;
+    const bothControls = CONTROLS.has(srcType) && CONTROLS.has(targetType);
+
+    // 仅提取源模块上实际有值的元数据字段
+    const pickDefined = (obj: Record<string, unknown>, keys: string[]) => {
+      const result: Record<string, unknown> = {};
+      for (const k of keys) {
+        if (obj[k] !== undefined && obj[k] !== null && obj[k] !== '') result[k] = obj[k];
+      }
+      return result;
+    };
+
+    if (isSameType || bothControls) {
+      // 情况1&2：同类型模块，或两个都是控件 → 复制全部属性
+      const metaFields = ['name', 'jobTitle', 'birth', 'phone', 'email', 'title', 'photo'];
+      store.updateModule(targetId, {
+        style: src.style ? { ...src.style } : undefined,
+        ...pickDefined(src as unknown as Record<string, unknown>, metaFields),
+      });
+    } else {
+      // 情况3—其余所有情况：仅复制共有布局属性 + 基本标识
+      const LAYOUT_KEYS = new Set([
+        'padding', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft',
+        'margin', 'marginTop', 'marginRight', 'marginBottom', 'marginLeft',
+        'backgroundColor', 'borderRadius', 'boxShadow', 'opacity',
+        'width', 'height', 'minWidth', 'maxWidth', 'minHeight', 'maxHeight',
+        'overflow', 'border', 'borderWidth', 'borderStyle', 'borderColor',
+      ]);
+      const commonStyle: Record<string, string> = {};
+      if (src.style) {
+        for (const key of Object.keys(src.style)) {
+          if (LAYOUT_KEYS.has(key)) commonStyle[key] = src.style[key];
+        }
+      }
+      store.updateModule(targetId, {
+        style: Object.keys(commonStyle).length > 0 ? commonStyle : undefined,
+        ...pickDefined(src as unknown as Record<string, unknown>, ['name', 'title']),
+      });
+    }
+    setFormatPainterSourceId(null);
+    select(targetId);
+  };
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -226,8 +292,8 @@ function CanvasArea({ deleteMode, onExitDeleteMode }: CanvasAreaProps) {
           id={mod.id}
           module={mod}
           isSelected={isSelected}
-          onSelect={() => select(mod.id)}
-          onEditFocus={() => select(null)}
+          onSelect={() => { if (formatPainterSourceId && formatPainterSourceId !== mod.id) { applyFormatPainter(mod.id); } else { select(mod.id); } }}
+          onEditFocus={() => { if (formatPainterSourceId && formatPainterSourceId !== mod.id) { applyFormatPainter(mod.id); } else { select(null); } }}
           disableDrag={deleteMode}
           data-id={mod.id}
           onContextMenu={(e) => handleContextMenu(e, mod.id)}
@@ -296,8 +362,8 @@ function CanvasArea({ deleteMode, onExitDeleteMode }: CanvasAreaProps) {
         id={mod.id}
         module={mod}
         isSelected={isSelected}
-        onSelect={() => select(mod.id)}
-        onEditFocus={() => select(null)}
+        onSelect={() => { if (formatPainterSourceId && formatPainterSourceId !== mod.id) { applyFormatPainter(mod.id); } else { select(mod.id); } }}
+        onEditFocus={() => { if (formatPainterSourceId && formatPainterSourceId !== mod.id) { applyFormatPainter(mod.id); } else { select(null); } }}
         disableDrag={deleteMode}
         data-id={mod.id}
         onContextMenu={(e) => handleContextMenu(e, mod.id)}

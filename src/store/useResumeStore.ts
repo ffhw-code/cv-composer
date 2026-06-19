@@ -42,6 +42,10 @@ interface ResumeStore {
   undo: () => void;
   redo: () => void;
   importModules: (newModules: ResumeModule[]) => void;
+  formatPainterSourceId: string | null;
+  setFormatPainterSourceId: (id: string | null) => void;
+  formatPainterTextStyle: Record<string, string> | null;
+  setFormatPainterTextStyle: (style: Record<string, string> | null) => void;
 }
 
 const generateId = (): string => {
@@ -177,6 +181,8 @@ export const useResumeStore = create<ResumeStore>((set, get) => {
     pagePadding: '40px',
     pageGap: '16px',
     pagePaddingTop: '40px',
+    formatPainterSourceId: null as string | null,
+    formatPainterTextStyle: null as Record<string, string> | null,
     setPagePadding: (value: string) => set({ pagePadding: value }),
     setPageGap: (value: string) => set({ pageGap: value }),
     setPagePaddingTop: (value: string) => set({ pagePaddingTop: value }),
@@ -308,6 +314,9 @@ export const useResumeStore = create<ResumeStore>((set, get) => {
     select: (id) => set({ selectedId: id }),
 
     // 导入
+    setFormatPainterSourceId: (id: string | null) => set({ formatPainterSourceId: id }),
+    setFormatPainterTextStyle: (style: Record<string, string> | null) => set({ formatPainterTextStyle: style }),
+
     importModules: (newModules) => {
       const state = get();
       pushHistory(state.modules);

@@ -96,8 +96,24 @@ export interface SetStyleByTypeParams {
   style: Record<string, string>;
 }
 
+export interface SetFieldParams {
+  id: string;
+  field: string;
+  value: string;
+}
+
 export interface RemoveModuleParams {
   id: string;
+}
+
+export interface CopyStyleParams {
+  source_id: string;
+  target_id: string;
+}
+
+export interface CopyTextStyleParams {
+  source_id: string;
+  target_id: string;
 }
 
 export interface DeleteModulesParams {
@@ -335,7 +351,7 @@ export const aiTools = [
     type: 'function' as const,
     function: {
       name: 'set_style',
-      description: '修改已有模块的多个 CSS 样式属性。id 必须来自当前画布。',
+      description: '修改已有模块的多个 CSS 样式属性。id 必须来自当前画布。支持的属性见上方「样式属性键名及可选值」完整列表。',
       parameters: {
         type: 'object',
         properties: {
@@ -381,6 +397,22 @@ export const aiTools = [
   {
     type: 'function' as const,
     function: {
+      name: 'set_field',
+      description: '修改模块的非样式元数据字段。可设置的字段：name（姓名）、jobTitle（求职意向）、birth（出生年月）、phone（电话）、email（邮箱）、title（模块标题）。注意：这不同于 set_content（改 HTML 正文）和 set_style（改 CSS 样式）。',
+      parameters: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', description: '目标模块 id' },
+          field: { type: 'string', description: '字段名：name、jobTitle、birth、phone、email、title' },
+          value: { type: 'string', description: '字段值，纯文本' },
+        },
+        required: ['id', 'field', 'value'],
+      },
+    },
+  },
+  {
+    type: 'function' as const,
+    function: {
       name: 'remove_module',
       description: '删除指定模块及其所有子模块。',
       parameters: {
@@ -419,6 +451,36 @@ export const aiTools = [
           id: { type: 'string', description: '要复制的模块 id' },
         },
         required: ['id'],
+      },
+    },
+  },
+  {
+    type: 'function' as const,
+    function: {
+      name: 'copy_style',
+      description: '模块格式刷：复制源模块的样式到目标模块。规则：同类型模块或两个都是控件(text/heading/list之间)→复制全部属性及元数据；其余跨类型→仅复制共有布局属性(padding/margin/背景/圆角/阴影/宽高等)和基本字段(name/title)。',
+      parameters: {
+        type: 'object',
+        properties: {
+          source_id: { type: 'string', description: '源模块 id（复制谁的样式）' },
+          target_id: { type: 'string', description: '目标模块 id（把样式应用到谁）' },
+        },
+        required: ['source_id', 'target_id'],
+      },
+    },
+  },
+  {
+    type: 'function' as const,
+    function: {
+      name: 'copy_text_style',
+      description: '文字样式复制：将源模块的文字排版属性复制到目标模块。自动从 module.style 和 HTML 内联样式(&lt;span style="..."&gt;) 中提取字体/字号/颜色等，写入目标 module.style 并清除目标 HTML 中冲突的內联样式，使 module.style 生效。适合"让这些字和那些字长得一样"的需求。',
+      parameters: {
+        type: 'object',
+        properties: {
+          source_id: { type: 'string', description: '源模块 id（复制谁的文字样式）' },
+          target_id: { type: 'string', description: '目标模块 id（把文字样式应用到谁）' },
+        },
+        required: ['source_id', 'target_id'],
       },
     },
   },
@@ -470,6 +532,17 @@ export const aiTools = [
         type: 'object',
         properties: {},
         required: [],
+      },
+    },
+  },
+  {
+    type: 'function' as const,
+    function: {
+      name: 'get_uploaded_file',
+      description: '获取用户上传的简历文件信息（base64 编码）。上传文件后必须先调用此工具获取文件数据，再调用 execute_skill 技能 import-resume 进行解析。',
+      parameters: {
+        type: 'object',
+        properties: {},
       },
     },
   },
@@ -529,7 +602,16 @@ export function buildSystemPrompt(): string {
 - 修改已有模块时，id 必须来自下方「当前画布」列表，禁止编造 id
 - 创建简历头使用 add_header，创建内容模块使用 add_module——这两个工具会自动生成子控件，禁止手动为它们构造 children
 - add_flex / add_grid 仅用于包装已存在的子模块；创建新容器+子控件组合时使用 add_flex_inline / add_grid_inline
-- 样式属性仅使用: fontSize, fontWeight, color, backgroundColor, padding, margin, borderRadius, border, boxShadow, display, flexDirection, alignItems, justifyContent, gap, gridTemplateColumns, width, height, lineHeight, textAlign, objectFit
+- 样式属性键名及可选值：
+  通用布局: width, height, minWidth, maxWidth, minHeight, maxHeight, padding, margin, backgroundColor, borderRadius, opacity, overflow
+  边框（需搭配使用，见下方说明）: borderScope(全部/上/下/左/右), borderStyle(none/solid/dashed/dotted), borderColor, borderWidth
+  渐变背景: gradientDirection(none | "to bottom" | "to right" | "to bottom right" | "to bottom left"), gradientFrom, gradientTo
+  阴影: boxShadow(none | "0 1px 3px rgba(0,0,0,0.1)" | "0 4px 6px rgba(0,0,0,0.1)" | "0 8px 16px rgba(0,0,0,0.15)")
+  文字排版: fontFamily, fontSize, fontWeight, fontStyle, fontVariant, color, textAlign, textDecoration, textTransform, textIndent, lineHeight, letterSpacing, wordSpacing, whiteSpace, wordBreak, overflowWrap, direction
+  弹性布局(仅 flex/header/module): display, flexDirection, alignItems, justifyContent, flexWrap, gap
+  网格布局(仅 grid): gridTemplateColumns, gridTemplateRows, gap
+  图片(仅 image): objectFit
+  边框设置说明: 同时设置 borderScope、borderStyle、borderColor、borderWidth 四个键才能生效，如 {"borderScope":"全部","borderStyle":"solid","borderColor":"#333","borderWidth":"2px"}
 - 颜色值统一用 #rrggbb，尺寸值统一用 px 单位
   - 单次回复可调用多个 tool，但须等待 tool 结果后再决定下一步。每次请求的工具调用总数不超过 5 个，达到后应直接回复用户
 - 连续同一 tool 失败 2 次后不得再试，改为向用户报告具体错误

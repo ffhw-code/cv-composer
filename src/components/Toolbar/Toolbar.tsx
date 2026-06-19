@@ -76,7 +76,7 @@ function ColorInput({ label, value, onChange }: { label: string; value: string; 
   return (
     <div className="flex items-center gap-1 text-xs">
       <span className="text-gray-500 w-10 truncate">{label}</span>
-      <input type="color" value={value} onChange={(e) => onChange(e.target.value)} className="w-6 h-5 border border-gray-300 rounded cursor-pointer p-0" />
+      <input type="color" value={value || '#000000'} onChange={(e) => onChange(e.target.value)} className="w-6 h-5 border border-gray-300 rounded cursor-pointer p-0" />
     </div>
   );
 }
@@ -142,6 +142,8 @@ function Toolbar() {
   const setPagePaddingTop = useResumeStore((s) => s.setPagePaddingTop);
 
   const selectedModule = selectedId ? findModuleById(modules, selectedId) : null;
+  const formatPainterSourceId = useResumeStore((s) => s.formatPainterSourceId);
+  const formatPainterTextStyle = useResumeStore((s) => s.formatPainterTextStyle);
 
   const keycapStyle =
     'px-3 py-1.5 text-sm font-medium text-gray-700 bg-gradient-to-b from-white to-gray-100 border border-gray-300 rounded-lg shadow-[inset_0_1px_0_#fff,0_2px_0_#d1d5db,0_3px_6px_rgba(0,0,0,0.1)] active:shadow-[inset_0_1px_3px_rgba(0,0,0,0.1)] active:translate-y-[2px] transition-all duration-75';
@@ -170,6 +172,49 @@ function Toolbar() {
       activeEditor.off('transaction', checkImage);
     };
   }, [activeEditor]);
+
+  // Word 风格文字格式刷：监听编辑器选区，当格式刷激活且有新选区时自动应用文字样式
+  const sourceSelectionRef = useRef<{ from: number; to: number } | null>(null);
+  const formatBrushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!activeEditor || !formatPainterTextStyle) return;
+    const apply = () => {
+      const { from, to, empty } = activeEditor.state.selection;
+      if (empty || from >= to) return;
+      // 跳过与源选区相同的选区
+      if (sourceSelectionRef.current && sourceSelectionRef.current.from === from && sourceSelectionRef.current.to === to) return;
+      // 防抖：拖选过程中 selectionUpdate 连续触发，等用户停止拖选后再应用样式
+      if (formatBrushTimerRef.current) clearTimeout(formatBrushTimerRef.current);
+      formatBrushTimerRef.current = setTimeout(() => {
+        formatBrushTimerRef.current = null;
+        const style = useResumeStore.getState().formatPainterTextStyle;
+        if (!style) return;
+        const { from: f, to: t } = activeEditor.state.selection;
+        if (f >= t) return;
+        const chain = activeEditor.chain().focus().setTextSelection({ from: f, to: t });
+        // 先清空全部已有样式，再逐项设置，确保目标与源完全一致
+        chain.unsetAllMarks();
+        // 段落属性
+        if (style.textAlign) chain.setTextAlign(style.textAlign);
+        // 字符属性
+        if (style.fontFamily) chain.setFontFamily(style.fontFamily);
+        if (style.fontSize) chain.setFontSize(style.fontSize);
+        if (style.color) chain.setColor(style.color);
+        if (style.fontWeight) chain.setFontWeight(style.fontWeight);
+        if (style.fontStyle === 'italic') chain.setItalic();
+        if (style.textDecoration?.includes('underline')) chain.setUnderline();
+        if (style.textDecoration?.includes('line-through')) chain.setStrike();
+        if (style.letterSpacing) chain.setLetterSpacing(style.letterSpacing);
+        if (style.backgroundColor) chain.setHighlight({ color: style.backgroundColor });
+        if (style.link) chain.setLink({ href: style.link });
+        chain.setTextSelection({ from: f, to: t }).run();
+        // 退出格式刷
+        useResumeStore.getState().setFormatPainterTextStyle(null);
+      }, 200);
+    };
+    activeEditor.on('selectionUpdate', apply);
+    return () => { activeEditor.off('selectionUpdate', apply); clearTimeout(formatBrushTimerRef.current); };
+  }, [activeEditor, formatPainterTextStyle]);
 
   const handleSave = () => {
     const currentModules = useResumeStore.getState().modules;
@@ -297,6 +342,67 @@ function Toolbar() {
           <button onClick={() => setActiveTool('edit')} className={activeTool === 'edit' ? keycapActiveStyle : keycapStyle}>编辑</button>
           <button onClick={() => useResumeStore.getState().undo()} className={keycapStyle} title="撤销">撤销</button>
           <button onClick={() => useResumeStore.getState().redo()} className={keycapStyle} title="重做">重做</button>
+          <button
+            onClick={() => {
+              const store = useResumeStore.getState();
+              if (store.formatPainterSourceId || store.formatPainterTextStyle) {
+                store.setFormatPainterSourceId(null);
+                store.setFormatPainterTextStyle(null);
+                return;
+              }
+              // 优先检测编辑器文字选区
+              if (activeEditor) {
+                const { from, to, empty } = activeEditor.state.selection;
+                if (!empty && from < to) {
+                  // 记录源选区位置，避免应用到同一选区
+                  sourceSelectionRef.current = { from, to };
+                  // 提取选区全部文字属性（从选区起始位置捕获所有 marks + 段落属性）
+                  const textStyle: Record<string, string> = {};
+                  const $pos = activeEditor.state.doc.resolve(from);
+                  for (const mark of $pos.marks()) {
+                    const attrs = mark.attrs as Record<string, string>;
+                    switch (mark.type.name) {
+                      case 'bold': textStyle.fontWeight = 'bold'; break;
+                      case 'italic': textStyle.fontStyle = 'italic'; break;
+                      case 'underline': textStyle.textDecoration = 'underline'; break;
+                      case 'strike': textStyle.textDecoration = textStyle.textDecoration ? textStyle.textDecoration + ' line-through' : 'line-through'; break;
+                      case 'code': break;
+                      case 'link': textStyle.link = attrs.href; break;
+                      case 'textStyle': {
+                        if (attrs.fontFamily) textStyle.fontFamily = attrs.fontFamily;
+                        if (attrs.fontSize) textStyle.fontSize = attrs.fontSize;
+                        if (attrs.color) textStyle.color = attrs.color;
+                        if (attrs.fontWeight && !textStyle.fontWeight) textStyle.fontWeight = attrs.fontWeight;
+                        if (attrs.letterSpacing) textStyle.letterSpacing = attrs.letterSpacing;
+                        break;
+                      }
+                      case 'highlight': {
+                        if (attrs.color) textStyle.backgroundColor = attrs.color;
+                        break;
+                      }
+                    }
+                  }
+                  // 捕获段落级属性——文字对齐
+                  const node = $pos.parent;
+                  if (node.attrs?.textAlign) {
+                    textStyle.textAlign = node.attrs.textAlign;
+                  }
+                  if (Object.keys(textStyle).length > 0) {
+                    store.setFormatPainterTextStyle(textStyle);
+                    return;
+                  }
+                }
+              }
+              // 无文字选区：使用模块级格式刷
+              if (selectedId) {
+                store.setFormatPainterSourceId(selectedId);
+              }
+            }}
+            className={formatPainterSourceId || formatPainterTextStyle ? keycapActiveStyle : keycapStyle}
+            title={formatPainterSourceId ? '格式刷已激活，点击目标模块应用样式' : formatPainterTextStyle ? '文字格式刷已激活，点击目标模块应用文字样式' : '格式刷：先选中文字（在编辑器中拖选），再点此按钮激活'}
+          >
+            格式刷
+          </button>
         </div>
       </div>
 

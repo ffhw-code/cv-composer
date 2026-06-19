@@ -85,7 +85,14 @@ function buildPrompt(): string {
 **容器独有属性**: children(子节点数组), direction(flex), columns(grid)
 
 **CSS 属性词汇表（仅使用以下属性）**:
-fontSize(如 "16px"), fontWeight(如 "bold" 或 "700"), color(如 "#333333"), backgroundColor, padding, margin, borderRadius, border, boxShadow, display, flexDirection, alignItems, justifyContent, gap, gridTemplateColumns, width, height, lineHeight, textAlign, objectFit
+  通用布局: width, height, minWidth, maxWidth, minHeight, maxHeight, padding, margin, backgroundColor, borderRadius, opacity, overflow
+  边框: borderScope(全部/上/下/左/右), borderStyle(none/solid/dashed/dotted), borderColor, borderWidth
+  渐变: gradientDirection, gradientFrom, gradientTo
+  阴影: boxShadow
+  文字: fontSize(如"16px"), fontWeight(如"bold"或"700"), color(如"#333333"), fontFamily, fontStyle, fontVariant, textAlign, textDecoration, textTransform, textIndent, lineHeight, letterSpacing, wordSpacing, whiteSpace, wordBreak, overflowWrap, direction
+  弹性布局(仅flex): display, flexDirection, alignItems, justifyContent, flexWrap, gap
+  网格布局(仅grid): gridTemplateColumns, gridTemplateRows, gap
+  图片(仅image): objectFit
 
 **对齐与间距**: 用 justifyContent("space-between"|"space-around"|"flex-start"|"center") 表达元素排列方式，用 gap(如 "0px"|"8px"|"12px") 控制子元素间距，用 padding 控制容器内边距，用固定 height 控制行高。
 

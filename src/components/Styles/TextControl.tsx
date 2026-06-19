@@ -4,6 +4,7 @@ import { getTextExtensions } from '../../tiptap/editorExtensions';
 import { useResumeStore } from '../../store/useResumeStore';
 import { useActiveEditor } from '../../hooks/useActiveEditor';
 import { useOverflowGuard } from '../../hooks/useOverflowGuard';
+import { buildContainerStyle, hasCustomBorder } from '../../utils/styleHelpers';
 import type { ResumeModule } from '../../store/useResumeStore';
 
 /** 清理 HTML 中所有尾部空块 */
@@ -47,7 +48,7 @@ function TextControl({ module }: { module: ResumeModule }) {
     }
   }, [module.content, editor]);
 
-  // 动态应用模块样式到编辑器根元素
+  // 动态应用模块样式到编辑器根元素（文字排版属性）
   useEffect(() => {
     if (!editor) return;
     const dom = editor.view.dom;
@@ -59,21 +60,36 @@ function TextControl({ module }: { module: ResumeModule }) {
     dom.style.textAlign = style.textAlign || '';
     dom.style.backgroundColor = style.backgroundColor || '';
     dom.style.fontWeight = style.fontWeight || '';
+    dom.style.fontStyle = style.fontStyle || '';
+    dom.style.fontVariant = style.fontVariant || '';
     dom.style.lineHeight = style.lineHeight || '';
     dom.style.letterSpacing = style.letterSpacing || '';
+    dom.style.textDecoration = style.textDecoration || '';
+    dom.style.textTransform = style.textTransform || '';
+    dom.style.textIndent = style.textIndent || '';
+    dom.style.wordSpacing = style.wordSpacing || '';
+    dom.style.whiteSpace = style.whiteSpace || '';
+    dom.style.wordBreak = style.wordBreak || '';
+    dom.style.overflowWrap = style.overflowWrap || '';
+    dom.style.direction = style.direction || '';
   }, [editor, module.style]);
 
-  const { ref, heightStyle, isOverflowing } = useOverflowGuard(module.style?.height);
+  const styleForBuild = module.style ? { ...module.style } : undefined;
+  const userHeight = styleForBuild?.height;
+  if (styleForBuild) delete styleForBuild.height;
+
+  const custom = hasCustomBorder(styleForBuild);
+  const inline = buildContainerStyle(styleForBuild);
+  const { ref, heightStyle, isOverflowing } = useOverflowGuard(userHeight);
+
   const containerStyle: React.CSSProperties = {
+    ...inline,
     width: module.style?.width || 'auto',
     ...heightStyle,
-    margin: module.style?.margin || '0',
-    padding: module.style?.padding || '0',
-    backgroundColor: module.style?.backgroundColor || 'transparent',
   };
 
   return (
-    <div ref={ref} style={containerStyle} className={isOverflowing ? 'ring-2 ring-red-300 rounded' : ''}>
+    <div ref={ref} style={containerStyle} className={`${custom ? 'min-h-[20px]' : ''} ${isOverflowing ? 'ring-2 ring-red-300 rounded' : ''}`}>
       <EditorContent editor={editor} />
     </div>
   );

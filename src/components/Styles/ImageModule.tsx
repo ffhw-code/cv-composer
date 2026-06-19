@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useResumeStore } from '../../store/useResumeStore';
 import type { ResumeModule } from '../../store/useResumeStore';
+import { buildContainerStyle } from '../../utils/styleHelpers';
 
 export default function ImageModule({ module }: { module: ResumeModule }) {
   const updateModule = useResumeStore((s) => s.updateModule);
@@ -9,6 +10,7 @@ export default function ImageModule({ module }: { module: ResumeModule }) {
   const startPos = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
 
   const imageData = module.content || '';
+  const inline = buildContainerStyle(module.style);
   const width = module.style?.width || 'auto';
   const height = module.style?.height || 'auto';
 
@@ -96,7 +98,7 @@ export default function ImageModule({ module }: { module: ResumeModule }) {
           <img
             src={imageData}
             alt="图片"
-            style={{ width, height, maxWidth: '100%', display: 'block' }}
+            style={{ ...inline, width, height, maxWidth: '100%', display: 'block' }}
             className="rounded cursor-pointer"
             onClick={handleClick}
           />
@@ -109,7 +111,7 @@ export default function ImageModule({ module }: { module: ResumeModule }) {
       ) : (
         <div
           className="border border-dashed border-gray-300 bg-gray-50 flex items-center justify-center cursor-pointer hover:border-blue-400"
-          style={{ width: width === 'auto' ? '100px' : width, height: height === 'auto' ? '100px' : height, minWidth: '60px', minHeight: '60px' }}
+          style={{ ...inline, width: width === 'auto' ? '100px' : width, height: height === 'auto' ? '100px' : height, minWidth: '60px', minHeight: '60px' }}
           onClick={handleClick}
         >
           <span className="text-gray-400 text-sm">点击上传图片</span>

@@ -12,6 +12,7 @@ export type CommandAction =
   | 'setStyle'
   | 'setContent'
   | 'setProperty'
+  | 'setField'
   | 'addCustomModule'
   | 'selectModule'
   | 'applyTemplate';
@@ -403,6 +404,22 @@ export function executeCommands(
           currentModules = updateModuleInTree(currentModules, realId, (mod) => ({
             ...mod,
             style: { ...mod.style, ...params.style },
+          }));
+          break;
+        }
+
+        case 'setField': {
+          const params = cmd.params as { id: string; field: string; value: string };
+          const realId = resolveId(params.id, idMap);
+          let found = false;
+          const checkExist = (nodes: ResumeModule[]) => {
+            for (const n of nodes) { if (n.id === realId) { found = true; return; } if (n.children) checkExist(n.children); }
+          };
+          checkExist(currentModules);
+          if (!found) { errors.push(makeError("MODULE_NOT_FOUND", `setField: 模块 ${params.id} 不存在`, `请检查模块 id，确保它来自「当前画布」列表。`)); criticalError = true; return; }
+          currentModules = updateModuleInTree(currentModules, realId, (mod) => ({
+            ...mod,
+            [params.field]: params.value,
           }));
           break;
         }

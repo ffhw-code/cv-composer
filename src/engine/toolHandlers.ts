@@ -23,8 +23,11 @@ import type {
   SetContentParams,
   SetStyleParams,
   SetPropertyParams,
+  SetFieldParams,
   SetStyleByTypeParams,
   RemoveModuleParams,
+  CopyStyleParams,
+  CopyTextStyleParams,
   DeleteModulesParams,
   ClearCanvasParams,
   MoveModuleParams,
@@ -616,6 +619,26 @@ export function handleSetStyleByType(params: SetStyleByTypeParams, modules: Resu
   );
 }
 
+
+export function handleSetField(params: SetFieldParams, modules: ResumeModule[]): ToolResult {
+  const validFields = ['name', 'jobTitle', 'birth', 'phone', 'email', 'title'];
+  if (!validFields.includes(params.field)) {
+    return {
+      success: false,
+      code: 'INVALID_FIELD',
+      message: `set_field: 不支持的字段 "${params.field}"。可用字段: ${validFields.join(', ')}`,
+      fix: `请使用以下字段之一: ${validFields.join(', ')}。`,
+      originalModules: modules,
+    };
+  }
+
+  const cmd: Command = {
+    action: 'setField',
+    params: { id: params.id, field: params.field, value: params.value },
+  };
+  return toToolResult(executeCommands(modules, [cmd]), modules);
+}
+
 export function handleRemoveModule(params: RemoveModuleParams, modules: ResumeModule[]): ToolResult {
   const cmd: Command = {
     action: 'removeModule',
@@ -664,6 +687,269 @@ export function handleDeleteModules(params: DeleteModulesParams, modules: Resume
   const result = executeCommands(modules, commands);
   return toToolResult(result, modules, `已删除 ${params.ids.length} 个模块`);
 }
+
+
+export function handleCopyStyle(params: CopyStyleParams, modules: ResumeModule[]): ToolResult {
+  // 查找源模块
+  const findMod = (nodes: ResumeModule[], id: string): ResumeModule | null => {
+    for (const n of nodes) {
+      if (n.id === id) return n;
+      if (n.children) {
+        const found = findMod(n.children, id);
+        if (found) return found;
+      }
+    }
+    return null;
+  };
+
+  const source = findMod(modules, params.source_id);
+  if (!source) {
+    return {
+      success: false,
+      code: 'MODULE_NOT_FOUND',
+      message: `copy_style: 源模块 ${params.source_id} 不存在`,
+      fix: '请检查源模块 id 是否正确。',
+      originalModules: modules,
+    };
+  }
+
+  const target = findMod(modules, params.target_id);
+  if (!target) {
+    return {
+      success: false,
+      code: 'MODULE_NOT_FOUND',
+      message: `copy_style: 目标模块 ${params.target_id} 不存在`,
+      fix: '请检查目标模块 id 是否正确。',
+      originalModules: modules,
+    };
+  }
+
+  if (params.source_id === params.target_id) {
+    return {
+      success: false,
+      code: 'SAME_MODULE',
+      message: 'copy_style: 源模块和目标模块相同，无需复制',
+      fix: '请选择不同的模块。',
+      originalModules: modules,
+    };
+  }
+
+  // 类型感知：同类型或同是控件 → 全复制；跨类型 → 仅共有布局属性
+  const CONTROLS = new Set(['text', 'heading', 'list']);
+  const isSameType = source.type === target.type;
+  const bothControls = CONTROLS.has(source.type) && CONTROLS.has(target.type);
+
+  const commands: Command[] = [];
+
+  if (isSameType || bothControls) {
+    // 全量复制样式
+    commands.push({
+      action: 'setStyle',
+      params: { id: params.target_id, style: source.style || {} },
+    });
+    // 复制全部元数据
+    const metaFields = ['name', 'jobTitle', 'birth', 'phone', 'email', 'title'] as const;
+    for (const field of metaFields) {
+      if (source[field]) {
+        commands.push({
+          action: 'setField',
+          params: { id: params.target_id, field, value: source[field] as string },
+        });
+      }
+    }
+  } else {
+    // 跨类型：仅复制共有布局属性
+    const LAYOUT_KEYS = new Set([
+      'padding', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft',
+      'margin', 'marginTop', 'marginRight', 'marginBottom', 'marginLeft',
+      'backgroundColor', 'borderRadius', 'boxShadow', 'opacity',
+      'width', 'height', 'minWidth', 'maxWidth', 'minHeight', 'maxHeight',
+      'overflow', 'border', 'borderWidth', 'borderStyle', 'borderColor',
+    ]);
+    const commonStyle: Record<string, string> = {};
+    if (source.style) {
+      for (const key of Object.keys(source.style)) {
+        if (LAYOUT_KEYS.has(key)) commonStyle[key] = source.style[key];
+      }
+    }
+    if (Object.keys(commonStyle).length > 0) {
+      commands.push({
+        action: 'setStyle',
+        params: { id: params.target_id, style: commonStyle },
+      });
+    }
+    // 仅复制基本标识字段
+    const basicFields = ['name', 'title'] as const;
+    for (const field of basicFields) {
+      if (source[field]) {
+        commands.push({
+          action: 'setField',
+          params: { id: params.target_id, field, value: source[field] as string },
+        });
+      }
+    }
+  }
+
+  const result = executeCommands(modules, commands);
+  return toToolResult(result, modules, `已将模块 ${params.source_id} 的样式复制到 ${params.target_id}`);
+}
+
+// 文字排版相关 CSS 属性（仅影响文字外观，不影响容器）
+const TEXT_STYLE_KEYS = new Set([
+  'fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'fontVariant',
+  'color',
+  'textAlign', 'textDecoration', 'textTransform', 'textIndent',
+  'lineHeight', 'letterSpacing', 'wordSpacing',
+  'whiteSpace', 'wordBreak', 'overflowWrap', 'direction',
+]);
+
+// CSS 属性名 kebab-case → camelCase 映射（用于解析 HTML 内联样式）
+const CSS_TO_CAMEL: Record<string, string> = {
+  'font-family': 'fontFamily', 'font-size': 'fontSize', 'font-weight': 'fontWeight',
+  'font-style': 'fontStyle', 'font-variant': 'fontVariant', 'color': 'color',
+  'text-align': 'textAlign', 'text-decoration': 'textDecoration',
+  'text-transform': 'textTransform', 'text-indent': 'textIndent',
+  'line-height': 'lineHeight', 'letter-spacing': 'letterSpacing',
+  'word-spacing': 'wordSpacing', 'white-space': 'whiteSpace',
+  'word-break': 'wordBreak', 'overflow-wrap': 'overflowWrap', 'direction': 'direction',
+};
+
+/** 从 HTML 内容的 style 属性中提取文字排版 CSS 属性，转为 camelCase */
+function extractTextCSSFromHTML(html: string | undefined): Record<string, string> {
+  const result: Record<string, string> = {};
+  if (!html) return result;
+  const styleRegex = /style="([^"]*)"/gi;
+  let match;
+  while ((match = styleRegex.exec(html)) !== null) {
+    for (const decl of match[1].split(';')) {
+      const colonIdx = decl.indexOf(':');
+      if (colonIdx === -1) continue;
+      const prop = decl.substring(0, colonIdx).trim().toLowerCase();
+      const val = decl.substring(colonIdx + 1).trim();
+      const camel = CSS_TO_CAMEL[prop];
+      if (camel && val && TEXT_STYLE_KEYS.has(camel) && !result[camel]) {
+        result[camel] = val;
+      }
+    }
+  }
+  return result;
+}
+
+/** 从 HTML 内容中移除所有文字排版相关的内联 CSS 声明 */
+function stripTextCSSFromHTML(html: string | undefined): string {
+  if (!html) return '';
+  // 匹配 style="..." 属性，移除其中匹配的文字排版声明
+  return html.replace(/style="([^"]*)"/gi, (_full: string, declarations: string) => {
+    const parts = declarations.split(';').filter((d) => {
+      const colonIdx = d.indexOf(':');
+      if (colonIdx === -1) return true; // malformed, keep
+      const prop = d.substring(0, colonIdx).trim().toLowerCase();
+      const camel = CSS_TO_CAMEL[prop];
+      return !camel || !TEXT_STYLE_KEYS.has(camel);
+    });
+    const remaining = parts.join(';').trim();
+    return remaining ? `style="${remaining}"` : '';
+  });
+}
+
+export function handleCopyTextStyle(params: CopyTextStyleParams, modules: ResumeModule[]): ToolResult {
+  const findMod = (nodes: ResumeModule[], id: string): ResumeModule | null => {
+    for (const n of nodes) {
+      if (n.id === id) return n;
+      if (n.children) {
+        const found = findMod(n.children, id);
+        if (found) return found;
+      }
+    }
+    return null;
+  };
+
+  const source = findMod(modules, params.source_id);
+  if (!source) {
+    return {
+      success: false,
+      code: 'MODULE_NOT_FOUND',
+      message: `copy_text_style: 源模块 ${params.source_id} 不存在`,
+      fix: '请检查源模块 id 是否正确。',
+      originalModules: modules,
+    };
+  }
+
+  const target = findMod(modules, params.target_id);
+  if (!target) {
+    return {
+      success: false,
+      code: 'MODULE_NOT_FOUND',
+      message: `copy_text_style: 目标模块 ${params.target_id} 不存在`,
+      fix: '请检查目标模块 id 是否正确。',
+      originalModules: modules,
+    };
+  }
+
+  if (params.source_id === params.target_id) {
+    return {
+      success: false,
+      code: 'SAME_MODULE',
+      message: 'copy_text_style: 源模块和目标模块相同，无需复制',
+      fix: '请选择不同的模块。',
+      originalModules: modules,
+    };
+  }
+
+  // 1) 从 module.style 提取文字排版属性
+  const textStyle: Record<string, string> = {};
+  if (source.style) {
+    for (const key of Object.keys(source.style)) {
+      if (TEXT_STYLE_KEYS.has(key)) {
+        textStyle[key] = source.style[key];
+      }
+    }
+  }
+
+  // 2) 从 HTML 内联样式中补充未在 module.style 中出现的文字属性
+  const htmlTextStyle = extractTextCSSFromHTML(source.content as string | undefined);
+  for (const [key, val] of Object.entries(htmlTextStyle)) {
+    if (!textStyle[key]) {
+      textStyle[key] = val;
+    }
+  }
+
+  const commands: Command[] = [];
+
+  // 3) 将合并后的文字样式写入目标 module.style
+  if (Object.keys(textStyle).length > 0) {
+    commands.push({
+      action: 'setStyle',
+      params: { id: params.target_id, style: textStyle },
+    });
+  }
+
+  // 4) 清除目标 HTML 中的内联文字样式，使 module.style 生效
+  if (target.content) {
+    const stripped = stripTextCSSFromHTML(target.content as string);
+    if (stripped !== target.content) {
+      commands.push({
+        action: 'setContent',
+        params: { id: params.target_id, content: stripped },
+      });
+    }
+  }
+
+  if (commands.length === 0) {
+    return {
+      success: false,
+      code: 'NO_STYLE',
+      message: `copy_text_style: 源模块 ${params.source_id} 没有可复制的文字样式（module.style 和 HTML 内联样式中均未找到）`,
+      fix: '源模块可能没有设置任何文字样式属性。',
+      originalModules: modules,
+    };
+  }
+
+  const result = executeCommands(modules, commands);
+  const copied = Object.keys(textStyle).join(', ');
+  return toToolResult(result, modules, `已将模块 ${params.source_id} 的文字样式（${copied || '无'}）复制到 ${params.target_id}`);
+}
+
 
 export function handleClearCanvas(_params: ClearCanvasParams, modules: ResumeModule[]): ToolResult {
   if (modules.length === 0) {
@@ -912,11 +1198,14 @@ export const toolHandlerMap: Record<string, ToolHandler> = {
   set_style: (p, m) => handleSetStyle(p as unknown as SetStyleParams, m),
   set_style_by_type: (p, m) => handleSetStyleByType(p as unknown as SetStyleByTypeParams, m),
   set_property: (p, m) => handleSetProperty(p as unknown as SetPropertyParams, m),
+  set_field: (p, m) => handleSetField(p as unknown as SetFieldParams, m),
   remove_module: (p, m) => handleRemoveModule(p as unknown as RemoveModuleParams, m),
   delete_modules: (p, m) => handleDeleteModules(p as unknown as DeleteModulesParams, m),
   clear_canvas: (p, m) => handleClearCanvas(p as unknown as ClearCanvasParams, m),
   move_module: (p, m) => handleMoveModule(p as unknown as MoveModuleParams, m),
   duplicate_module: (p, m) => handleDuplicateModule(p as unknown as DuplicateModuleParams, m),
+  copy_style: (p, m) => handleCopyStyle(p as unknown as CopyStyleParams, m),
+  copy_text_style: (p, m) => handleCopyTextStyle(p as unknown as CopyTextStyleParams, m),
   apply_template: (p, m) => handleApplyTemplate(p as unknown as ApplyTemplateParams, m),
   export_pdf: (_p, m) => handleExportPdf(m),
   // execute_skill and get_uploaded_file handled separately by ChatPanel (async + file access)
