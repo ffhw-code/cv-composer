@@ -91,7 +91,7 @@ function ResizeHandles({ moduleId, containerRef }: ResizeHandlesProps) {
   ];
 
   return (
-    <>
+    <div className="resize-handles" style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 30 }}>
       {corners.map(({ key, style }) => (
         <div
           key={key}
@@ -99,7 +99,7 @@ function ResizeHandles({ moduleId, containerRef }: ResizeHandlesProps) {
           onMouseDown={onMouseDown(key)}
         />
       ))}
-    </>
+    </div>
   );
 }
 

@@ -53,12 +53,13 @@ function CanvasArea({ deleteMode, onExitDeleteMode }: CanvasAreaProps) {
   const dragStartRef = useRef<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
+    // 进入和退出删除模式时都清空选中集，防止跨会话残留
+    setSelectedIds(new Set());
     if (!deleteMode) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setSelectedIds(new Set());
       select(null);
     }
-  }, [deleteMode, select]);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+  }, [deleteMode]);
 
 
   const zoomIn = () => setScale((s) => Math.min(s + 0.1, 2));
@@ -501,7 +502,10 @@ function CanvasArea({ deleteMode, onExitDeleteMode }: CanvasAreaProps) {
         <ContextMenu x={contextMenu.x} y={contextMenu.y} module={contextMenu.module} onClose={closeContextMenu} />
       )}
 
-      <div className="absolute bottom-4 right-4 flex flex-col gap-2 items-end">
+      <div
+        className="absolute bottom-4 right-4 flex flex-col gap-2 items-end"
+        onMouseDown={(e) => e.stopPropagation()}
+      >
         {deleteMode && (
           <button
             onClick={selectedIds.size > 0 ? handleDelete : handleExit}
