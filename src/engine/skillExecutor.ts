@@ -728,55 +728,8 @@ registerSkill('import-resume', async (_params, ctx) => {
   const overflowH = canvasH > A4_H + 2;
   console.log('[import-resume] 宽度溢出:', overflowW, '| 高度溢出:', overflowH);
 
-  let compressNote = '';
+  console.log('[import-resume] （缩放逻辑已暂时关闭，仅测量诊断）');
 
-  if (overflowW || overflowH) {
-    // 取两个方向中更激进的缩放比
-    const scaleW = overflowW ? A4_W / canvasW : 1;
-    const scaleH = overflowH ? A4_H / canvasH : 1;
-    const desiredScale = Math.min(scaleW, scaleH);
-    // 同步缩放页面级边距和模块间距
-    const pageStore = useResumeStore.getState();
-    const rawPadTop = parseInt(pageStore.pagePaddingTop || '40') || 40;
-    const rawPad = parseInt(pageStore.pagePadding || '40') || 40;
-    const rawGap = parseInt(pageStore.pageGap || '16') || 16;
-    pageStore.setPagePaddingTop(`${Math.max(4, Math.round(rawPadTop * desiredScale))}px`);
-    pageStore.setPagePadding(`${Math.max(4, Math.round(rawPad * desiredScale))}px`);
-    pageStore.setPageGap(`${Math.max(2, Math.round(rawGap * desiredScale))}px`);
-    console.log('[import-resume] 页面边距缩放: padTop', rawPadTop, '→', Math.max(4, Math.round(rawPadTop * desiredScale)), 'pad', rawPad, '→', Math.max(4, Math.round(rawPad * desiredScale)), 'gap', rawGap, '→', Math.max(2, Math.round(rawGap * desiredScale)));
-    // 反推 effectiveMaxW 使 scaleLayoutToFit 内部计算和 desiredScale 一致
-    const effectiveMaxW = A4_W / desiredScale;
-    console.log('[import-resume] scaleW:', scaleW.toFixed(4), 'scaleH:', scaleH.toFixed(4), '→ 采用:', desiredScale.toFixed(4));
-
-    const { scaledCount } = scaleLayoutToFit(result.newModules, effectiveMaxW);
-    console.log('[import-resume] 缩放影响属性数:', scaledCount);
-    trimBlankGaps(result.newModules, true);
-
-    // 用缩放后的数据替换画布，等 React 重新渲染后测量真实高度
-    ctx.importModules(result.newModules);
-    await new Promise<void>((resolve) => {
-      requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
-    });
-
-    const pageEl2 = document.querySelector('#resume-preview') as HTMLElement | null;
-    const afterH = pageEl2?.scrollHeight || A4_H;
-    console.log('[import-resume] 缩放后实测高度:', afterH, 'px');
-    if (afterH > A4_H) {
-      const hRatio = A4_H / afterH * 0.95;
-      const hCount = compressModuleStyles(result.newModules, hRatio);
-      compressNote = ` (内容溢出，已自动压缩 ${hCount} 处间距)`;
-      console.log('[import-resume] 二次高度压缩比:', hRatio.toFixed(4), '| 压缩属性数:', hCount);
-      ctx.importModules(result.newModules);
-      // 最终验证
-      await new Promise<void>((resolve) => {
-        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
-      });
-      const pageEl3 = document.querySelector('#resume-preview') as HTMLElement | null;
-      const finalH = pageEl3?.scrollHeight || A4_H;
-      console.log('[import-resume] 最终实测高度:', finalH, 'px', finalH > A4_H ? '(仍溢出!)' : '(已容纳)');
-    }
-  }
-
-  return `简历导入完成，已导入 ${result.newModules.length} 个模块。${compressNote}`;
+  return `简历导入完成，已导入 ${result.newModules.length} 个模块。`;
 
 });

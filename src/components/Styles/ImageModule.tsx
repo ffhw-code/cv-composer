@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { useResumeStore } from '../../store/useResumeStore';
 import type { ResumeModule } from '../../store/useResumeStore';
 import { buildContainerStyle } from '../../utils/styleHelpers';
+import { useEditMode } from '../../hooks/useEditMode';
 
 export default function ImageModule({ module }: { module: ResumeModule }) {
   const updateModule = useResumeStore((s) => s.updateModule);
@@ -9,6 +10,7 @@ export default function ImageModule({ module }: { module: ResumeModule }) {
   const [, setDragging] = useState(false);
   const startPos = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
 
+  const isEditing = useEditMode();
   const imageData = module.content || '';
   const inline = buildContainerStyle(module.style);
   const width = module.style?.width || 'auto';
@@ -111,7 +113,7 @@ export default function ImageModule({ module }: { module: ResumeModule }) {
       ) : (
         <div
           className="border border-dashed border-gray-300 bg-gray-50 flex items-center justify-center cursor-pointer hover:border-blue-400"
-          style={{ ...inline, width: width === 'auto' ? '100px' : width, height: height === 'auto' ? '100px' : height, minWidth: '60px', minHeight: '60px' }}
+          style={{ ...inline, width: width === 'auto' ? '100px' : width, height: height === 'auto' ? '100px' : height, minWidth: isEditing ? '60px' : '0', minHeight: isEditing ? '60px' : '0' }}
           onClick={handleClick}
         >
           <span className="text-gray-400 text-sm">点击上传图片</span>

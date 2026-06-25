@@ -147,7 +147,7 @@ function SortableModule({
     transition,
     opacity: isDragging ? 0.4 : 1,
     position: 'relative',
-    border: (isEditing && isSelected) ? '2px solid #3b82f6' : '2px solid transparent',
+    border: isEditing ? ((isEditing && isSelected) ? '2px solid #3b82f6' : '2px solid transparent') : 'none',
     borderRadius: '4px',
     cursor: isDragging ? 'grabbing' : 'default',
     paddingTop: (isEditing && isSelected && renderToolbar) ? '20px' : '0',

@@ -53,7 +53,7 @@ function ListControl({ module }: { module: ResumeModule }) {
     if (!editor) return;
     const dom = editor.view.dom;
     const style = module.style || {};
-    // eslint-disable-next-line react-hooks/immutability
+    dom.style.padding = isEditing ? '' : '0';
     dom.style.fontFamily = style.fontFamily || '';
     dom.style.fontSize = style.fontSize || '';
     dom.style.color = style.color || '';
@@ -71,7 +71,7 @@ function ListControl({ module }: { module: ResumeModule }) {
     dom.style.wordBreak = style.wordBreak || '';
     dom.style.overflowWrap = style.overflowWrap || '';
     dom.style.direction = style.direction || '';
-  }, [editor, module.style]);
+  }, [editor, module.style, isEditing]);
 
   const styleForBuild = module.style ? { ...module.style } : undefined;
   const userHeight = styleForBuild?.height;
