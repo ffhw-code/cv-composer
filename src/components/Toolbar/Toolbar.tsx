@@ -116,7 +116,7 @@ function ImageSizeInputs({
 
 const FONT_SIZE_PRESETS = ['12', '14', '16', '18', '20', '24', '32', '48'];
 
-function Toolbar() {
+function Toolbar({ isEditing, onToggleEdit }: { isEditing: boolean; onToggleEdit: () => void }) {
   const [activeTool, setActiveTool] = useState<'edit' | 'insert'>('edit');
   const [textColor, setTextColor] = useState('#000000');
   const [highlightColor, setHighlightColor] = useState('#ffff00');
@@ -337,6 +337,13 @@ function Toolbar() {
           <button onClick={handleSave} className={keycapStyle} title="保存">保存</button>
           <button onClick={() => loadFileRef.current?.click()} className={keycapStyle} title="加载">加载</button>
           <button onClick={() => setActiveTool('insert')} className={activeTool === 'insert' ? keycapActiveStyle : keycapStyle}>插入</button>
+          <button
+            onClick={onToggleEdit}
+            className={isEditing ? keycapStyle : keycapActiveStyle}
+            title={isEditing ? '预览：查看最终简历效果' : '退出预览'}
+          >
+            {isEditing ? '预览' : '编辑'}
+          </button>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={() => setActiveTool('edit')} className={activeTool === 'edit' ? keycapActiveStyle : keycapStyle}>编辑</button>

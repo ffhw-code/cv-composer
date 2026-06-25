@@ -153,7 +153,7 @@ export function exportPDF() {
         </style>
       </head>
       <body>
-        ${clone.outerHTML}
+        <div data-editing="false">${clone.outerHTML}</div>
       </body>
       </html>
     `);

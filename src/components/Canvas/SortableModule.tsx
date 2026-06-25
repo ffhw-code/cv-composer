@@ -3,6 +3,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { ResumeModule } from '../../store/useResumeStore';
 import { useResumeStore } from '../../store/useResumeStore';
+import { useEditMode } from '../../hooks/useEditMode';
 import { findModuleById } from '../../utils/moduleUtils';
 import ResizeHandles from './ResizeHandles';
 
@@ -36,6 +37,7 @@ function SortableModule({
   const selectedId = useResumeStore((s) => s.selectedId);
   const modules = useResumeStore((s) => s.modules);
   const updateModule = useResumeStore((s) => s.updateModule);
+  const isEditing = useEditMode();
   const containerRef = useRef<HTMLDivElement>(null);
   const [showKeyboardHint, setShowKeyboardHint] = useState(false);
 
@@ -145,10 +147,10 @@ function SortableModule({
     transition,
     opacity: isDragging ? 0.4 : 1,
     position: 'relative',
-    border: isSelected ? '2px solid #3b82f6' : '2px solid transparent',
+    border: (isEditing && isSelected) ? '2px solid #3b82f6' : '2px solid transparent',
     borderRadius: '4px',
     cursor: isDragging ? 'grabbing' : 'default',
-    paddingTop: isSelected && renderToolbar ? '20px' : '0',
+    paddingTop: (isEditing && isSelected && renderToolbar) ? '20px' : '0',
   };
 
   const borderHandleStyle: React.CSSProperties = {
@@ -164,7 +166,7 @@ function SortableModule({
 
   return (
     <div ref={mergedRef} style={containerStyle} {...rest}>
-      {isSelected && renderToolbar && (
+      {isEditing && isSelected && renderToolbar && (
         <div className="absolute top-0.5 left-0.5 right-0.5 z-20">{renderToolbar}</div>
       )}
       {/* 四个边框手柄 */}
@@ -225,12 +227,12 @@ function SortableModule({
       </div>
 
       {/* 缩放把手（叶子组件） */}
-      {showResizeHandles && (
+      {isEditing && showResizeHandles && (
         <ResizeHandles moduleId={id} containerRef={containerRef} />
       )}
 
       {/* 快捷键提示条 */}
-      {isSelected && showKeyboardHint && (
+      {isEditing && isSelected && showKeyboardHint && (
         <div
           className="absolute -bottom-8 left-1/2 -translate-x-1/2 z-30 px-3 py-1 text-[11px] bg-gray-800 text-white rounded whitespace-nowrap pointer-events-none shadow-lg"
         >

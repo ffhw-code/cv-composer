@@ -1,1 +1,18 @@
 @import "tailwindcss";
+/* —— 预览 / 导出态：清除编辑器专用样式 —— */
+[data-editing="false"] .min-h-\[20px\],
+[data-editing="false"] .min-h-\[60px\] {
+  min-height: 0;
+}
+[data-editing="false"] .border-dashed {
+  border-style: solid;
+  border-color: transparent;
+}
+[data-editing="false"] .bg-gray-50\/40,
+[data-editing="false"] .bg-gray-50\/60 {
+  background-color: transparent;
+}
+
+[data-editing="false"] .ProseMirror {
+  min-height: 0;
+}

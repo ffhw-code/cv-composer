@@ -4,11 +4,11 @@ import { loadTemplate, type TemplateModule } from './templates';
 import { executeCommands, type Command } from './commandExecutor';
 import type { ResumeModule } from '../store/useResumeStore';
 import { useResumeStore } from '../store/useResumeStore';
+import { scaleLayoutToFit, trimBlankGaps } from './layoutScaler';
 import { findModuleById } from '../utils/moduleUtils';
 import type { ParsedResume, LayoutTree, LayoutTreeNode } from '../utils/resumeParser';
 import { getUploadedFile } from '../utils/aiConfig';
 import { normalizeLayoutTree } from './layoutTreeNormalizer';
-import { applyOverflowCompression } from './layoutTreeNormalizer';
 
 export interface SkillContext {
   modules: ResumeModule[];
@@ -25,6 +25,44 @@ const skillRegistry = new Map<string, SkillHandler>();
 
 export function registerSkill(name: string, handler: SkillHandler) {
   skillRegistry.set(name, handler);
+}
+
+
+/** base64 字符串 → Blob */
+function base64ToBlob(base64: string, mimeType: string): Blob {
+  const byteChars = atob(base64);
+  const byteArrays: Uint8Array[] = [];
+  for (let offset = 0; offset < byteChars.length; offset += 512) {
+    const slice = byteChars.slice(offset, offset + 512);
+    const byteNumbers = new Array(slice.length);
+    for (let i = 0; i < slice.length; i++) {
+      byteNumbers[i] = slice.charCodeAt(i);
+    }
+    byteArrays.push(new Uint8Array(byteNumbers));
+  }
+  return new Blob(byteArrays, { type: mimeType });
+}
+// ========== 模块样式压缩（ResumeModule 层级） ==========
+
+const HEIGHT_KEYS = ['padding', 'paddingTop', 'paddingBottom', 'margin', 'marginTop', 'marginBottom', 'gap', 'rowGap', 'columnGap'];
+
+function compressModuleStyles(modules: ResumeModule[], ratio: number): number {
+  let count = 0;
+  function walk(m: ResumeModule) {
+    if (!m.style) return;
+    for (const k of HEIGHT_KEYS) {
+      const v = m.style[k];
+      if (!v) continue;
+      const num = parseFloat(v);
+      if (isNaN(num) || num <= 0) continue;
+      const compressed = Math.round(num * ratio);
+      m.style[k] = compressed + 'px';
+      count++;
+    }
+    if (m.children) m.children.forEach(walk);
+  }
+  modules.forEach(walk);
+  return count;
 }
 
 export async function executeSkill(
@@ -657,60 +695,88 @@ registerSkill('import-resume', async (_params, ctx) => {
   const normalized = normalizeLayoutTree(parsed.layoutTree, parsed.data);
   console.log('[import-resume] 规范化后模块数:', normalized.modules.length);
 
-  // 2. LayoutTree 层级溢出压缩
-  const store = useResumeStore.getState();
-  const padTop = parseInt(store.pagePaddingTop || store.pagePadding) || 40;
-  const padBottom = parseInt(store.pagePadding) || 40;
-  const gap = parseInt(store.pageGap) || 16;
-  const overflow = applyOverflowCompression(
-    [normalized.header, ...normalized.modules],
-    padTop,
-    padBottom,
-    gap,
-  );
-
-  if (overflow.compressed) {
-    useResumeStore.getState().setPagePaddingTop(String(overflow.newPaddingTop) + 'px');
-    useResumeStore.getState().setPagePadding(String(overflow.newPaddingBottom) + 'px');
-    useResumeStore.getState().setPageGap(String(overflow.newPageGap) + 'px');
-  }
-
-  // 3. 翻译为 Command 数组
+  // 2. 翻译为 Command 数组（跳过预处理压缩，宽度缩放后统一处理高度）
   const commands = translateLayoutTree(
     { header: normalized.header, modules: normalized.modules },
     parsed,
   );
   console.log('[import-resume] 生成指令数:', commands.length);
 
-  // 4. 执行
+  // 3. 执行
   const result = executeCommands(ctx.modules, commands);
   console.log('[import-resume] 生成的模块数:', result.newModules.length);
   if (result.errors.length > 0) {
     return `构建简历时出错：${result.errors.map((e: {message: string}) => e.message).join('; ')}`;
   }
 
+  // 4. 先导入画布，用真实 React 渲染测量实际尺寸
   ctx.importModules(result.newModules);
+
+  // 等待 React 渲染完成（两帧确保 dnd-kit + TipTap 全部就绪）
+  await new Promise<void>((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+  });
+
+  // 测量 A4 内容区 (#resume-preview) 的实际渲染尺寸
+  const pageEl = document.querySelector('#resume-preview') as HTMLElement | null;
+  const canvasW = pageEl?.scrollWidth || 794;
+  const canvasH = pageEl?.scrollHeight || 1123;
+  console.log('[import-resume] 画布实测宽:', canvasW, 'px | 高:', canvasH, 'px (A4: 794×1123)');
+
+  const A4_W = 794, A4_H = 1123;
+  const overflowW = canvasW > A4_W + 2;
+  const overflowH = canvasH > A4_H + 2;
+  console.log('[import-resume] 宽度溢出:', overflowW, '| 高度溢出:', overflowH);
+
   let compressNote = '';
-  if (overflow.gaveUp) {
-    compressNote = ' (警告：内容过多，压缩后仍超出 A4 页面，请手动调整间距或精简内容)';
-  } else if (overflow.compressed) {
-    compressNote = ' (内容溢出，已自动压缩间距和页边距)';
+
+  if (overflowW || overflowH) {
+    // 取两个方向中更激进的缩放比
+    const scaleW = overflowW ? A4_W / canvasW : 1;
+    const scaleH = overflowH ? A4_H / canvasH : 1;
+    const desiredScale = Math.min(scaleW, scaleH);
+    // 同步缩放页面级边距和模块间距
+    const pageStore = useResumeStore.getState();
+    const rawPadTop = parseInt(pageStore.pagePaddingTop || '40') || 40;
+    const rawPad = parseInt(pageStore.pagePadding || '40') || 40;
+    const rawGap = parseInt(pageStore.pageGap || '16') || 16;
+    pageStore.setPagePaddingTop(`${Math.max(4, Math.round(rawPadTop * desiredScale))}px`);
+    pageStore.setPagePadding(`${Math.max(4, Math.round(rawPad * desiredScale))}px`);
+    pageStore.setPageGap(`${Math.max(2, Math.round(rawGap * desiredScale))}px`);
+    console.log('[import-resume] 页面边距缩放: padTop', rawPadTop, '→', Math.max(4, Math.round(rawPadTop * desiredScale)), 'pad', rawPad, '→', Math.max(4, Math.round(rawPad * desiredScale)), 'gap', rawGap, '→', Math.max(2, Math.round(rawGap * desiredScale)));
+    // 反推 effectiveMaxW 使 scaleLayoutToFit 内部计算和 desiredScale 一致
+    const effectiveMaxW = A4_W / desiredScale;
+    console.log('[import-resume] scaleW:', scaleW.toFixed(4), 'scaleH:', scaleH.toFixed(4), '→ 采用:', desiredScale.toFixed(4));
+
+    const { scaledCount } = scaleLayoutToFit(result.newModules, effectiveMaxW);
+    console.log('[import-resume] 缩放影响属性数:', scaledCount);
+    trimBlankGaps(result.newModules, true);
+
+    // 用缩放后的数据替换画布，等 React 重新渲染后测量真实高度
+    ctx.importModules(result.newModules);
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+    });
+
+    const pageEl2 = document.querySelector('#resume-preview') as HTMLElement | null;
+    const afterH = pageEl2?.scrollHeight || A4_H;
+    console.log('[import-resume] 缩放后实测高度:', afterH, 'px');
+    if (afterH > A4_H) {
+      const hRatio = A4_H / afterH * 0.95;
+      const hCount = compressModuleStyles(result.newModules, hRatio);
+      compressNote = ` (内容溢出，已自动压缩 ${hCount} 处间距)`;
+      console.log('[import-resume] 二次高度压缩比:', hRatio.toFixed(4), '| 压缩属性数:', hCount);
+      ctx.importModules(result.newModules);
+      // 最终验证
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+      });
+      const pageEl3 = document.querySelector('#resume-preview') as HTMLElement | null;
+      const finalH = pageEl3?.scrollHeight || A4_H;
+      console.log('[import-resume] 最终实测高度:', finalH, 'px', finalH > A4_H ? '(仍溢出!)' : '(已容纳)');
+    }
   }
+
   return `简历导入完成，已导入 ${result.newModules.length} 个模块。${compressNote}`;
 
 });
-
-// 辅助：base64 转 Blob（清理后转换）
-function base64ToBlob(base64: string, mimeType: string): Blob {
-  let clean = base64.replace(/\s/g, '');
-  while (clean.length % 4 !== 0) {
-    clean += '=';
-  }
-  const byteCharacters = atob(clean);
-  const byteNumbers = new Array(byteCharacters.length);
-  for (let i = 0; i < byteCharacters.length; i++) {
-    byteNumbers[i] = byteCharacters.charCodeAt(i);
-  }
-  const byteArray = new Uint8Array(byteNumbers);
-  return new Blob([byteArray], { type: mimeType });
-}

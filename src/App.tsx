@@ -1,5 +1,6 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { ActiveEditorProvider } from './hooks/useActiveEditor';
+import { EditModeProvider } from './hooks/useEditMode';
 import Toolbar from './components/Toolbar/Toolbar';
 import ModulePanel from './components/Module/ModulePanel';
 import CanvasArea from './components/Canvas/CanvasArea';
@@ -14,12 +15,23 @@ function App() {
   const [rightWidth, setRightWidth] = useState(256);
   const [deleteMode, setDeleteMode] = useState(false);
   const [chatCollapsed, setChatCollapsed] = useState(true);
+  const [isEditing, setIsEditing] = useState(true);
 
   const handleResize = useCallback((newWidth: number) => {
     setRightWidth(Math.max(200, Math.min(400, newWidth)));
   }, []);
 
   const enterDeleteMode = () => setDeleteMode(true);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !isEditing) {
+        setIsEditing(true);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isEditing]);
   const exitDeleteMode = () => setDeleteMode(false);
 
   const chatWidth = chatCollapsed ? 36 : 295; // 折叠36，展开295
@@ -27,11 +39,12 @@ function App() {
   const totalWidth = chatWidth + 75 + 842 + rightWidth; // 75 是新的 ModulePanel 宽度
 
   return (
+    <EditModeProvider value={isEditing}>
     <ActiveEditorProvider>
       <div className="h-screen flex flex-col bg-white overflow-hidden">
         <div className="bg-white border-b border-gray-200 flex justify-center">
           <div style={{ width: `${totalWidth}px` }}>
-            <Toolbar />
+            <Toolbar isEditing={isEditing} onToggleEdit={() => setIsEditing((v) => !v)} />
           </div>
         </div>
 
@@ -60,6 +73,7 @@ function App() {
         </div>
       </div>
     </ActiveEditorProvider>
+    </EditModeProvider>
   );
 }
 

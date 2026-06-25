@@ -210,7 +210,10 @@ modules 中每项包含 title，其内容二选一：
 4. 模块若包含多条记录（多个工作经历、多个教育经历、多个项目经历），必须使用 entries 结构逐条拆分。每条包含独立的 date、company、role、description 等字段（字段名根据原图实际内容命名）
 5. 每条记录的排版细节（日期+公司同行、角色在右、描述在下方等）必须逐层在 LayoutTree 中表达，禁止把所有文本合并到单个 content 字符串
 6. 容器节点(flex/grid)的 children 必须是非空数组
-7. 只返回 JSON，不要任何额外文字`;
+7. 原图中的列表内容（多条并列、每行短句、有项目符号或编号）必须使用 list 节点，list 的 content 用 <li> 包裹每项。禁止用多个 text 节点替代列表
+8. 同一模块内多个连续排列的文本字段（如 date、company、role 同行），若它们的样式完全相同（fontSize、color、fontWeight 一致），应合并为一个 text 节点，内容用 <br> 标签分隔。禁止为每个字段单独建 text 节点再用 flex row 排列
+9. 减少不必要的 flex 嵌套：若子 flex 只包裹单个 text/heading 且自身没有独立背景色、边框、padding 等视觉属性，去掉该层 flex 直接放子节点
+10. 只返回 JSON，不要任何额外文字`;
 }
 
 // ==================== JSON 提取与解析 ====================

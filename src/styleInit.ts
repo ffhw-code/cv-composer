@@ -18,12 +18,12 @@ import moduleThumb4 from './assets/images/moduleThumb4.png';
 
 export function initStyles() {
   // ===================== 基础控件注册 =====================
-  registerStyle({ type: 'text', style: 'text-default', label: '文本框', thumb: '', component: TextControl, defaultContent: { content: '请在此输入文本...' } });
-  registerStyle({ type: 'heading', style: 'heading-default', label: '标题', thumb: '', component: HeadingControl, defaultContent: { content: '标题' } });
-  registerStyle({ type: 'list', style: 'list-default', label: '列表', thumb: '', component: ListControl, defaultContent: { content: '<li>列表项</li>' } });
-  registerStyle({ type: 'image', style: 'image-default', label: '图片', thumb: '', component: ImageModule, defaultContent: { content: '' } });
-  registerStyle({ type: 'flex', style: 'flex-default', label: '弹性容器', thumb: '', component: FlexContainer });
-  registerStyle({ type: 'grid', style: 'grid-default', label: '网格容器', thumb: '', component: GridContainer, defaultStyle: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' } });
+  registerStyle({ type: 'text', style: 'text-default', label: '文本框', thumb: '', component: TextControl, defaultContent: { content: '请在此输入文本...' }, defaultStyle: { padding: '0', margin: '0' } });
+  registerStyle({ type: 'heading', style: 'heading-default', label: '标题', thumb: '', component: HeadingControl, defaultContent: { content: '标题' }, defaultStyle: { padding: '0', margin: '0' } });
+  registerStyle({ type: 'list', style: 'list-default', label: '列表', thumb: '', component: ListControl, defaultContent: { content: '<li>列表项</li>' }, defaultStyle: { padding: '0', margin: '0' } });
+  registerStyle({ type: 'image', style: 'image-default', label: '图片', thumb: '', component: ImageModule, defaultContent: { content: '' }, defaultStyle: { padding: '0', margin: '0' } });
+  registerStyle({ type: 'flex', style: 'flex-default', label: '弹性容器', thumb: '', component: FlexContainer, defaultStyle: { padding: '0', margin: '0', gap: '0' } });
+  registerStyle({ type: 'grid', style: 'grid-default', label: '网格容器', thumb: '', component: GridContainer, defaultStyle: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', padding: '0', margin: '0' } });
 
   // ===================== 新版简历头模板 =====================
   registerStyle({

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useResumeStore, type ResumeModule } from '../../store/useResumeStore';
+import { useEditMode } from '../../hooks/useEditMode';
 import { findModuleById, findParentById, getAllModuleIds } from '../../utils/moduleUtils';
 import EditableModule from '../Module/EditableModule';
 import SortableModule from './SortableModule';
@@ -51,6 +52,7 @@ function CanvasArea({ deleteMode, onExitDeleteMode }: CanvasAreaProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [selectRect, setSelectRect] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
   const dragStartRef = useRef<{ x: number; y: number } | null>(null);
+  const isEditing = useEditMode();
 
   useEffect(() => {
     // 进入和退出删除模式时都清空选中集，防止跨会话残留
@@ -60,6 +62,12 @@ function CanvasArea({ deleteMode, onExitDeleteMode }: CanvasAreaProps) {
     }
     // eslint-disable-next-line react-hooks/set-state-in-effect
   }, [deleteMode]);
+
+  // 预览模式下 Esc 退出（需要从父组件获得回调，通过 props 传入）
+  // 这里仅处理 pointer-events 和视觉效果，Esc 由 App 层处理
+
+  // 预览模式：禁止画布交互
+  const previewStyle: React.CSSProperties = {};
 
 
   const zoomIn = () => setScale((s) => Math.min(s + 0.1, 2));
@@ -402,7 +410,8 @@ function CanvasArea({ deleteMode, onExitDeleteMode }: CanvasAreaProps) {
   return (
     <div
       className="relative bg-gray-100 h-full"
-      style={{ width: '842px' }}
+      style={{ width: '842px', ...previewStyle }}
+      data-editing={isEditing ? 'true' : 'false'}
       onClick={(e) => {
         closeContextMenu();
         if (e.target === e.currentTarget || !(e.target as HTMLElement).closest('[data-id]')) {

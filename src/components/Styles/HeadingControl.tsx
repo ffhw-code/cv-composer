@@ -3,6 +3,7 @@ import { useEditor, EditorContent } from '@tiptap/react';
 import { getHeadingExtensions } from '../../tiptap/editorExtensions';
 import { useResumeStore } from '../../store/useResumeStore';
 import { useOverflowGuard } from '../../hooks/useOverflowGuard';
+import { useEditMode } from '../../hooks/useEditMode';
 import { buildContainerStyle, hasCustomBorder } from '../../utils/styleHelpers';
 import { useActiveEditor } from '../../hooks/useActiveEditor';
 import type { ResumeModule } from '../../store/useResumeStore';
@@ -20,6 +21,7 @@ const cleanTrailing = (html: string): string => {
 function HeadingControl({ module }: { module: ResumeModule }) {
   const updateModule = useResumeStore((s) => s.updateModule);
   const { setActiveEditor } = useActiveEditor();
+  const isEditing = useEditMode();
 
   const editor = useEditor({
     extensions: getHeadingExtensions(),
@@ -51,7 +53,7 @@ function HeadingControl({ module }: { module: ResumeModule }) {
     if (!editor) return;
     const dom = editor.view.dom;
     const style = module.style || {};
-    /* eslint-disable react-hooks/immutability */
+    dom.style.padding = isEditing ? '' : '0';
     dom.style.fontFamily = style.fontFamily || '';
     dom.style.fontSize = style.fontSize || '';
     dom.style.color = style.color || '';
@@ -69,8 +71,7 @@ function HeadingControl({ module }: { module: ResumeModule }) {
     dom.style.wordBreak = style.wordBreak || '';
     dom.style.overflowWrap = style.overflowWrap || '';
     dom.style.direction = style.direction || '';
-    /* eslint-enable react-hooks/immutability */
-  }, [editor, module.style]);
+  }, [editor, module.style, isEditing]);
 
   const styleForBuild = module.style ? { ...module.style } : undefined;
   const userHeight = styleForBuild?.height;
@@ -87,7 +88,7 @@ function HeadingControl({ module }: { module: ResumeModule }) {
   };
 
   return (
-    <div ref={ref} style={containerStyle} className={`${custom ? 'min-h-[20px]' : ''} ${isOverflowing ? 'ring-2 ring-red-300 rounded' : ''}`}>
+    <div ref={ref} style={containerStyle} className={`${isEditing && custom ? 'min-h-[20px]' : ''} ${isOverflowing ? 'ring-2 ring-red-300 rounded' : ''}`}>
       <EditorContent editor={editor} />
     </div>
   );

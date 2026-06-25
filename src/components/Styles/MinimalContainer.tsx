@@ -2,6 +2,7 @@ import { useResumeStore } from '../../store/useResumeStore';
 import type { ResumeModule } from '../../store/useResumeStore';
 import { buildContainerStyle, hasCustomBorder } from '../../utils/styleHelpers';
 import { useOverflowGuard } from '../../hooks/useOverflowGuard';
+import { useEditMode } from '../../hooks/useEditMode';
 
 interface MinimalContainerProps {
   module: ResumeModule;
@@ -10,6 +11,7 @@ interface MinimalContainerProps {
 
 function MinimalContainer({ module, children }: MinimalContainerProps) {
   const addModule = useResumeStore((s) => s.addModule);
+  const isEditing = useEditMode();
 
   const styleForBuild = module.style ? { ...module.style } : undefined;
   const userHeight = styleForBuild?.height;
@@ -26,8 +28,8 @@ function MinimalContainer({ module, children }: MinimalContainerProps) {
   };
 
   const overflowClass = isOverflowing ? 'ring-2 ring-red-300 rounded' : '';
-  const borderClass = custom ? '' : 'border border-dashed border-gray-300 ';
-  const bgClass = custom ? 'bg-gray-50/60' : 'bg-gray-50/40';
+  const borderClass = (isEditing && !custom) ? 'border border-dashed border-gray-300 ' : '';
+  const bgClass = isEditing ? (custom ? 'bg-gray-50/60' : 'bg-gray-50/40') : '';
 
   if (children) {
     return (

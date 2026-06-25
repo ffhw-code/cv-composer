@@ -4,6 +4,7 @@ import { getTextExtensions } from '../../tiptap/editorExtensions';
 import { useResumeStore } from '../../store/useResumeStore';
 import { useActiveEditor } from '../../hooks/useActiveEditor';
 import { useOverflowGuard } from '../../hooks/useOverflowGuard';
+import { useEditMode } from '../../hooks/useEditMode';
 import { buildContainerStyle, hasCustomBorder } from '../../utils/styleHelpers';
 import type { ResumeModule } from '../../store/useResumeStore';
 
@@ -20,6 +21,7 @@ const cleanTrailing = (html: string): string => {
 function TextControl({ module }: { module: ResumeModule }) {
   const updateModule = useResumeStore((s) => s.updateModule);
   const { setActiveEditor } = useActiveEditor();
+  const isEditing = useEditMode();
 
   const editor = useEditor({
     extensions: getTextExtensions(),
@@ -53,7 +55,8 @@ function TextControl({ module }: { module: ResumeModule }) {
     if (!editor) return;
     const dom = editor.view.dom;
     const style = module.style || {};
-    // eslint-disable-next-line react-hooks/immutability
+    dom.style.minHeight = isEditing ? '40px' : '0';
+    dom.style.padding = isEditing ? '' : '0';
     dom.style.fontFamily = style.fontFamily || '';
     dom.style.fontSize = style.fontSize || '';
     dom.style.color = style.color || '';
@@ -72,7 +75,7 @@ function TextControl({ module }: { module: ResumeModule }) {
     dom.style.wordBreak = style.wordBreak || '';
     dom.style.overflowWrap = style.overflowWrap || '';
     dom.style.direction = style.direction || '';
-  }, [editor, module.style]);
+  }, [editor, module.style, isEditing]);
 
   const styleForBuild = module.style ? { ...module.style } : undefined;
   const userHeight = styleForBuild?.height;
@@ -89,7 +92,7 @@ function TextControl({ module }: { module: ResumeModule }) {
   };
 
   return (
-    <div ref={ref} style={containerStyle} className={`${custom ? 'min-h-[20px]' : ''} ${isOverflowing ? 'ring-2 ring-red-300 rounded' : ''}`}>
+    <div ref={ref} style={containerStyle} className={`${isEditing && custom ? 'min-h-[20px]' : ''} ${isOverflowing ? 'ring-2 ring-red-300 rounded' : ''}`}>
       <EditorContent editor={editor} />
     </div>
   );

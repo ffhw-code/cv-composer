@@ -123,10 +123,61 @@ function normalizeNode(node: LayoutTreeNode, data?: ResumeData): NormalizedNode 
     node.children = normalizedChildren;
   }
 
+  // 5.5 合并相邻同样式叶子节点（仅垂直布局容器，跳过 row 方向）
+  if (isContainer && (node.children || []).length >= 2 && node.direction !== 'row') {
+    node.children = mergeAdjacentLeafNodes(node.children);
+  }
+
   return node as NormalizedNode;
 }
 
+// ==================== 相邻叶子节点合并 ====================
+
+const STYLE_CMP_KEYS = [
+  'fontSize', 'fontFamily', 'fontWeight', 'fontStyle',
+  'color', 'textAlign', 'lineHeight', 'letterSpacing',
+  'textDecoration', 'textTransform',
+];
+
+function stylesEqual(a: Record<string, string> | undefined, b: Record<string, string> | undefined): boolean {
+  if (!a && !b) return true;
+  if (!a || !b) return false;
+  for (const k of STYLE_CMP_KEYS) {
+    if ((a[k] || '') !== (b[k] || '')) return false;
+  }
+  return true;
+}
+
+/** 将 children 中连续且样式相同的 text/heading 叶子节点合并为一个 */
+function mergeAdjacentLeafNodes(children: NormalizedNode[]): NormalizedNode[] {
+  if (children.length < 2) return children;
+
+  const result: NormalizedNode[] = [];
+  let pending: NormalizedNode | null = null;
+
+  for (const child of children) {
+    const isLeaf = child.type === 'text' || child.type === 'heading';
+    const isPlaceholder = child._placeholder;
+
+    if (pending && isLeaf && !isPlaceholder &&
+        child.content !== pending.content &&
+        pending.type === child.type &&
+        stylesEqual(pending.style, child.style)) {
+      // 合并到 pending
+      pending.content = (pending.content || '') + '<br>' + (child.content || '');
+      delete pending.ref; // 合并后失去单字段标识
+    } else {
+      if (pending) result.push(pending);
+      pending = { ...child, children: child.children ? [...child.children] : undefined };
+    }
+  }
+  if (pending) result.push(pending);
+
+  return result;
+}
+
 // ==================== 入口 ====================
+
 
 export function normalizeLayoutTree(tree: LayoutTree, data?: ResumeData): NormalizedTree {
   return {

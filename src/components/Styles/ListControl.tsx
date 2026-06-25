@@ -3,6 +3,7 @@ import { useEditor, EditorContent } from '@tiptap/react';
 import { getListExtensions } from '../../tiptap/editorExtensions';
 import { useResumeStore } from '../../store/useResumeStore';
 import { useOverflowGuard } from '../../hooks/useOverflowGuard';
+import { useEditMode } from '../../hooks/useEditMode';
 import { buildContainerStyle, hasCustomBorder } from '../../utils/styleHelpers';
 import { useActiveEditor } from '../../hooks/useActiveEditor';
 import type { ResumeModule } from '../../store/useResumeStore';
@@ -20,6 +21,7 @@ const cleanTrailing = (html: string): string => {
 function ListControl({ module }: { module: ResumeModule }) {
   const updateModule = useResumeStore((s) => s.updateModule);
   const { setActiveEditor } = useActiveEditor();
+  const isEditing = useEditMode();
 
   const editor = useEditor({
     extensions: getListExtensions(),
@@ -86,7 +88,7 @@ function ListControl({ module }: { module: ResumeModule }) {
   };
 
   return (
-    <div ref={ref} style={containerStyle} className={`${custom ? 'min-h-[20px]' : ''} ${isOverflowing ? 'ring-2 ring-red-300 rounded' : ''}`}>
+    <div ref={ref} style={containerStyle} className={`${isEditing && custom ? 'min-h-[20px]' : ''} ${isOverflowing ? 'ring-2 ring-red-300 rounded' : ''}`}>
       <EditorContent editor={editor} />
     </div>
   );

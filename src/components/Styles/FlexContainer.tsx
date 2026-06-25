@@ -2,6 +2,7 @@ import { useResumeStore } from '../../store/useResumeStore';
 import type { ResumeModule } from '../../store/useResumeStore';
 import { buildContainerStyle, hasCustomBorder } from '../../utils/styleHelpers';
 import { useOverflowGuard } from '../../hooks/useOverflowGuard';
+import { useEditMode } from '../../hooks/useEditMode';
 
 interface FlexContainerProps {
   module: ResumeModule;
@@ -10,6 +11,7 @@ interface FlexContainerProps {
 
 function FlexContainer({ module, children }: FlexContainerProps) {
   const addModule = useResumeStore((s) => s.addModule);
+  const isEditing = useEditMode();
   const direction = (module.style?.flexDirection as 'row' | 'column') || 'column';
   const gap = module.style?.gap || '0px';
 
@@ -35,7 +37,9 @@ function FlexContainer({ module, children }: FlexContainerProps) {
     return (
       <div
         ref={ref}
-        className={`${custom ? 'min-h-[20px] p-0 bg-gray-50/60' : 'border border-dashed border-gray-300 min-h-[20px] p-0 bg-gray-50/40'} rounded ${overflowClass}`}
+        className={`${custom
+          ? (isEditing ? 'min-h-[20px] p-0 bg-gray-50/60' : 'p-0')
+          : (isEditing ? 'border border-dashed border-gray-300 min-h-[20px] p-0 bg-gray-50/40' : 'p-0')} rounded ${overflowClass}`}
         style={{ ...containerStyle, width: containerStyle.width || '100%' }}
         data-id={module.id}
       >
@@ -49,7 +53,7 @@ function FlexContainer({ module, children }: FlexContainerProps) {
   return (
     <div
       ref={ref}
-      className={`border border-dashed border-gray-300 min-h-[60px] p-0 flex flex-col items-center justify-center gap-0 ${overflowClass}`}
+      className={`${isEditing ? 'border border-dashed border-gray-300 min-h-[60px]' : ''} p-0 flex flex-col items-center justify-center gap-0 ${overflowClass}`}
       style={containerStyle}
       data-id={module.id}
     >
