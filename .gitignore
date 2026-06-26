@@ -24,3 +24,12 @@ dist-ssr
 *.sw?
 *.orig
 *.rej
+
+# Codex internal
+.agents/
+.codex/
+
+# Local data & internal docs
+保存的简历/
+固有问题.md
+总执行方案.md

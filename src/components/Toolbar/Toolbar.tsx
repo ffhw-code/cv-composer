@@ -1,9 +1,9 @@
 // src/components/Toolbar/Toolbar.tsx
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useResumeStore } from '../../store/useResumeStore';
-import type { ResumeModule } from '../../store/useResumeStore';
 import { useActiveEditor } from '../../hooks/useActiveEditor';
 import { sanitizeLinkUrl } from '../../tiptap/editorExtensions';
+import { findModuleById } from '../../utils/moduleUtils';
 
 // ---------- 小型输入控件 ----------
 function StyleInputWithUnit({
@@ -184,14 +184,14 @@ function Toolbar({ isEditing, onToggleEdit }: { isEditing: boolean; onToggleEdit
       // 跳过与源选区相同的选区
       if (sourceSelectionRef.current && sourceSelectionRef.current.from === from && sourceSelectionRef.current.to === to) return;
       // 防抖：拖选过程中 selectionUpdate 连续触发，等用户停止拖选后再应用样式
-      if (formatBrushTimerRef.current) clearTimeout(formatBrushTimerRef.current);
+      if (formatBrushTimerRef.current) if (formatBrushTimerRef.current != null) clearTimeout(formatBrushTimerRef.current);
       formatBrushTimerRef.current = setTimeout(() => {
         formatBrushTimerRef.current = null;
         const style = useResumeStore.getState().formatPainterTextStyle;
         if (!style) return;
         const { from: f, to: t } = activeEditor.state.selection;
         if (f >= t) return;
-        const chain = activeEditor.chain().focus().setTextSelection({ from: f, to: t });
+        const chain = activeEditor.chain().focus().setTextSelection({ from: f!, to: t! });
         // 先清空全部已有样式，再逐项设置，确保目标与源完全一致
         chain.unsetAllMarks();
         // 段落属性
@@ -207,13 +207,13 @@ function Toolbar({ isEditing, onToggleEdit }: { isEditing: boolean; onToggleEdit
         if (style.letterSpacing) chain.setLetterSpacing(style.letterSpacing);
         if (style.backgroundColor) chain.setHighlight({ color: style.backgroundColor });
         if (style.link) chain.setLink({ href: style.link });
-        chain.setTextSelection({ from: f, to: t }).run();
+        chain.setTextSelection({ from: f!, to: t! }).run();
         // 退出格式刷
         useResumeStore.getState().setFormatPainterTextStyle(null);
       }, 200);
     };
     activeEditor.on('selectionUpdate', apply);
-    return () => { activeEditor.off('selectionUpdate', apply); clearTimeout(formatBrushTimerRef.current); };
+    return () => { activeEditor.off('selectionUpdate', apply); if (formatBrushTimerRef.current != null) clearTimeout(formatBrushTimerRef.current); };
   }, [activeEditor, formatPainterTextStyle]);
 
   const handleSave = () => {
@@ -713,17 +713,6 @@ function Toolbar({ isEditing, onToggleEdit }: { isEditing: boolean; onToggleEdit
       </div>
     </div>
   );
-}
-
-function findModuleById(modules: ResumeModule[], id: string): ResumeModule | null {
-  for (const mod of modules) {
-    if (mod.id === id) return mod;
-    if (mod.children) {
-      const found = findModuleById(mod.children, id);
-      if (found) return found;
-    }
-  }
-  return null;
 }
 
 export default Toolbar;

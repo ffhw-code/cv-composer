@@ -55,6 +55,7 @@ function TextControl({ module }: { module: ResumeModule }) {
     if (!editor) return;
     const dom = editor.view.dom;
     const style = module.style || {};
+    // eslint-disable-next-line react-hooks/immutability
     dom.style.minHeight = isEditing ? '40px' : '0';
     dom.style.padding = isEditing ? '' : '0';
     dom.style.fontFamily = style.fontFamily || '';

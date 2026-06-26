@@ -1,5 +1,7 @@
+import { generateId } from "../utils/idUtils";
 // src/engine/commandExecutor.ts
 import type { ResumeModule } from '../store/useResumeStore';
+import { findModuleById } from '../utils/moduleUtils';
 import { useResumeStore } from '../store/useResumeStore';
 import { getStylesByType } from '../store/styleRegistry';
 
@@ -105,12 +107,6 @@ function validateJsonFormat(commands: Command[]): string | null {
 // ==================== 引擎内部工具 ====================
 type IdMap = Map<string, string>;
 
-function generateId(): string {
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-    return crypto.randomUUID();
-  }
-  return `m${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-}
 
 function resolveId(id: string, idMap: IdMap): string {
   return idMap.get(id) || id;
@@ -142,7 +138,6 @@ function correctType(raw: string): ResumeModule['type'] | null {
     'paragraph': 'text', 'photo': 'image', '简历头': 'header', '模块': 'module',
     '文本框': 'text', '标题': 'heading', '列表': 'list', '图片': 'image',
     '弹性容器': 'flex', '网格容器': 'grid',
-    // divider/shape 已移除，装饰通过 CSS 属性实现
   };
   if (alias[lower]) return alias[lower] as ResumeModule['type'];
   for (const vt of VALID_TYPES) {
@@ -256,8 +251,6 @@ export function executeCommands(
               image: 'image-default',
               flex: 'flex-default',
               grid: 'grid-default',
-            divider: 'divider-default',
-            shape: 'shape-default',
             };
             if (defaultStyleMap[resolvedType]) resolvedStyleId = defaultStyleMap[resolvedType];
           }
@@ -303,8 +296,6 @@ export function executeCommands(
             const defaultStyleMap: Record<string, string> = {
               text: 'text-default', heading: 'heading-default', list: 'list-default',
               image: 'image-default', flex: 'flex-default', grid: 'grid-default',
-            divider: 'divider-default',
-            shape: 'shape-default',
             };
             if (defaultStyleMap[type]) resolvedStyleId = defaultStyleMap[type];
           }
@@ -340,12 +331,7 @@ export function executeCommands(
         case 'updateModule': {
           const params = cmd.params as UpdateModuleParams;
           const realId = resolveId(params.id, idMap);
-          let found = false;
-          const checkExist = (nodes: ResumeModule[]) => {
-            for (const n of nodes) { if (n.id === realId) { found = true; return; } if (n.children) checkExist(n.children); }
-          };
-          checkExist(currentModules);
-          if (!found) { errors.push(makeError("MODULE_NOT_FOUND", `updateModule: 模块 ${params.id} 不存在`, `请检查模块 id 是否正确，确保它来自「当前画布」列表中的已有模块。`)); criticalError = true; return; }
+          if (!findModuleById(currentModules, realId)) { errors.push(makeError("MODULE_NOT_FOUND", `updateModule: 模块 ${params.id} 不存在`, `请检查模块 id 是否正确，确保它来自「当前画布」列表中的已有模块。`)); criticalError = true; return; }
           currentModules = updateModuleInTree(currentModules, realId, (mod) => ({ ...mod, ...params.data }));
           break;
         }
@@ -395,12 +381,7 @@ export function executeCommands(
         case 'setStyle': {
           const params = cmd.params as SetStyleParams;
           const realId = resolveId(params.id, idMap);
-          let found = false;
-          const checkExist = (nodes: ResumeModule[]) => {
-            for (const n of nodes) { if (n.id === realId) { found = true; return; } if (n.children) checkExist(n.children); }
-          };
-          checkExist(currentModules);
-          if (!found) { errors.push(makeError("MODULE_NOT_FOUND", `setStyle: 模块 ${params.id} 不存在`, `请检查模块 id，确保它来自「当前画布」列表。`)); criticalError = true; return; }
+          if (!findModuleById(currentModules, realId)) { errors.push(makeError("MODULE_NOT_FOUND", `setStyle: 模块 ${params.id} 不存在`, `请检查模块 id，确保它来自「当前画布」列表。`)); criticalError = true; return; }
           currentModules = updateModuleInTree(currentModules, realId, (mod) => ({
             ...mod,
             style: { ...mod.style, ...params.style },
@@ -411,12 +392,7 @@ export function executeCommands(
         case 'setField': {
           const params = cmd.params as { id: string; field: string; value: string };
           const realId = resolveId(params.id, idMap);
-          let found = false;
-          const checkExist = (nodes: ResumeModule[]) => {
-            for (const n of nodes) { if (n.id === realId) { found = true; return; } if (n.children) checkExist(n.children); }
-          };
-          checkExist(currentModules);
-          if (!found) { errors.push(makeError("MODULE_NOT_FOUND", `setField: 模块 ${params.id} 不存在`, `请检查模块 id，确保它来自「当前画布」列表。`)); criticalError = true; return; }
+          if (!findModuleById(currentModules, realId)) { errors.push(makeError("MODULE_NOT_FOUND", `setField: 模块 ${params.id} 不存在`, `请检查模块 id，确保它来自「当前画布」列表。`)); criticalError = true; return; }
           currentModules = updateModuleInTree(currentModules, realId, (mod) => ({
             ...mod,
             [params.field]: params.value,
@@ -427,12 +403,7 @@ export function executeCommands(
         case 'setContent': {
           const params = cmd.params as SetContentParams;
           const realId = resolveId(params.id, idMap);
-          let found = false;
-          const checkExist = (nodes: ResumeModule[]) => {
-            for (const n of nodes) { if (n.id === realId) { found = true; return; } if (n.children) checkExist(n.children); }
-          };
-          checkExist(currentModules);
-          if (!found) { errors.push(makeError("MODULE_NOT_FOUND", `setContent: 模块 ${params.id} 不存在`, `请检查模块 id，确保它来自「当前画布」列表。`)); criticalError = true; return; }
+          if (!findModuleById(currentModules, realId)) { errors.push(makeError("MODULE_NOT_FOUND", `setContent: 模块 ${params.id} 不存在`, `请检查模块 id，确保它来自「当前画布」列表。`)); criticalError = true; return; }
           currentModules = updateModuleInTree(currentModules, realId, (mod) => ({
             ...mod,
             content: params.content,
@@ -443,12 +414,7 @@ export function executeCommands(
         case 'setProperty': {
           const params = cmd.params as SetPropertyParams;
           const realId = resolveId(params.id, idMap);
-          let found = false;
-          const checkExist = (nodes: ResumeModule[]) => {
-            for (const n of nodes) { if (n.id === realId) { found = true; return; } if (n.children) checkExist(n.children); }
-          };
-          checkExist(currentModules);
-          if (!found) { errors.push(makeError("MODULE_NOT_FOUND", `setProperty: 模块 ${params.id} 不存在`, `请检查模块 id，确保它来自「当前画布」列表。`)); criticalError = true; return; }
+          if (!findModuleById(currentModules, realId)) { errors.push(makeError("MODULE_NOT_FOUND", `setProperty: 模块 ${params.id} 不存在`, `请检查模块 id，确保它来自「当前画布」列表。`)); criticalError = true; return; }
           currentModules = updateModuleInTree(currentModules, realId, (mod) => ({
             ...mod,
             style: { ...mod.style, [params.property]: params.value },
@@ -466,14 +432,7 @@ export function executeCommands(
           const params = cmd.params as ApplyTemplateParams;
           const realId = resolveId(params.id, idMap);
           let targetType: string = 'module';
-          const search = (nodes: ResumeModule[]): ResumeModule | null => {
-            for (const n of nodes) {
-              if (n.id === realId) return n;
-              if (n.children) { const found = search(n.children); if (found) return found; }
-            }
-            return null;
-          };
-          const mod = search(currentModules);
+          const mod = findModuleById(currentModules, realId);
           if (!mod) { errors.push(makeError("MODULE_NOT_FOUND", `applyTemplate: 模块 ${params.id} 不存在`, `请检查模块 id，确保它来自「当前画布」列表。`)); criticalError = true; return; }
           targetType = mod.type;
           const matchedStyle = matchStyleId(targetType, params.styleId);

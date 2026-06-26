@@ -125,7 +125,7 @@ function normalizeNode(node: LayoutTreeNode, data?: ResumeData): NormalizedNode 
 
   // 5.5 合并相邻同样式叶子节点（仅垂直布局容器，跳过 row 方向）
   if (isContainer && (node.children || []).length >= 2 && node.direction !== 'row') {
-    node.children = mergeAdjacentLeafNodes(node.children);
+    node.children = mergeAdjacentLeafNodes(node.children!);
   }
 
   return node as NormalizedNode;

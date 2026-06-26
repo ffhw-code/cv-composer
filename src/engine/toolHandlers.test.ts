@@ -560,3 +560,231 @@ describe('toolHandlerMap', () => {
     expect(toolHandlerMap['nonexistent_tool']).toBeUndefined();
   });
 });
+
+// ============================================================
+// handleCopyStyle / handleCopyTextStyle — 格式刷
+// ============================================================
+
+import {
+  handleCopyStyle,
+  handleCopyTextStyle,
+} from './toolHandlers';
+
+describe('handleCopyStyle', () => {
+  const makeModule = (overrides: Partial<ResumeModule> = {}): ResumeModule => ({
+    id: 'mod-1',
+    type: 'text',
+    styleId: 'text-default',
+    style: {},
+    children: [],
+    ...overrides,
+  });
+
+  it('copies all style properties when types match', () => {
+    const source = makeModule({ id: 'src', type: 'text', style: { fontSize: '16px', color: '#333' } });
+    const target = makeModule({ id: 'tgt', type: 'text', style: { fontSize: '12px' } });
+    const mods = [source, target];
+
+    const result = handleCopyStyle({ source_id: 'src', target_id: 'tgt' }, mods);
+    expect(result.success).toBe(true);
+    if (!result.success) throw new Error('unexpected error');
+
+    const updatedTarget = result.newModules.find(m => m.id === 'tgt')!;
+    expect(updatedTarget.style).toEqual({ fontSize: '16px', color: '#333' });
+  });
+
+  it('copies between same control types (text → heading)', () => {
+    const source = makeModule({ id: 'src', type: 'text', style: { fontSize: '14px', color: '#111' }, name: 'TestName' });
+    const target = makeModule({ id: 'tgt', type: 'heading', style: {} });
+    const mods = [source, target];
+
+    const result = handleCopyStyle({ source_id: 'src', target_id: 'tgt' }, mods);
+    expect(result.success).toBe(true);
+    if (!result.success) throw new Error('unexpected error');
+
+    const updatedTarget = result.newModules.find(m => m.id === 'tgt')!;
+    expect(updatedTarget.style).toEqual({ fontSize: '14px', color: '#111' });
+    expect(updatedTarget.name).toBe('TestName');
+  });
+
+  it('copies only layout properties for cross-type (text → flex)', () => {
+    const source = makeModule({
+      id: 'src', type: 'text',
+      style: { fontSize: '14px', color: '#111', padding: '10px', borderRadius: '5px' },
+    });
+    const target = makeModule({ id: 'tgt', type: 'flex', style: { display: 'flex' } });
+    const mods = [source, target];
+
+    const result = handleCopyStyle({ source_id: 'src', target_id: 'tgt' }, mods);
+    expect(result.success).toBe(true);
+    if (!result.success) throw new Error('unexpected error');
+
+    const updatedTarget = result.newModules.find(m => m.id === 'tgt')!;
+    // Should have layout props but NOT text-specific props
+    expect(updatedTarget.style?.padding).toBe('10px');
+    expect(updatedTarget.style?.borderRadius).toBe('5px');
+    expect(updatedTarget.style?.fontSize).toBeUndefined();
+    expect(updatedTarget.style?.color).toBeUndefined();
+    // Should preserve existing flex-specific properties
+    expect(updatedTarget.style?.display).toBe('flex');
+  });
+
+  it('errors when source module not found', () => {
+    const target = makeModule({ id: 'tgt' });
+    const result = handleCopyStyle({ source_id: 'nonexistent', target_id: 'tgt' }, [target]);
+    expect(result.success).toBe(false);
+    if (result.success) throw new Error('expected error');
+    expect(result.code).toBe('MODULE_NOT_FOUND');
+  });
+
+  it('errors when target module not found', () => {
+    const source = makeModule({ id: 'src' });
+    const result = handleCopyStyle({ source_id: 'src', target_id: 'nonexistent' }, [source]);
+    expect(result.success).toBe(false);
+    if (result.success) throw new Error('expected error');
+    expect(result.code).toBe('MODULE_NOT_FOUND');
+  });
+
+  it('errors when source and target are the same', () => {
+    const mod = makeModule({ id: 'same' });
+    const result = handleCopyStyle({ source_id: 'same', target_id: 'same' }, [mod]);
+    expect(result.success).toBe(false);
+    if (result.success) throw new Error('expected error');
+    expect(result.code).toBe('SAME_MODULE');
+  });
+
+  it('copies metadata fields for same-type modules', () => {
+    const source = makeModule({
+      id: 'src', type: 'text',
+      name: '张三', jobTitle: '工程师', phone: '13800000000', email: 'test@test.com',
+    });
+    const target = makeModule({ id: 'tgt', type: 'text' });
+    const mods = [source, target];
+
+    const result = handleCopyStyle({ source_id: 'src', target_id: 'tgt' }, mods);
+    expect(result.success).toBe(true);
+    if (!result.success) throw new Error('unexpected error');
+
+    const updatedTarget = result.newModules.find(m => m.id === 'tgt')!;
+    expect(updatedTarget.name).toBe('张三');
+    expect(updatedTarget.jobTitle).toBe('工程师');
+    expect(updatedTarget.phone).toBe('13800000000');
+    expect(updatedTarget.email).toBe('test@test.com');
+  });
+});
+
+describe('handleCopyTextStyle', () => {
+  const makeModule = (overrides: Partial<ResumeModule> = {}): ResumeModule => ({
+    id: 'mod-1',
+    type: 'text',
+    styleId: 'text-default',
+    style: {},
+    children: [],
+    ...overrides,
+  });
+
+  it('copies text CSS properties from module.style', () => {
+    const source = makeModule({
+      id: 'src',
+      style: { fontSize: '18px', fontWeight: '700', color: '#0f172a', padding: '10px' },
+    });
+    const target = makeModule({ id: 'tgt', style: { fontSize: '12px' } });
+    const mods = [source, target];
+
+    const result = handleCopyTextStyle({ source_id: 'src', target_id: 'tgt' }, mods);
+    expect(result.success).toBe(true);
+    if (!result.success) throw new Error('unexpected error');
+
+    const updatedTarget = result.newModules.find(m => m.id === 'tgt')!;
+    // Text properties should be copied
+    expect(updatedTarget.style?.fontSize).toBe('18px');
+    expect(updatedTarget.style?.fontWeight).toBe('700');
+    expect(updatedTarget.style?.color).toBe('#0f172a');
+    // Layout property should NOT be copied
+    expect(updatedTarget.style?.padding).toBeUndefined();
+  });
+
+  it('extracts and copies text CSS from HTML inline styles', () => {
+    const source = makeModule({
+      id: 'src',
+      style: {},
+      content: '<p style="font-size:16px;color:#333;margin:5px">text</p>',
+    });
+    const target = makeModule({ id: 'tgt', style: {} });
+    const mods = [source, target];
+
+    const result = handleCopyTextStyle({ source_id: 'src', target_id: 'tgt' }, mods);
+    expect(result.success).toBe(true);
+    if (!result.success) throw new Error('unexpected error');
+
+    const updatedTarget = result.newModules.find(m => m.id === 'tgt')!;
+    // Should extract text properties from HTML
+    expect(updatedTarget.style?.fontSize).toBe('16px');
+    expect(updatedTarget.style?.color).toBe('#333');
+    // margin is NOT a text style key
+    expect(updatedTarget.style?.margin).toBeUndefined();
+  });
+
+  it('strips conflicting inline styles from target HTML', () => {
+    const source = makeModule({
+      id: 'src',
+      content: '<p style="font-size:16px">text</p>',
+    });
+    const target = makeModule({
+      id: 'tgt',
+      content: '<p style="font-size:12px;padding:5px">old text</p>',
+    });
+    const mods = [source, target];
+
+    const result = handleCopyTextStyle({ source_id: 'src', target_id: 'tgt' }, mods);
+    expect(result.success).toBe(true);
+
+    const updatedTarget = result.success
+      ? result.newModules.find(m => m.id === 'tgt')!
+      : null;
+    expect(updatedTarget).toBeDefined();
+    // font-size should be removed from HTML (moved to module.style)
+    expect(updatedTarget!.content).not.toContain('font-size');
+    // padding is not a text style, should remain
+    expect(updatedTarget!.content).toContain('padding:5px');
+  });
+
+  it('errors when no text style to copy', () => {
+    const source = makeModule({ id: 'src', style: { padding: '10px' } });
+    const target = makeModule({ id: 'tgt' });
+    const mods = [source, target];
+
+    const result = handleCopyTextStyle({ source_id: 'src', target_id: 'tgt' }, mods);
+    expect(result.success).toBe(false);
+    if (result.success) throw new Error('expected error');
+    expect(result.code).toBe('NO_STYLE');
+  });
+
+  it('errors when source and target are the same', () => {
+    const mod = makeModule({ id: 'same', style: { fontSize: '14px' } });
+    const result = handleCopyTextStyle({ source_id: 'same', target_id: 'same' }, [mod]);
+    expect(result.success).toBe(false);
+    if (result.success) throw new Error('expected error');
+    expect(result.code).toBe('SAME_MODULE');
+  });
+
+  it('module.style takes priority over HTML inline styles', () => {
+    const source = makeModule({
+      id: 'src',
+      style: { fontSize: '20px' },
+      content: '<p style="font-size:14px;color:#999">text</p>',
+    });
+    const target = makeModule({ id: 'tgt', style: {} });
+    const mods = [source, target];
+
+    const result = handleCopyTextStyle({ source_id: 'src', target_id: 'tgt' }, mods);
+    expect(result.success).toBe(true);
+    if (!result.success) throw new Error('unexpected error');
+
+    const updatedTarget = result.newModules.find(m => m.id === 'tgt')!;
+    // Module style font-size (20px) takes priority over HTML (14px)
+    expect(updatedTarget.style?.fontSize).toBe('20px');
+    // HTML color should still be extracted since not in module.style
+    expect(updatedTarget.style?.color).toBe('#999');
+  });
+});

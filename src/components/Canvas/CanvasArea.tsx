@@ -56,12 +56,12 @@ function CanvasArea({ deleteMode, onExitDeleteMode }: CanvasAreaProps) {
 
   useEffect(() => {
     // 进入和退出删除模式时都清空选中集，防止跨会话残留
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSelectedIds(new Set());
     if (!deleteMode) {
       select(null);
     }
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-  }, [deleteMode]);
+  }, [deleteMode, select]);
 
   // 预览模式下 Esc 退出（需要从父组件获得回调，通过 props 传入）
   // 这里仅处理 pointer-events 和视觉效果，Esc 由 App 层处理
@@ -86,24 +86,16 @@ function CanvasArea({ deleteMode, onExitDeleteMode }: CanvasAreaProps) {
   const handleExit = () => onExitDeleteMode();
 
   // 格式刷辅助：在模块树中递归查找
-  const findModuleInTree = (ns: ResumeModule[], id: string): ResumeModule | null => {
-    for (const n of ns) {
-      if (n.id === id) return n;
-      if (n.children) { const f = findModuleInTree(n.children, id); if (f) return f; }
-    }
-    return null;
-  };
 
   const applyFormatPainter = (targetId: string) => {
     const store = useResumeStore.getState();
-    const src = findModuleInTree(store.modules, formatPainterSourceId!);
+    const src = findModuleById(store.modules, formatPainterSourceId!);
     if (!src) { setFormatPainterSourceId(null); return; }
-    const target = findModuleInTree(store.modules, targetId);
+    const target = findModuleById(store.modules, targetId);
     if (!target) { setFormatPainterSourceId(null); return; }
 
     // 模块类型分类
     const CONTROLS = new Set(['text', 'heading', 'list']);
-    const COMPONENTS = new Set(['flex', 'grid']);
     const srcType = src.type;
     const targetType = target.type;
     const isSameType = srcType === targetType;

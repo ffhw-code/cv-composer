@@ -1,5 +1,7 @@
+import { generateId } from "../utils/idUtils";
 // src/engine/toolHandlers.ts
 // 每个 tool 对应一个纯函数，接收参数 + 当前 modules，返回操作结果。
+import { findModuleById } from '../utils/moduleUtils';
 // 内部通过构造 Command 调用 commandExecutor，不向 LLM 暴露 Command 结构。
 
 import { executeCommands, type Command } from './commandExecutor';
@@ -61,12 +63,6 @@ export type ToolResult = ToolSuccess | ToolError;
 
 // ==================== 辅助函数 ====================
 
-function generateId(): string {
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-    return crypto.randomUUID();
-  }
-  return `m${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-}
 
 function esc(str: string): string {
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -205,20 +201,9 @@ export function handleAddFlex(params: AddFlexParams, modules: ResumeModule[]): T
   }
 
   // 查找并收集所有需要包装的模块
-  const findMod = (nodes: ResumeModule[], id: string): ResumeModule | null => {
-    for (const n of nodes) {
-      if (n.id === id) return n;
-      if (n.children) {
-        const found = findMod(n.children, id);
-        if (found) return found;
-      }
-    }
-    return null;
-  };
-
   const childModules: ResumeModule[] = [];
   for (const childId of params.children) {
-    const mod = findMod(modules, childId);
+    const mod = findModuleById(modules, childId);
     if (!mod) {
       return {
         success: false,
@@ -287,20 +272,9 @@ export function handleAddGrid(params: AddGridParams, modules: ResumeModule[]): T
     };
   }
 
-  const findMod = (nodes: ResumeModule[], id: string): ResumeModule | null => {
-    for (const n of nodes) {
-      if (n.id === id) return n;
-      if (n.children) {
-        const found = findMod(n.children, id);
-        if (found) return found;
-      }
-    }
-    return null;
-  };
-
   const childModules: ResumeModule[] = [];
   for (const childId of params.children) {
-    const mod = findMod(modules, childId);
+    const mod = findModuleById(modules, childId);
     if (!mod) {
       return {
         success: false,
@@ -691,18 +665,7 @@ export function handleDeleteModules(params: DeleteModulesParams, modules: Resume
 
 export function handleCopyStyle(params: CopyStyleParams, modules: ResumeModule[]): ToolResult {
   // 查找源模块
-  const findMod = (nodes: ResumeModule[], id: string): ResumeModule | null => {
-    for (const n of nodes) {
-      if (n.id === id) return n;
-      if (n.children) {
-        const found = findMod(n.children, id);
-        if (found) return found;
-      }
-    }
-    return null;
-  };
-
-  const source = findMod(modules, params.source_id);
+  const source = findModuleById(modules, params.source_id);
   if (!source) {
     return {
       success: false,
@@ -713,7 +676,7 @@ export function handleCopyStyle(params: CopyStyleParams, modules: ResumeModule[]
     };
   }
 
-  const target = findMod(modules, params.target_id);
+  const target = findModuleById(modules, params.target_id);
   if (!target) {
     return {
       success: false,
@@ -853,18 +816,7 @@ function stripTextCSSFromHTML(html: string | undefined): string {
 }
 
 export function handleCopyTextStyle(params: CopyTextStyleParams, modules: ResumeModule[]): ToolResult {
-  const findMod = (nodes: ResumeModule[], id: string): ResumeModule | null => {
-    for (const n of nodes) {
-      if (n.id === id) return n;
-      if (n.children) {
-        const found = findMod(n.children, id);
-        if (found) return found;
-      }
-    }
-    return null;
-  };
-
-  const source = findMod(modules, params.source_id);
+  const source = findModuleById(modules, params.source_id);
   if (!source) {
     return {
       success: false,
@@ -875,7 +827,7 @@ export function handleCopyTextStyle(params: CopyTextStyleParams, modules: Resume
     };
   }
 
-  const target = findMod(modules, params.target_id);
+  const target = findModuleById(modules, params.target_id);
   if (!target) {
     return {
       success: false,
@@ -979,18 +931,7 @@ export function handleMoveModule(params: MoveModuleParams, modules: ResumeModule
 
 export function handleDuplicateModule(params: DuplicateModuleParams, modules: ResumeModule[]): ToolResult {
   // 查找目标模块
-  const findMod = (nodes: ResumeModule[], id: string): ResumeModule | null => {
-    for (const n of nodes) {
-      if (n.id === id) return n;
-      if (n.children) {
-        const found = findMod(n.children, id);
-        if (found) return found;
-      }
-    }
-    return null;
-  };
-
-  const target = findMod(modules, params.id);
+  const target = findModuleById(modules, params.id);
   if (!target) {
     return {
       success: false,

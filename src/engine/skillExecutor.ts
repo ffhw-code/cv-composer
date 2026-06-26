@@ -3,8 +3,6 @@ import JSON5 from 'json5';
 import { loadTemplate, type TemplateModule } from './templates';
 import { executeCommands, type Command } from './commandExecutor';
 import type { ResumeModule } from '../store/useResumeStore';
-import { useResumeStore } from '../store/useResumeStore';
-import { scaleLayoutToFit, trimBlankGaps } from './layoutScaler';
 import { findModuleById } from '../utils/moduleUtils';
 import type { ParsedResume, LayoutTree, LayoutTreeNode } from '../utils/resumeParser';
 import { getUploadedFile } from '../utils/aiConfig';
@@ -31,38 +29,16 @@ export function registerSkill(name: string, handler: SkillHandler) {
 /** base64 字符串 → Blob */
 function base64ToBlob(base64: string, mimeType: string): Blob {
   const byteChars = atob(base64);
-  const byteArrays: Uint8Array[] = [];
+  const byteArrays: Uint8Array<ArrayBuffer>[] = [];
   for (let offset = 0; offset < byteChars.length; offset += 512) {
     const slice = byteChars.slice(offset, offset + 512);
     const byteNumbers = new Array(slice.length);
     for (let i = 0; i < slice.length; i++) {
       byteNumbers[i] = slice.charCodeAt(i);
     }
-    byteArrays.push(new Uint8Array(byteNumbers));
+    byteArrays.push(new Uint8Array(byteNumbers) as Uint8Array<ArrayBuffer>);
   }
   return new Blob(byteArrays, { type: mimeType });
-}
-// ========== 模块样式压缩（ResumeModule 层级） ==========
-
-const HEIGHT_KEYS = ['padding', 'paddingTop', 'paddingBottom', 'margin', 'marginTop', 'marginBottom', 'gap', 'rowGap', 'columnGap'];
-
-function compressModuleStyles(modules: ResumeModule[], ratio: number): number {
-  let count = 0;
-  function walk(m: ResumeModule) {
-    if (!m.style) return;
-    for (const k of HEIGHT_KEYS) {
-      const v = m.style[k];
-      if (!v) continue;
-      const num = parseFloat(v);
-      if (isNaN(num) || num <= 0) continue;
-      const compressed = Math.round(num * ratio);
-      m.style[k] = compressed + 'px';
-      count++;
-    }
-    if (m.children) m.children.forEach(walk);
-  }
-  modules.forEach(walk);
-  return count;
 }
 
 export async function executeSkill(

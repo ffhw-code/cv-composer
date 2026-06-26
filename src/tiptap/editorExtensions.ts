@@ -1,3 +1,16 @@
+declare module '@tiptap/core' {
+  interface Commands<ReturnType> {
+    fontWeight: {
+      setFontWeight: (fontWeight: string) => ReturnType;
+      unsetFontWeight: () => ReturnType;
+    };
+    letterSpacing: {
+      setLetterSpacing: (letterSpacing: string) => ReturnType;
+      unsetLetterSpacing: () => ReturnType;
+    };
+  }
+}
+
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import StarterKit from '@tiptap/starter-kit';
 import Highlight from '@tiptap/extension-highlight';

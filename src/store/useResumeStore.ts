@@ -1,3 +1,5 @@
+import { generateId } from "../utils/idUtils";
+import { findModuleById } from '../utils/moduleUtils';
 import { create } from 'zustand';
 import { getStyleConfig } from './styleRegistry';
 
@@ -48,12 +50,6 @@ interface ResumeStore {
   setFormatPainterTextStyle: (style: Record<string, string> | null) => void;
 }
 
-const generateId = (): string => {
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-    return crypto.randomUUID();
-  }
-  return `m${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-};
 
 const MAX_HISTORY = 30;
 
@@ -276,17 +272,7 @@ export const useResumeStore = create<ResumeStore>((set, get) => {
         photo: mod.photo,
       });
 
-      let sourceModule: ResumeModule | null = null;
-      const findSource = (nodes: ResumeModule[]): void => {
-        for (const node of nodes) {
-          if (node.id === sourceId) {
-            sourceModule = node;
-            return;
-          }
-          if (node.children) findSource(node.children);
-        }
-      };
-      findSource(modules);
+      const sourceModule = findModuleById(modules, sourceId);
       if (!sourceModule) return;
 
       const newModule = deepClone(sourceModule);

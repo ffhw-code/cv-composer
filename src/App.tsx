@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { ActiveEditorProvider } from './hooks/useActiveEditor';
 import { EditModeProvider } from './hooks/useEditMode';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import Toolbar from './components/Toolbar/Toolbar';
 import ModulePanel from './components/Module/ModulePanel';
 import CanvasArea from './components/Canvas/CanvasArea';
@@ -39,6 +40,7 @@ function App() {
   const totalWidth = chatWidth + 75 + 842 + rightWidth; // 75 是新的 ModulePanel 宽度
 
   return (
+    <ErrorBoundary>
     <EditModeProvider value={isEditing}>
     <ActiveEditorProvider>
       <div className="h-screen flex flex-col bg-white overflow-hidden">
@@ -74,6 +76,7 @@ function App() {
       </div>
     </ActiveEditorProvider>
     </EditModeProvider>
+    </ErrorBoundary>
   );
 }
 
