@@ -17,7 +17,7 @@ interface ChatPanelProps {
   onToggle: () => void;
 }
 
-const MAX_TOOL_ROUNDS = 4;
+const MAX_TOOL_ROUNDS = 8;
 const AI_REQUEST_TIMEOUT_MS = 120_000;
 
 interface Suggestion {

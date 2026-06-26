@@ -1,7 +1,6 @@
 # 🧩 cv-composer — 聊天式 AI 简历编辑器
 
 <p align="center">
-  <!-- 替换为实际截图或 GIF -->
   <img src="screenshot.png" alt="cv-composer 界面预览" width="800"/>
 </p>
 
