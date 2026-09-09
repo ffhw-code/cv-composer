@@ -1,5 +1,6 @@
 import { generateId } from "../utils/idUtils";
 import { findModuleById } from '../utils/moduleUtils';
+import { loadSavedResume } from '../utils/resumePersistence';
 import { create } from 'zustand';
 import { getStyleConfig } from './styleRegistry';
 
@@ -135,6 +136,9 @@ function moveModuleRecursive(
 // ---------- Store 实现 ----------
 
 export const useResumeStore = create<ResumeStore>((set, get) => {
+  // 首次进入 / 刷新时恢复上次自动保存的文档（模块树 + 页面设置）
+  const savedResume = loadSavedResume();
+
   const pushHistory = (currentModules: ResumeModule[]) => {
     const { past } = get();
     const newPast = [...past, currentModules];
@@ -170,13 +174,13 @@ export const useResumeStore = create<ResumeStore>((set, get) => {
   }
 
   return {
-    modules: [],
+    modules: savedResume?.modules ?? [],
     selectedId: null,
     past: [],
     future: [],
-    pagePadding: '40px',
-    pageGap: '16px',
-    pagePaddingTop: '40px',
+    pagePadding: savedResume?.pagePadding ?? '40px',
+    pageGap: savedResume?.pageGap ?? '16px',
+    pagePaddingTop: savedResume?.pagePaddingTop ?? '40px',
     formatPainterSourceId: null as string | null,
     formatPainterTextStyle: null as Record<string, string> | null,
     setPagePadding: (value: string) => set({ pagePadding: value }),

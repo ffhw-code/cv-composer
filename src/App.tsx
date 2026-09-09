@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { ActiveEditorProvider } from './hooks/useActiveEditor';
 import { EditModeProvider } from './hooks/useEditMode';
+import { useResumeAutosave } from './hooks/useResumeAutosave';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import Toolbar from './components/Toolbar/Toolbar';
 import ModulePanel from './components/Module/ModulePanel';
@@ -12,6 +13,8 @@ import { initStyles } from './styleInit';
 initStyles();
 
 function App() {
+  useResumeAutosave();
+
   const [selectedControl, setSelectedControl] = useState<string | null>(null);
   const [rightWidth, setRightWidth] = useState(256);
   const [deleteMode, setDeleteMode] = useState(false);
