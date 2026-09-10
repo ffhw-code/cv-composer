@@ -1,6 +1,7 @@
 // src/components/AI/ChatPanel.tsx
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { useResumeStore, type ResumeModule } from '../../store/useResumeStore';
+import { useResumeStore } from '../../store/useResumeStore';
+import type { ResumeModule } from '../../types/resume';
 import ApiKeyModal from '../Settings/ApiKeyModal';
 import { buildSystemPrompt, aiTools } from '../../engine/aiPrompt';
 import { getFixedConstraints } from '../../engine/ruleBase';

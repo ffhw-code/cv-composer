@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ResumeModule } from '../store/useResumeStore';
+import type { ResumeModule } from '../types/resume';
 import {
   RESUME_AUTOSAVE_DEBOUNCE_MS,
   RESUME_AUTOSAVE_KEY,

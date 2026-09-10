@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { useResumeStore, type ResumeModule } from '../../store/useResumeStore';
+import { useResumeStore } from '../../store/useResumeStore';
+import type { ResumeModule } from '../../types/resume';
 import { useEditMode } from '../../hooks/useEditMode';
 import { findModuleById, findParentById, getAllModuleIds } from '../../utils/moduleUtils';
 import EditableModule from '../Module/EditableModule';

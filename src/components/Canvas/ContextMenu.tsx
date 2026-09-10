@@ -1,6 +1,6 @@
 import { useResumeStore } from '../../store/useResumeStore';
 import { findParentById, findModuleById } from '../../utils/moduleUtils';
-import type { ResumeModule } from '../../store/useResumeStore';
+import type { ResumeModule } from '../../types/resume';
 
 interface ContextMenuProps {
   x: number;

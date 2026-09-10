@@ -1,6 +1,6 @@
 // src/store/styleRegistry.ts
 import type { FC } from 'react';
-import type { ResumeModule } from './useResumeStore';
+import type { ResumeModule } from '../types/resume';
 
 export type StyleComponentProps = { module: ResumeModule; children?: React.ReactNode };
 export type ModuleType = ResumeModule['type'];

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { findModuleById, findParentById, getAllModuleIds, getCanvasStateSummary, exportLayoutTree } from './moduleUtils';
-import type { ResumeModule } from '../store/useResumeStore';
+import type { ResumeModule } from '../types/resume';
 
 const makeMod = (overrides: Partial<ResumeModule> = {}): ResumeModule => ({
   id: 'mod-1',

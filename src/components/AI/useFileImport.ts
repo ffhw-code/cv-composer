@@ -56,7 +56,7 @@ export function useFileImport(
 
   const buildSkillContext = () => ({
     get modules() { return useResumeStore.getState().modules; },
-    importModules: (mods: import('../../store/useResumeStore').ResumeModule[]) =>
+    importModules: (mods: import('../../types/resume').ResumeModule[]) =>
       useResumeStore.getState().importModules(mods),
     getCanvasState: () => {
       const modules = useResumeStore.getState().modules;

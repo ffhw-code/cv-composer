@@ -1,5 +1,5 @@
 import { getStyleConfig } from '../../store/styleRegistry';
-import type { ResumeModule } from '../../store/useResumeStore';
+import type { ResumeModule } from '../../types/resume';
 
 interface EditableModuleProps {
   module: ResumeModule;

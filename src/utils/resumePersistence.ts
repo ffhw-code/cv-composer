@@ -1,4 +1,4 @@
-import type { ResumeModule } from '../store/useResumeStore';
+import type { ResumeModule } from '../types/resume';
 
 // ========== 简历文档自动保存（localStorage） ==========
 //

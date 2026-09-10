@@ -1,5 +1,5 @@
 import { getStyleConfig } from '../../store/styleRegistry';
-import type { ResumeModule } from '../../store/useResumeStore';
+import type { ResumeModule } from '../../types/resume';
 
 function ResumeHeader({ module }: { module: ResumeModule }) {
   const config = getStyleConfig('header', module.styleId);

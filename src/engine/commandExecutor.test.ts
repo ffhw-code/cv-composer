@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { executeCommands } from './commandExecutor';
-import type { ResumeModule } from '../store/useResumeStore';
+import type { ResumeModule } from '../types/resume';
 import { initStyles } from '../styleInit';
 
 // 初始化样式注册表（commandExecutor 依赖它）

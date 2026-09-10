@@ -1,4 +1,4 @@
-import type { ResumeModule } from '../store/useResumeStore';
+import type { ResumeModule } from '../types/resume';
 
 // ========== 树查找工具 ==========
 

@@ -6,7 +6,7 @@ import { useOverflowGuard } from '../../hooks/useOverflowGuard';
 import { useEditMode } from '../../hooks/useEditMode';
 import { buildContainerStyle, hasCustomBorder } from '../../utils/styleHelpers';
 import { useActiveEditor } from '../../hooks/useActiveEditor';
-import type { ResumeModule } from '../../store/useResumeStore';
+import type { ResumeModule } from '../../types/resume';
 
 /** 清理 HTML 中所有尾部空块 */
 const cleanTrailing = (html: string): string => {

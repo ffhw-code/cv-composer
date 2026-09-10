@@ -1,6 +1,6 @@
 import { generateId } from "../utils/idUtils";
 // src/engine/commandExecutor.ts
-import type { ResumeModule } from '../store/useResumeStore';
+import type { ResumeModule } from '../types/resume';
 import { findModuleById } from '../utils/moduleUtils';
 import { useResumeStore } from '../store/useResumeStore';
 import { getStylesByType } from '../store/styleRegistry';

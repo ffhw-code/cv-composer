@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { scaleLayoutToFit, trimBlankGaps } from './layoutScaler';
-import type { ResumeModule } from '../store/useResumeStore';
+import type { ResumeModule } from '../types/resume';
 
 function makeModule(overrides: Partial<ResumeModule> = {}): ResumeModule {
   return {

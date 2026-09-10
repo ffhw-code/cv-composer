@@ -1,7 +1,7 @@
 // src/engine/layoutScaler.ts
 // 导入简历后自动缩放模块树以适应 A4 画布宽度（794px）
 
-import type { ResumeModule } from '../store/useResumeStore';
+import type { ResumeModule } from '../types/resume';
 
 export const TARGET_WIDTH = 794; // A4 px width
 

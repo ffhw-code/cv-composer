@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useResumeStore } from '../../store/useResumeStore';
-import type { ResumeModule } from '../../store/useResumeStore';
+import type { ResumeModule } from '../../types/resume';
 import { buildContainerStyle } from '../../utils/styleHelpers';
 import { useEditMode } from '../../hooks/useEditMode';
 

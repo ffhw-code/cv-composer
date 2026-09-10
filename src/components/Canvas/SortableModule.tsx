@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import type { ResumeModule } from '../../store/useResumeStore';
+import type { ResumeModule } from '../../types/resume';
 import { useResumeStore } from '../../store/useResumeStore';
 import { useEditMode } from '../../hooks/useEditMode';
 import { findModuleById } from '../../utils/moduleUtils';

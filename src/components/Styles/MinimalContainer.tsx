@@ -1,5 +1,5 @@
 import { useResumeStore } from '../../store/useResumeStore';
-import type { ResumeModule } from '../../store/useResumeStore';
+import type { ResumeModule } from '../../types/resume';
 import { buildContainerStyle, hasCustomBorder } from '../../utils/styleHelpers';
 import { useOverflowGuard } from '../../hooks/useOverflowGuard';
 import { useEditMode } from '../../hooks/useEditMode';

@@ -1,7 +1,7 @@
 // src/engine/layoutMeasurer.ts
 // 虚拟 DOM 渲染测量模块树在 A4 宽度下的实际溢出宽度，用于确定缩放比
 
-import type { ResumeModule } from '../store/useResumeStore';
+import type { ResumeModule } from '../types/resume';
 import { TARGET_WIDTH } from './layoutScaler';
 
 /** 支持的 CSS 属性集合 — 仅把影响宽度的属性透传到测量 DOM */

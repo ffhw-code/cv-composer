@@ -5,7 +5,7 @@ import { findModuleById } from '../utils/moduleUtils';
 // 内部通过构造 Command 调用 commandExecutor，不向 LLM 暴露 Command 结构。
 
 import { executeCommands, type Command } from './commandExecutor';
-import type { ResumeModule } from '../store/useResumeStore';
+import type { ResumeModule } from '../types/resume';
 import { loadTemplate } from './templates';
 import { useResumeStore } from '../store/useResumeStore';
 import { executeSkill, type SkillContext } from './skillExecutor';

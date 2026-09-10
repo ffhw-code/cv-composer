@@ -2,7 +2,7 @@
 import JSON5 from 'json5';
 import { loadTemplate, type TemplateModule } from './templates';
 import { executeCommands, type Command } from './commandExecutor';
-import type { ResumeModule } from '../store/useResumeStore';
+import type { ResumeModule } from '../types/resume';
 import { findModuleById } from '../utils/moduleUtils';
 import type { ParsedResume, LayoutTree, LayoutTreeNode } from '../utils/resumeParser';
 import { getUploadedFile } from '../utils/aiConfig';

@@ -1,27 +1,9 @@
 import { generateId } from "../utils/idUtils";
 import { findModuleById } from '../utils/moduleUtils';
 import { loadSavedResume } from '../utils/resumePersistence';
+import type { ResumeModule } from '../types/resume';
 import { create } from 'zustand';
 import { getStyleConfig } from './styleRegistry';
-
-export interface ResumeModule {
-  id: string;
-  type: 'header' | 'module' | 'text' | 'heading' | 'list' | 'image' | 'flex' | 'grid';
-  styleId?: string;
-  style?: Record<string, string>;
-  name?: string;
-  jobTitle?: string;
-  birth?: string;
-  phone?: string;
-  email?: string;
-  photo?: string;
-  title?: string;
-  content?: string;
-  children: ResumeModule[];
-  parentId?: string;
-  width?: number;
-  height?: number;
-}
 
 interface ResumeStore {
   modules: ResumeModule[];

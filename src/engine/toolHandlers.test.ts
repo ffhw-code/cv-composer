@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll } from 'vitest';
-import type { ResumeModule } from '../store/useResumeStore';
+import type { ResumeModule } from '../types/resume';
 import { initStyles } from '../styleInit';
 import {
   handleAddText,
