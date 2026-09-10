@@ -23,9 +23,9 @@ import {
   handleMoveModule,
   handleDuplicateModule,
   handleApplyTemplate,
-  toolHandlerMap,
   type ToolResult,
 } from './toolHandlers';
+import { toolHandlerMap } from './aiPrompt';
 
 beforeAll(() => {
   initStyles();

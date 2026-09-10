@@ -1119,35 +1119,3 @@ export async function handleExecuteSkill(
     };
   }
 }
-
-// ==================== Tool 路由表 ====================
-
-export type ToolHandler = (params: Record<string, unknown>, modules: ResumeModule[]) => ToolResult | Promise<ToolResult>;
-
-export const toolHandlerMap: Record<string, ToolHandler> = {
-  add_text: (_p, m) => handleAddText(_p as unknown as AddTextParams, m),
-  add_heading: (p, m) => handleAddHeading(p as unknown as AddHeadingParams, m),
-  add_list: (p, m) => handleAddList(p as unknown as AddListParams, m),
-  add_image: (p, m) => handleAddImage(p as unknown as AddImageParams, m),
-  add_flex: (p, m) => handleAddFlex(p as unknown as AddFlexParams, m),
-  add_grid: (p, m) => handleAddGrid(p as unknown as AddGridParams, m),
-  add_flex_inline: (p, m) => handleAddFlexInline(p as unknown as AddFlexInlineParams, m),
-  add_grid_inline: (p, m) => handleAddGridInline(p as unknown as AddGridInlineParams, m),
-  add_header: (p, m) => handleAddHeader(p as unknown as AddHeaderParams, m),
-  add_module: (p, m) => handleAddModule(p as unknown as AddModuleParams, m),
-  set_content: (p, m) => handleSetContent(p as unknown as SetContentParams, m),
-  set_style: (p, m) => handleSetStyle(p as unknown as SetStyleParams, m),
-  set_style_by_type: (p, m) => handleSetStyleByType(p as unknown as SetStyleByTypeParams, m),
-  set_property: (p, m) => handleSetProperty(p as unknown as SetPropertyParams, m),
-  set_field: (p, m) => handleSetField(p as unknown as SetFieldParams, m),
-  remove_module: (p, m) => handleRemoveModule(p as unknown as RemoveModuleParams, m),
-  delete_modules: (p, m) => handleDeleteModules(p as unknown as DeleteModulesParams, m),
-  clear_canvas: (p, m) => handleClearCanvas(p as unknown as ClearCanvasParams, m),
-  move_module: (p, m) => handleMoveModule(p as unknown as MoveModuleParams, m),
-  duplicate_module: (p, m) => handleDuplicateModule(p as unknown as DuplicateModuleParams, m),
-  copy_style: (p, m) => handleCopyStyle(p as unknown as CopyStyleParams, m),
-  copy_text_style: (p, m) => handleCopyTextStyle(p as unknown as CopyTextStyleParams, m),
-  apply_template: (p, m) => handleApplyTemplate(p as unknown as ApplyTemplateParams, m),
-  export_pdf: (_p, m) => handleExportPdf(m),
-  // execute_skill and get_uploaded_file handled separately by ChatPanel (async + file access)
-};

@@ -1,5 +1,8 @@
 // src/engine/aiPrompt.ts
 import { getStylesByType } from '../styles/styleRegistry';
+import { type ToolResult, handleAddText, handleAddHeading, handleAddList, handleAddImage, handleAddFlex, handleAddGrid, handleAddFlexInline, handleAddGridInline, handleAddHeader, handleAddModule, handleSetContent, handleSetStyle, handleSetStyleByType, handleSetProperty, handleSetField, handleRemoveModule, handleDeleteModules, handleClearCanvas, handleMoveModule, handleDuplicateModule, handleCopyStyle, handleCopyTextStyle, handleApplyTemplate, handleExportPdf } from './toolHandlers';
+import type { ResumeModule } from '../types/resume';
+
 
 // ==================== Tool 参数类型 ====================
 
@@ -145,9 +148,37 @@ export interface ExecuteSkillParams {
   params?: Record<string, unknown>;
 }
 
+export type RegisteredToolRunner = (
+  params: Record<string, unknown>,
+  modules: ResumeModule[],
+) => ToolResult | Promise<ToolResult>;
+
+export interface ChatToolFunction {
+  name: string;
+  description: string;
+  parameters: Record<string, unknown>;
+}
+
+/** 单个工具的注册条目：OpenAI function schema（发给 LLM）+ run（本地执行），参数类型经 defineTool 收敛 */
+export interface ChatToolEntry {
+  type: 'function';
+  function: ChatToolFunction;
+  run?: RegisteredToolRunner;
+}
+
+/**
+ * 将「带类型参数的纯函数」适配为 RegisteredToolRunner。
+ * LLM 返回的 args 本质是 JSON 反序列化的 unknown，唯一一次参数断言收敛在这里。
+ */
+function defineTool<P extends object>(
+  run: (params: P, modules: ResumeModule[]) => ToolResult | Promise<ToolResult>,
+): RegisteredToolRunner {
+  return (params, modules) => run(params as unknown as P, modules);
+}
+
 // ==================== OpenAI Function Calling Tool 定义 ====================
 
-export const aiTools = [
+export const aiTools: ChatToolEntry[] = [
   {
     type: 'function' as const,
     function: {
@@ -162,6 +193,7 @@ export const aiTools = [
         required: ['content'],
       },
     },
+    run: defineTool<AddTextParams>((p, m) => handleAddText(p, m)),
   },
   {
     type: 'function' as const,
@@ -177,6 +209,7 @@ export const aiTools = [
         required: ['content'],
       },
     },
+    run: defineTool<AddHeadingParams>((p, m) => handleAddHeading(p, m)),
   },
   {
     type: 'function' as const,
@@ -192,6 +225,7 @@ export const aiTools = [
         required: ['content'],
       },
     },
+    run: defineTool<AddListParams>((p, m) => handleAddList(p, m)),
   },
   {
     type: 'function' as const,
@@ -207,6 +241,7 @@ export const aiTools = [
         required: [],
       },
     },
+    run: defineTool<AddImageParams>((p, m) => handleAddImage(p, m)),
   },
   {
     type: 'function' as const,
@@ -224,6 +259,7 @@ export const aiTools = [
         required: ['children'],
       },
     },
+    run: defineTool<AddFlexParams>((p, m) => handleAddFlex(p, m)),
   },
   {
     type: 'function' as const,
@@ -241,6 +277,7 @@ export const aiTools = [
         required: ['children'],
       },
     },
+    run: defineTool<AddGridParams>((p, m) => handleAddGrid(p, m)),
   },
   {
     type: 'function' as const,
@@ -271,6 +308,7 @@ export const aiTools = [
         required: ['children'],
       },
     },
+    run: defineTool<AddFlexInlineParams>((p, m) => handleAddFlexInline(p, m)),
   },
   {
     type: 'function' as const,
@@ -301,6 +339,7 @@ export const aiTools = [
         required: ['children'],
       },
     },
+    run: defineTool<AddGridInlineParams>((p, m) => handleAddGridInline(p, m)),
   },
   {
     type: 'function' as const,
@@ -315,6 +354,7 @@ export const aiTools = [
         required: ['styleId'],
       },
     },
+    run: defineTool<AddHeaderParams>((p, m) => handleAddHeader(p, m)),
   },
   {
     type: 'function' as const,
@@ -331,6 +371,7 @@ export const aiTools = [
         required: ['styleId', 'title', 'content'],
       },
     },
+    run: defineTool<AddModuleParams>((p, m) => handleAddModule(p, m)),
   },
   {
     type: 'function' as const,
@@ -346,6 +387,7 @@ export const aiTools = [
         required: ['id', 'content'],
       },
     },
+    run: defineTool<SetContentParams>((p, m) => handleSetContent(p, m)),
   },
   {
     type: 'function' as const,
@@ -361,6 +403,7 @@ export const aiTools = [
         required: ['id', 'style'],
       },
     },
+    run: defineTool<SetStyleParams>((p, m) => handleSetStyle(p, m)),
   },
   {
     type: 'function' as const,
@@ -377,6 +420,7 @@ export const aiTools = [
         required: ['id', 'property', 'value'],
       },
     },
+    run: defineTool<SetPropertyParams>((p, m) => handleSetProperty(p, m)),
   },
   {
     type: 'function' as const,
@@ -393,6 +437,7 @@ export const aiTools = [
         required: ['style'],
       },
     },
+    run: defineTool<SetStyleByTypeParams>((p, m) => handleSetStyleByType(p, m)),
   },
   {
     type: 'function' as const,
@@ -409,6 +454,7 @@ export const aiTools = [
         required: ['id', 'field', 'value'],
       },
     },
+    run: defineTool<SetFieldParams>((p, m) => handleSetField(p, m)),
   },
   {
     type: 'function' as const,
@@ -423,6 +469,7 @@ export const aiTools = [
         required: ['id'],
       },
     },
+    run: defineTool<RemoveModuleParams>((p, m) => handleRemoveModule(p, m)),
   },
   {
     type: 'function' as const,
@@ -439,6 +486,7 @@ export const aiTools = [
         required: ['id', 'index'],
       },
     },
+    run: defineTool<MoveModuleParams>((p, m) => handleMoveModule(p, m)),
   },
   {
     type: 'function' as const,
@@ -453,6 +501,7 @@ export const aiTools = [
         required: ['id'],
       },
     },
+    run: defineTool<DuplicateModuleParams>((p, m) => handleDuplicateModule(p, m)),
   },
   {
     type: 'function' as const,
@@ -468,6 +517,7 @@ export const aiTools = [
         required: ['source_id', 'target_id'],
       },
     },
+    run: defineTool<CopyStyleParams>((p, m) => handleCopyStyle(p, m)),
   },
   {
     type: 'function' as const,
@@ -483,6 +533,7 @@ export const aiTools = [
         required: ['source_id', 'target_id'],
       },
     },
+    run: defineTool<CopyTextStyleParams>((p, m) => handleCopyTextStyle(p, m)),
   },
   {
     type: 'function' as const,
@@ -497,6 +548,7 @@ export const aiTools = [
         required: ['name'],
       },
     },
+    run: defineTool<ApplyTemplateParams>((p, m) => handleApplyTemplate(p, m)),
   },
   {
     type: 'function' as const,
@@ -511,6 +563,7 @@ export const aiTools = [
         required: ['ids'],
       },
     },
+    run: defineTool<DeleteModulesParams>((p, m) => handleDeleteModules(p, m)),
   },
   {
     type: 'function' as const,
@@ -522,6 +575,7 @@ export const aiTools = [
         properties: {},
       },
     },
+    run: defineTool<ClearCanvasParams>((_p, m) => handleClearCanvas(_p, m)),
   },
   {
     type: 'function' as const,
@@ -534,6 +588,7 @@ export const aiTools = [
         required: [],
       },
     },
+    run: defineTool<ExportPdfParams>((_p, m) => handleExportPdf(m)),
   },
   {
     type: 'function' as const,
@@ -562,6 +617,11 @@ export const aiTools = [
     },
   },
 ];
+
+/** 兼容层：按工具名查找可执行 runner（execute_skill / get_uploaded_file 由 ChatPanel 按技能上下文单独处理） */
+export const toolHandlerMap: Record<string, RegisteredToolRunner> = Object.fromEntries(
+  aiTools.flatMap((tool) => (tool.run ? [[tool.function.name, tool.run]] : [])),
+) as Record<string, RegisteredToolRunner>;
 
 // ==================== System Prompt ====================
 
