@@ -32,7 +32,7 @@ cv-composer 是**纯前端静态应用**（Vite + React + TS），没有后端�
 
 3. **开启 GitHub Pages**：仓库 `Settings → Pages → Build and deployment → Source` 选择 **`GitHub Actions`**（不要选分支部署，否则会与工作流冲突）。
 
-4. 完成以上设置后，向 `main` 推送即可触发 `.github/workflows/deploy.yml`：`npm ci` → `npm run build` → 上传 `dist/` → 发布。
+4. 完成以上设置后，向 `main` 推送即可触发 `.github/workflows/deploy.yml`：`npm ci` → `npm run lint` → `npm test` → `npm run build` → 上传 `dist/` → 发布。
 
 5. 在 `Actions` 页确认 `Deploy to GitHub Pages` 运行成功，然后访问线上地址。
 
@@ -44,7 +44,7 @@ git commit -m "feat: 说明这次改了什么"
 git push origin main
 ```
 
-推送后自动完成"构建 + 发布"。同一时间只有一个发布流程在跑（工作流配置了并发互斥），新推送会自动取消进行中的旧流程。
+推送后自动完成"lint + 测试 + 构建 + 发布"。**lint 或测试任一失败，整个流程会在构建前终止，不会发布**。同一时间只有一个发布流程在跑（工作流配置了并发互斥），新推送会自动取消进行中的旧流程。
 
 发布后验证：
 
