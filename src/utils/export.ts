@@ -1,3 +1,5 @@
+// ⚠️ browser-only：PDF 导出依赖 document.querySelector / 隐藏 iframe / window.print 等
+// 浏览器 API，只允许在浏览器环境调用；Node 或 SSR 下不要 import 执行本模块。
 export function exportPDF() {
   // 优先使用多页容器，否则降级到旧版单页
   const container = document.getElementById('resume-pages') || document.getElementById('resume-preview');

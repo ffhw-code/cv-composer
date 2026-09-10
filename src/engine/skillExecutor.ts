@@ -688,6 +688,11 @@ registerSkill('import-resume', async (_params, ctx) => {
   // 4. 先导入画布，用真实 React 渲染测量实际尺寸
   ctx.importModules(result.newModules);
 
+  // ⚠️ 以下画布测量属于 browser-only：需要真实 DOM（#resume-preview）与 rAF
+  if (typeof document === 'undefined' || typeof requestAnimationFrame === 'undefined') {
+    return '简历导入完成（非浏览器环境，跳过画布溢出诊断）。';
+  }
+
   // 等待 React 渲染完成（两帧确保 dnd-kit + TipTap 全部就绪）
   await new Promise<void>((resolve) => {
     requestAnimationFrame(() => requestAnimationFrame(() => resolve()));

@@ -1,5 +1,8 @@
 // src/engine/layoutMeasurer.ts
-// 虚拟 DOM 渲染测量模块树在 A4 宽度下的实际溢出宽度，用于确定缩放比
+// ⚠️ browser-only：本模块通过把模块树渲染进真实 DOM（document.createElement /
+// scrollWidth / document.fonts）来测量 A4 宽度下的溢出，依赖浏览器排版引擎，
+// 无法在 Node/SSR 中运行。因此在无 DOM 环境下显式降级为不测量（返回 TARGET_WIDTH），
+// 调用方不应把「返回 TARGET_WIDTH」当作真实测量结果。
 
 import type { ResumeModule } from '../types/resume';
 import { TARGET_WIDTH } from './layoutScaler';
