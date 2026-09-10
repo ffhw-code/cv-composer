@@ -7,7 +7,7 @@ import { buildSystemPrompt, aiTools, toolHandlerMap } from '../../engine/aiPromp
 import { getFixedConstraints } from '../../engine/ruleBase';
 import { executeSkill } from '../../engine/skillExecutor';
 import { exportLayoutTree, getCanvasStateSummary } from '../../utils/moduleUtils';
-import { getApiConfig, getUploadedFile, getProviderQuirks } from '../../utils/aiConfig';
+import { getApiConfig, getUploadedFile, getProviderQuirks, resolveBaseUrl } from '../../utils/aiConfig';
 import { repairTruncatedJson } from '../../utils/jsonRepair';
 import { translateApiError, callAiForPolish, callAiForEvaluate, callSmartFill } from './aiApi';
 import { useFileImport } from './useFileImport';
@@ -93,7 +93,7 @@ function ChatPanel({ collapsed, onToggle }: ChatPanelProps) {
       };
     }
 
-    const baseUrl = config.baseUrl || 'https://dashscope.aliyuncs.com/compatible-mode/v1';
+    const baseUrl = resolveBaseUrl(config.baseUrl);
     const model = config.model || 'qwen-plus';
 
     const isUpload = msgs.some((m: { content?: string }) => m.content?.includes('[上传文件]'));

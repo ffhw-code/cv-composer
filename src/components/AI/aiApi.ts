@@ -1,5 +1,5 @@
 // 直接 AI API 调用（非 tool-calling 路径），供 skill 和 file import 使用
-import { getApiConfig } from '../../utils/aiConfig';
+import { getApiConfig, resolveBaseUrl } from '../../utils/aiConfig';
 
 export function translateApiError(status: number, body: string, model: string): string {
   let detail = '';
@@ -39,7 +39,7 @@ export function translateApiError(status: number, body: string, model: string): 
 export async function callSmartFill(sysPrompt: string, userPrompt: string): Promise<string> {
   const config = getApiConfig();
   if (!config || !config.apiKey) throw new Error('API 未配置');
-  const baseUrl = config.baseUrl || 'https://dashscope.aliyuncs.com/compatible-mode/v1';
+  const baseUrl = resolveBaseUrl(config.baseUrl);
   const model = config.model || 'qwen-plus';
   const messages = [
     {
@@ -68,7 +68,7 @@ export async function callSmartFill(sysPrompt: string, userPrompt: string): Prom
 export async function callAiForEvaluate(prompt: string): Promise<string> {
   const config = getApiConfig();
   if (!config?.apiKey) throw new Error('API 未配置');
-  const baseUrl = config.baseUrl || 'https://dashscope.aliyuncs.com/compatible-mode/v1';
+  const baseUrl = resolveBaseUrl(config.baseUrl);
   const model = config.model || 'qwen-plus';
   const messages = [{ role: 'user' as const, content: prompt }];
   const response = await fetch(`${baseUrl}/chat/completions`, {
@@ -93,7 +93,7 @@ export async function callAiForPolish(text: string): Promise<string> {
   ];
   const config = getApiConfig();
   if (!config?.apiKey) throw new Error('API 未配置');
-  const baseUrl = config.baseUrl || 'https://dashscope.aliyuncs.com/compatible-mode/v1';
+  const baseUrl = resolveBaseUrl(config.baseUrl);
   const model = config.model || 'qwen-plus';
   const response = await fetch(`${baseUrl}/chat/completions`, {
     method: 'POST',
@@ -116,7 +116,7 @@ export async function callAiWithMessagesRaw(
 ): Promise<string> {
   const config = getApiConfig();
   if (!config || !config.apiKey) throw new Error('API 未配置');
-  const baseUrl = config.baseUrl || 'https://dashscope.aliyuncs.com/compatible-mode/v1';
+  const baseUrl = resolveBaseUrl(config.baseUrl);
   const model = config.model || 'qwen-plus';
 
   const controller = new AbortController();

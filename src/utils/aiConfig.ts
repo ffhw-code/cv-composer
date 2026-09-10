@@ -62,6 +62,14 @@ export const PROVIDER_PRESETS: Record<string, ProviderPreset> = {
   },
 };
 
+/** 未显式配置 baseUrl 时默认走阿里云百炼兼容接口 */
+export const DEFAULT_BASE_URL = PROVIDER_PRESETS.aliyun.baseUrl;
+
+/** 解析实际请求地址：空字符串视为未配置，回退到默认服务商 */
+export function resolveBaseUrl(baseUrl?: string): string {
+  return baseUrl && baseUrl.trim() ? baseUrl : DEFAULT_BASE_URL;
+}
+
 export function getProviderQuirks(provider: string): ProviderQuirks {
   return PROVIDER_PRESETS[provider]?.quirks || PROVIDER_PRESETS.custom.quirks;
 }

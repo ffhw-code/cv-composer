@@ -1,5 +1,5 @@
 // src/utils/resumeParser.ts
-import { getApiConfig, isVisionModel } from './aiConfig';
+import { getApiConfig, isVisionModel, resolveBaseUrl } from './aiConfig';
 
 // ==================== 类型定义 ====================
 
@@ -374,7 +374,7 @@ export async function parseResumeFile(file: File): Promise<ParsedResume> {
     throw new Error('请先配置 AI 服务 (API Key)');
   }
 
-  const baseUrl = config.baseUrl || 'https://dashscope.aliyuncs.com/compatible-mode/v1';
+  const baseUrl = resolveBaseUrl(config.baseUrl);
   // 图片解析优先使用视觉模型，回退到通用模型
   let model = config.visionModel || config.model;
   const isImage = file.type.startsWith('image/');
