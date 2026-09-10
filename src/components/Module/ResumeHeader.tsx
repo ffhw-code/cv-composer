@@ -1,4 +1,4 @@
-import { getStyleConfig } from '../../store/styleRegistry';
+import { getStyleConfig } from '../../styles/styleRegistry';
 import type { ResumeModule } from '../../types/resume';
 
 function ResumeHeader({ module }: { module: ResumeModule }) {

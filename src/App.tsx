@@ -8,7 +8,7 @@ import ModulePanel from './components/Module/ModulePanel';
 import CanvasArea from './components/Canvas/CanvasArea';
 import StylePanel from './components/Toolbar/StylePanel';
 import ChatPanel from './components/AI/ChatPanel';
-import { initStyles } from './styleInit';
+import { initStyles } from './styles/styleInit';
 
 initStyles();
 

@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState } from 'react';
 import { useResumeStore } from '../../store/useResumeStore';
-import { getStylesByType } from '../../store/styleRegistry';
+import { getStylesByType } from '../../styles/styleRegistry';
 import { findModuleById } from '../../utils/moduleUtils';
 
 interface StylePanelProps {

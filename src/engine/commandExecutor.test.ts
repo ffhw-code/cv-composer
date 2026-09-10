@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { executeCommands } from './commandExecutor';
 import type { ResumeModule } from '../types/resume';
-import { initStyles } from '../styleInit';
+import { initStyles } from '../styles/styleInit';
 
 // 初始化样式注册表（commandExecutor 依赖它）
 beforeAll(() => {

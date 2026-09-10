@@ -3,7 +3,7 @@ import { findModuleById } from '../utils/moduleUtils';
 import { loadSavedResume } from '../utils/resumePersistence';
 import type { ResumeModule } from '../types/resume';
 import { create } from 'zustand';
-import { getStyleConfig } from './styleRegistry';
+import { getStyleConfig } from '../styles/styleRegistry';
 
 interface ResumeStore {
   modules: ResumeModule[];
@@ -130,7 +130,7 @@ export const useResumeStore = create<ResumeStore>((set, get) => {
 
   // 模板递归构建（保留给 addModuleFromTemplate）
   function buildModuleFromTemplate(
-    template: import('./styleRegistry').ChildTemplate,
+    template: import('../styles/styleRegistry').ChildTemplate,
     parentId: string
   ): ResumeModule {
     const config = getStyleConfig(template.type, template.styleId);

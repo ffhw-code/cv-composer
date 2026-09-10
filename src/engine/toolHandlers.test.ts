@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import type { ResumeModule } from '../types/resume';
-import { initStyles } from '../styleInit';
+import { initStyles } from '../styles/styleInit';
 import {
   handleAddText,
   handleAddHeading,

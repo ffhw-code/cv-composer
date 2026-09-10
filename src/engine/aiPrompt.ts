@@ -1,5 +1,5 @@
 // src/engine/aiPrompt.ts
-import { getStylesByType } from '../store/styleRegistry';
+import { getStylesByType } from '../styles/styleRegistry';
 
 // ==================== Tool 参数类型 ====================
 

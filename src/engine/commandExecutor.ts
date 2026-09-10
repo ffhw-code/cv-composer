@@ -3,7 +3,7 @@ import { generateId } from "../utils/idUtils";
 import type { ResumeModule } from '../types/resume';
 import { findModuleById } from '../utils/moduleUtils';
 import { useResumeStore } from '../store/useResumeStore';
-import { getStylesByType } from '../store/styleRegistry';
+import { getStylesByType } from '../styles/styleRegistry';
 
 // ==================== 指令定义 ====================
 export type CommandAction =
