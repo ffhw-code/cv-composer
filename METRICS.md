@@ -219,7 +219,7 @@
 | P0-1a | **失败归因埋点**：`AiRoundEvent` 记 `errorCode` / `errorDetail`（`ECONNRESET`、`EAI_AGAIN`、`TIMEOUT`、服务商 `error.code`），摘要按原因码聚合 | ✅ 已实现 | 上次只能看到笼统的 `network 16`，无法判断是限流还是本机网络 | 下次看摘要即可定位 |
 | P0-1b | **单请求超时**：120 s → 默认 45 s，且所有渠道（含 polish / evaluate / smart-fill）统一生效；可用 `localStorage.resume_ai_request_timeout_ms` 覆盖（5s~600s） | ✅ 已实现 | 成功请求 P95 仅 14.3 s；挂死连接白等 2 分钟 | 采集总时长下降 |
 | P0-1c | **harness 预检 + 污染标记**：开跑前发一个最小请求（含 tools schema）验证网络与模型名；传输失败占比 >20% 时报告标记 `suspect`；0 轮运行不落盘 | ✅ 已实现 | 07:46 / 07:50 两次因模型名无效白跑 50 轮；07:27 那轮被网络抖动污染却产出了正常模样的摘要 | 坏配置几秒内失败且不留脏文件 |
-| P0-B | **换模型档位**：用 `qwen-plus` / `qwen-max` / `gpt-4o` 跑同一 harness | ⏳ 待执行 | 原始 args 已证明是模型侧格式错乱，链路侧打捞救不回 `set_style` | 输出并列摘要，量化模型档位的贡献 |
+| P0-B | **换模型档位**：用 `qwen-plus` / `qwen-max` / `gpt-4o` 跑同一 harness | ✅ 已验证（`glm-5.2`，见 8.7.2）：`set_style` 从「48 次调用 47 次不可用」变成「3/3 全对」 | 原始 args 已证明是模型侧格式错乱，链路侧打捞救不回 `set_style` | 输出并列摘要，量化模型档位的贡献 |
 | P0-C | 重试回传具体原因（含原始 args 片段）+ 明确禁止 `<parameter=xxx>` 标记 | ✅ 已实现 | 39 次重试 0 次自愈，反馈信息不足 | `retries.avgPerTurn` 下降 |
 | P1 | 重复调用治理：`add_module` 增加同名模块守卫，返回结构化 redundant 提示 | ⏳ 待做 | add→remove 抖动白烧 17 次调用，单轮最高 51.5k tokens | 工具调用次数与 tokens 下降 |
 | P1 | 防「静默假成功」：无工具调用却声称已修改时给出明确提示（对齐已有的「不支持 Function Calling」检测） | ⏳ 待做 | 幻觉式成功比报错更危险（见发现 9） | 该场景轮次成功率不再虚高 |
@@ -275,6 +275,46 @@
 
 先用场景过滤补 `add_module` 的有效数据（`AI_BASELINE_SCENARIOS=add_module`），再在稳定网络下同模型跑一次全量作为正式 after；`set_style` 按 8.5 的 P0-B（换模型档位）验证。
 
+### 8.7 定向补测：`add_module` 与 P0-B 换模型验证（`536694a`）
+
+两次小样本采集，模型不同，**都只用于回答单个问题，不作为整体 after 基线**，也不写进第五节。这是新加的 `AI_BASELINE_SCENARIOS` 场景过滤第一次投入使用。
+
+#### 8.7.1 `add_module` 补测（`qwen3.7-flash`，2 轮后触发 token 守卫）
+
+- 原始数据：`metrics/ai-baseline-2026-09-11T10-24-55-270Z.json`（`aborted: true` / `finished: false`）。
+- 命令：`AI_BASELINE_SCENARIOS=add_module AI_BASELINE_ITERATIONS=3 AI_BASELINE_MAX_TURN_TOKENS=20000 npm run ai-baseline`
+- 结果：计划 3 轮，实际 2 轮后自动终止——第 2 轮消耗 28,876 tokens，超过单轮上限 20,000。
+- 数据：14 次工具调用 / 2 次失败；参数解析 **正常 14（100%）**；8 次请求成功率 87.5%（1 次 `timeout`）；两轮分别 10,610 / 28,876 tokens。
+
+结论：
+
+- 参数层与改前一致（改前 `add_module` 24/24 `ok`），**这个场景的失败与参数解析无关**。
+- 两轮都没成功（1 个 `timeout`、1 个 `partial`）。第 2 轮打了 5 个回合，调用在 `add_module` 与 `remove_module` 之间来回抖动——与 8.6 观察到的「同轮重复工具调用」是同一个问题，现在有了量化证据：**单轮 28.9k tokens、14 次调用只完成 1 件事**。
+- 所以除 `set_style` 外，第二个值得优先修的是重复调用守卫（见第九节），它直接决定这个场景的 token 成本。
+
+顺带：token 守卫在真实运行中按预期触发并落盘了已完成轮次（这正是它要防的「坏场景白烧额度」）。
+
+#### 8.7.2 P0-B：换模型档位（`glm-5.2`）
+
+- 原始数据：`metrics/ai-baseline-2026-09-11T10-18-00-180Z.json`（6 轮跑满，未被终止）。
+- 命令：`AI_BASELINE_MODEL=glm-5.2 AI_BASELINE_SCENARIOS=set_style,tool-error-retry AI_BASELINE_ITERATIONS=3 npm run ai-baseline`
+- 同机、同 harness、同 prompt，只换模型：
+
+| 场景 | `qwen3.7-flash`（8.6） | `glm-5.2`（本节） |
+|---|---|---|
+| `set_style` | 48 次调用：47 `invalid` + 1 `repaired`，全部失败；平均重试 2、打满 3 轮 + 超时；15.8k tokens/轮 | **3 次调用全部 `ok`、0 失败、0 重试**；2 轮/次；9.3k tokens/轮 |
+| `tool-error-retry` | 21 次调用全部失败（其中 20 次 `invalid`） | **0 次调用**：模型拒绝按指令调用不存在的 id，直接文本作答（命中率 0/3） |
+
+结论：
+
+- **`set_style` 的问题确认在模型侧，换档位直接消失。**差距是「全灭」对「全对」，不是边际差异；每轮 token 也从 15.8k 降到 9.3k（−41%）。样本只有 3 轮，但方向明确，足以支撑「换档位」这个决策。
+- `tool-error-retry` 在 `glm-5.2` 上测不出东西：模型不肯对不存在的 id 发起调用，改用文本作答。这本身是更合理的行为，但意味着**该场景需要重新设计**才能测到「工具报错 → 结构化错误 → 自愈」这条链路（例如换成「模块存在但参数类型不对」），否则命中率会一直是 0。
+- 这两条都不能与 8.1 的 `qwen3.7-flash` 基线横向比（模型不同），只用于判断「换档位是否值得」。
+
+#### 8.7.3 预算消耗
+
+两次采集合计 42,678 + 39,486 = **82,164 tokens**（按摘要的累计值），定向补测的成本远低于一次全量（改后全量为 254,361）。
+
 ## 九、后续待办
 
 - [x] `vitest bench`：覆盖 `layoutEngine` / `layoutTreeNormalizer` / `moduleUtils` 纯函数热路径（见第六节）
@@ -285,5 +325,6 @@
 - [x] harness 卫生：运行 0 轮（未设 Key、或模型 400 全失败）时不落盘或标记为无效，避免 `metrics/` 里出现看着像基线的空文件（已实现：0 轮不落盘；传输失败占比 >20% 时报告与摘要标 `suspect`）
 - [x] harness 场景过滤与额度保护：`AI_BASELINE_SCENARIOS` 只跑指定场景（未知场景在模块顶层直接报错）；单轮 token 超 `AI_BASELINE_MAX_TURN_TOKENS`（默认 30k）或出现 `network` 类失败时自动终止并落盘已完成轮次（报告标 `aborted`）
 - [ ] harness 完整性判定：单个场景有效轮数为 0（例如 5 轮全部 `network` 断线）时也应标记为不完整，不能只按总传输失败比例判断（8.6 那轮 15.8% 未触发 `suspect`，但 `add_module` 实际 0 数据）
-- [ ] 同轮重复工具调用守卫：治理「同一工具反复多轮打转、打满 `MAX_TOOL_ROUNDS` 却被记为成功」的假成功（先记待办，等数据对齐后再做）
+- [ ] 同轮重复工具调用守卫：治理「同一工具反复多轮打转、打满 `MAX_TOOL_ROUNDS` 却被记为成功」的假成功（已有量化证据：8.7.1 单轮 28.9k tokens / 14 次调用；另见 07:51 deepseek 那轮 8 次 `execute_skill` 打满却记成成功）
+- [ ] `tool-error-retry` 场景重设计：`glm-5.2` 会拒绝按指令调用不存在的 id（命中率 0/3），改用「模块存在但参数类型不对」的输入才能真正测到「工具报错 → 结构化错误 → 自愈」链路
 - [ ] `scripts/metrics.mjs`：自动采集构建/测试/lint 指标，写 `metrics/<sha>.json` 并由脚本生成第五节的表格
