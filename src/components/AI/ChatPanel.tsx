@@ -22,6 +22,7 @@ function ChatPanel({ collapsed, onToggle }: ChatPanelProps) {
     toast,
     handleKeyDown,
     handleExportLayout,
+    handleExportMetrics,
     applySuggestion,
     parsing,
     fileInputRef,
@@ -105,6 +106,7 @@ function ChatPanel({ collapsed, onToggle }: ChatPanelProps) {
               <button onClick={() => setApiModalVisible(true)} className="flex-shrink-0 h-8 px-2 text-xs bg-white border border-gray-300 rounded hover:bg-gray-50">API 设置</button>
               <button onClick={handleImportClick} disabled={parsing} className="flex-shrink-0 h-8 px-2 text-xs bg-white border border-gray-300 rounded hover:bg-gray-50">{parsing ? '解析中…' : '导入简历'}</button>
               <button onClick={handleExportLayout} className="flex-shrink-0 h-8 px-2 text-xs bg-white border border-gray-300 rounded hover:bg-gray-50">导出布局树</button>
+              <button onClick={handleExportMetrics} className="flex-shrink-0 h-8 px-2 text-xs bg-white border border-gray-300 rounded hover:bg-gray-50">AI 指标</button>
             </div>
           </div>
 

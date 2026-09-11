@@ -15,6 +15,21 @@ import {
 } from '../../utils/aiConfig';
 import { repairTruncatedJson } from '../../utils/jsonRepair';
 import {
+  estimateTokens,
+  exportAiMetricsJson,
+  formatAiMetricsSummary,
+  getAiSessionId,
+  getAiMetrics,
+  nowMs,
+  readUsage,
+  recordAiMetrics,
+  summarizeAiMetrics,
+  type AiArgsStatus,
+  type AiErrorKind,
+  type AiRoundEvent,
+  type AiTurnOutcome,
+} from '../../utils/aiMetrics';
+import {
   translateApiError,
   callAiForPolish,
   callAiForEvaluate,
@@ -24,6 +39,16 @@ import { useFileImport } from './useFileImport';
 
 const MAX_TOOL_ROUNDS = 8;
 const AI_REQUEST_TIMEOUT_MS = 120_000;
+
+/** 单轮用户对话的埋点累加器（贯穿多轮 function-calling 与重试） */
+interface TurnAccumulator {
+  sessionId: string;
+  startedAt: number;
+  rounds: number;
+  retries: number;
+  toolCalls: number;
+  toolErrors: number;
+}
 
 export interface Suggestion {
   title: string;
@@ -52,6 +77,7 @@ export function useAiChat() {
   const callAiWithMessages = async (
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     msgs: any[],
+    turn: TurnAccumulator,
     retryCount = 0,
     toolRoundCount = 0,
     createdIds?: Set<string>,
@@ -77,6 +103,32 @@ export function useAiChat() {
 
     const isUpload = msgs.some((m: { content?: string }) => m.content?.includes('[上传文件]'));
 
+    const promptChars = JSON.stringify(msgs).length;
+    const toolSchemaChars = JSON.stringify(aiTools).length;
+    const startedAt = nowMs();
+
+    /** 记录一次 HTTP 轮次；任何异常都被 recordAiMetrics 内部吞掉，不影响主流程 */
+    const recordRound = (ok: boolean, extra: Partial<AiRoundEvent> = {}): void => {
+      recordAiMetrics({
+        kind: 'round',
+        ts: Date.now(),
+        channel: 'chat',
+        model,
+        provider: config.provider,
+        retryIndex: retryCount,
+        toolRound: toolRoundCount,
+        promptChars,
+        promptTokensEst: estimateTokens(promptChars),
+        toolSchemaChars,
+        toolCallCount: 0,
+        latencyMs: nowMs() - startedAt,
+        ok,
+        ...extra,
+      });
+      turn.rounds += 1;
+      turn.retries = Math.max(turn.retries, retryCount);
+    };
+
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), AI_REQUEST_TIMEOUT_MS);
 
@@ -98,7 +150,9 @@ export function useAiChat() {
         signal: controller.signal,
       });
     } catch (err: unknown) {
-      if (err instanceof Error && err.name === 'AbortError') {
+      const isTimeout = err instanceof Error && err.name === 'AbortError';
+      recordRound(false, { errorKind: isTimeout ? 'timeout' : 'network' });
+      if (isTimeout) {
         throw new Error('请求超时，请稍后重试。', { cause: err });
       }
       console.error('[AI Request] 网络错误:', err);
@@ -110,11 +164,23 @@ export function useAiChat() {
     if (!response.ok) {
       const errText = await response.text();
       console.error('[AI Request] API 报错详情:', response.status, errText);
+      recordRound(false, { httpStatus: response.status, errorKind: 'http' });
       throw new Error(translateApiError(response.status, errText, model));
     }
 
-    const data = await response.json();
+    let data;
+    try {
+      data = await response.json();
+    } catch (err) {
+      recordRound(false, { httpStatus: response.status, errorKind: 'http' });
+      throw err;
+    }
     const msg = data.choices?.[0]?.message;
+
+    recordRound(true, {
+      toolCallCount: msg?.tool_calls?.length ?? 0,
+      usage: readUsage(data),
+    });
 
     if (!msg?.tool_calls) {
       console.log('[AI] 纯文本回复 (无工具调用)');
@@ -146,6 +212,7 @@ export function useAiChat() {
       const fnName = toolCall.function.name;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let args: any = {};
+      let argsStatus: AiArgsStatus = 'ok';
       try {
         args = JSON.parse(toolCall.function.arguments || '{}');
       } catch {
@@ -153,11 +220,31 @@ export function useAiChat() {
         const repaired = repairTruncatedJson(raw);
         try {
           args = JSON.parse(repaired);
+          argsStatus = 'repaired';
           console.warn('[Tool Call] JSON 已修复，原参数不完整:', raw.slice(0, 100));
         } catch {
+          argsStatus = 'invalid';
           console.error(`[Tool Call] 参数 JSON 不合法且无法修复: ${raw.slice(0, 200)}`);
         }
       }
+
+      // 参数解析失败时即便工具「没抛错」也不算成功
+      let toolOk = argsStatus !== 'invalid';
+      let toolErrorKind: AiErrorKind | undefined = argsStatus === 'invalid' ? 'invalid_args' : undefined;
+
+      const recordTool = (ok: boolean, errorKind?: AiErrorKind): void => {
+        recordAiMetrics({
+          kind: 'tool',
+          ts: Date.now(),
+          channel: 'chat',
+          name: fnName,
+          argsStatus,
+          ok,
+          ...(errorKind ? { errorKind } : {}),
+        });
+        turn.toolCalls += 1;
+        if (!ok) turn.toolErrors += 1;
+      };
 
       let resultContent: string;
       try {
@@ -195,6 +282,7 @@ export function useAiChat() {
               fix: `请删除此 ${fnName} 调用。add_text/add_heading/add_list 等创建工具已支持一次性传入 content 和 style。`,
             });
             toolResults.push({ role: 'tool', tool_call_id: toolCall.id, name: fnName, content: resultContent });
+            recordTool(false, 'redundant');
             continue;
           }
 
@@ -217,6 +305,8 @@ export function useAiChat() {
               resultContent = toolResult.summary || '操作已成功执行。';
             } else {
               hasError = true;
+              toolOk = false;
+              toolErrorKind = 'handler_error';
               setToolStatus(`${fnName} ✗`);
               resultContent = JSON.stringify({
                 error: toolResult.code,
@@ -226,12 +316,19 @@ export function useAiChat() {
             }
           } else {
             hasError = true;
+            toolOk = false;
+            toolErrorKind = 'unknown_tool';
             resultContent = `未知工具: ${fnName}`;
           }
         }
       } catch (err) {
         hasError = true;
-        resultContent = `工具调用失败: ${(err as Error).message}`;
+        const message = (err as Error).message;
+        toolOk = false;
+        toolErrorKind = message.includes('未知技能')
+          ? 'unknown_skill'
+          : message.includes('未知工具') ? 'unknown_tool' : 'handler_error';
+        resultContent = `工具调用失败: ${message}`;
       }
 
       toolResults.push({
@@ -240,6 +337,7 @@ export function useAiChat() {
         name: fnName,
         content: resultContent,
       });
+      recordTool(toolOk, toolErrorKind);
     }
 
     const trailingUserMsg = {
@@ -249,7 +347,7 @@ export function useAiChat() {
 
     if (hasError && retryCount < 2) {
       const newMsgs = [...msgs, msg, ...toolResults, trailingUserMsg];
-      return callAiWithMessages(newMsgs, retryCount + 1, toolRoundCount + 1, createdIds_);
+      return callAiWithMessages(newMsgs, turn, retryCount + 1, toolRoundCount + 1, createdIds_);
     }
 
     if (hasError) {
@@ -264,7 +362,7 @@ export function useAiChat() {
     }
 
     const newMsgs = [...msgs, msg, ...toolResults, trailingUserMsg];
-    return callAiWithMessages(newMsgs, retryCount, toolRoundCount + 1, createdIds_);
+    return callAiWithMessages(newMsgs, turn, retryCount, toolRoundCount + 1, createdIds_);
   };
 
   // ==================== 用户交互 ====================
@@ -284,6 +382,16 @@ export function useAiChat() {
       return;
     }
 
+    const turn: TurnAccumulator = {
+      sessionId: getAiSessionId(),
+      startedAt: nowMs(),
+      rounds: 0,
+      retries: 0,
+      toolCalls: 0,
+      toolErrors: 0,
+    };
+    let outcome: AiTurnOutcome = 'success';
+
     const canvasSummary = getCanvasStateSummary(useResumeStore.getState().modules);
     const rules = getFixedConstraints();
     const systemContent = buildSystemPrompt() + '\n\n## 必须遵守的规则\n' + rules + '\n\n## 当前画布\n' + canvasSummary;
@@ -293,10 +401,11 @@ export function useAiChat() {
 
     try {
       console.log('[ChatPanel] 发送消息:', userMsg);
-      const aiReply = await callAiWithMessages([systemMsg, ...historyMsgs, currentMsg]);
+      const aiReply = await callAiWithMessages([systemMsg, ...historyMsgs, currentMsg], turn);
       console.log('[ChatPanel] AI 回复:', JSON.stringify(aiReply).slice(0, 500));
 
       if (!aiReply) {
+        outcome = 'failed';
         setMessages(prev => [...prev, { role: 'ai', text: '未收到有效回复，请重试。' }]);
       } else {
         let suggestions: Suggestion[] | undefined;
@@ -319,10 +428,24 @@ export function useAiChat() {
         setMessages(prev => [...prev, { role: 'ai', text: displayText, suggestions }]);
       }
     } catch (err: unknown) {
+      outcome = 'failed';
       const chatErrMsg = err instanceof Error ? err.message : String(err);
       console.error('[ChatPanel] 请求失败:', chatErrMsg);
       setMessages(prev => [...prev, { role: 'ai', text: `出错了: ${chatErrMsg}` }]);
     } finally {
+      if (turn.toolErrors > 0 && outcome !== 'failed') outcome = 'partial';
+      recordAiMetrics({
+        kind: 'turn',
+        ts: Date.now(),
+        sessionId: turn.sessionId,
+        userChars: userMsg.length,
+        outcome,
+        rounds: turn.rounds,
+        retries: turn.retries,
+        toolCalls: turn.toolCalls,
+        toolErrors: turn.toolErrors,
+        latencyMs: nowMs() - turn.startedAt,
+      });
       setWaiting(false);
       setToolStatus(null);
     }
@@ -339,6 +462,22 @@ export function useAiChat() {
     console.log(JSON.stringify(tree, null, 2));
     navigator.clipboard.writeText(JSON.stringify(tree, null, 2)).catch(() => {});
     setMessages(prev => [...prev, { role: "ai", text: "布局树已导出到控制台并复制到剪贴板" }]);
+  };
+
+  /** 导出 AI 指标：下载 JSON（含原始事件与摘要），并把文本摘要复制到剪贴板 */
+  const handleExportMetrics = () => {
+    const events = getAiMetrics();
+    const summaryText = formatAiMetricsSummary(summarizeAiMetrics(events));
+    const blob = new Blob([exportAiMetricsJson()], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `ai-metrics-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    navigator.clipboard.writeText(summaryText).catch(() => {});
+    setToast(`已导出 AI 指标（${events.length} 条事件），摘要已复制到剪贴板`);
+    setTimeout(() => setToast(null), 2500);
   };
 
   const applySuggestion = async (suggestion: Suggestion) => {
@@ -368,6 +507,7 @@ export function useAiChat() {
     toast,
     handleKeyDown,
     handleExportLayout,
+    handleExportMetrics,
     applySuggestion,
     parsing,
     fileInputRef,

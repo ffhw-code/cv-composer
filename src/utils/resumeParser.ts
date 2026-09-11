@@ -1,5 +1,6 @@
 // src/utils/resumeParser.ts
-import { getApiConfig, isVisionModel, resolveBaseUrl } from './aiConfig';
+import { getApiConfig, isVisionModel, type ApiConfig } from './aiConfig';
+import { postChatCompletions, type AiResponseData } from '../components/AI/aiApi';
 
 // ==================== 类型定义 ====================
 
@@ -255,30 +256,18 @@ interface ChatMessageContent {
 }
 
 async function callApi(
-  baseUrl: string,
-  apiKey: string,
+  config: ApiConfig,
   model: string,
   messages: ChatMessage[],
 ): Promise<ParsedResume> {
-  const response = await fetch(`${baseUrl}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model,
-      messages,
-      temperature: 0.1,
-    }),
+  const data = await postChatCompletions({
+    channel: 'import-parse',
+    config,
+    messages,
+    model,
+    timeoutMs: 120_000,
+    buildHttpError: (status, errorText) => `API 请求失败: ${status} ${errorText}`,
   });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`API 请求失败: ${response.status} ${errorText}`);
-  }
-
-  const data = await response.json();
   const content = data.choices?.[0]?.message?.content;
   if (!content) {
     throw new Error('API 未返回有效内容');
@@ -306,24 +295,22 @@ async function callApi(
       },
     ];
 
-    const fixResponse = await fetch(`${baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model,
+    let fixData: AiResponseData;
+    try {
+      fixData = await postChatCompletions({
+        channel: 'import-parse',
+        config,
         messages: fixMessages,
-        temperature: 0.1,
-      }),
-    });
-
-    if (!fixResponse.ok) {
-      throw new Error(`JSON 修正请求失败: ${fixResponse.status}`, { cause: parseError });
+        model,
+        timeoutMs: 120_000,
+        retryIndex: 1,
+        buildHttpError: (status) => `JSON 修正请求失败: ${status}`,
+      });
+    } catch (err) {
+      // 修正请求本身失败：把「原始 JSON 解析失败」一并写进消息，便于区分是模型输出坏了还是网络问题
+      const fixErrMsg = err instanceof Error ? err.message : String(err);
+      throw new Error(`${fixErrMsg}；原始 JSON 解析失败：${errMsg}`, { cause: err });
     }
-
-    const fixData = await fixResponse.json();
     const fixContent = fixData.choices?.[0]?.message?.content;
     if (!fixContent) {
       throw new Error(`JSON 解析失败（修正后无输出）。原始错误: ${errMsg}`, { cause: parseError });
@@ -374,7 +361,6 @@ export async function parseResumeFile(file: File): Promise<ParsedResume> {
     throw new Error('请先配置 AI 服务 (API Key)');
   }
 
-  const baseUrl = resolveBaseUrl(config.baseUrl);
   // 图片解析优先使用视觉模型，回退到通用模型
   let model = config.visionModel || config.model;
   const isImage = file.type.startsWith('image/');
@@ -421,5 +407,5 @@ export async function parseResumeFile(file: File): Promise<ParsedResume> {
     throw new Error('不支持的文件格式，请上传 PNG/JPG 图片或 TXT 文本文件');
   }
 
-  return callApi(baseUrl, config.apiKey, model, messages);
+  return callApi(config, model, messages);
 }

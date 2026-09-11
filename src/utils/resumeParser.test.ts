@@ -3,6 +3,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { parseResumeFile } from './resumeParser';
+import { clearAiMetrics, getAiMetrics, type AiRoundEvent } from './aiMetrics';
 import { isVisionModel } from './aiConfig';
 import { saveApiConfig } from './aiConfig';
 
@@ -209,6 +210,62 @@ describe('parseResumeFile', () => {
     const file = new File([blob], 'r.pdf', { type: 'application/pdf' });
 
     await expect(parseResumeFile(file)).rejects.toThrow('PDF/Word 文件暂不支持');
+  });
+
+  it('解析请求记录 import-parse 渠道埋点', async () => {
+    clearAiMetrics();
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      mockFetchResponse(buildMockResumeResponse(validLayoutTree, validData)),
+    );
+
+    const blob = new Blob(['fake-image-data'], { type: 'image/png' });
+    await parseResumeFile(new File([blob], 'r.png', { type: 'image/png' }));
+
+    const rounds = getAiMetrics().filter((e): e is AiRoundEvent => e.kind === 'round');
+    expect(rounds).toHaveLength(1);
+    expect(rounds[0]).toMatchObject({
+      channel: 'import-parse',
+      ok: true,
+      retryIndex: 0,
+      toolSchemaChars: 0,
+      model: 'qwen-vl-max',
+    });
+    expect(rounds[0].promptChars).toBeGreaterThan(0);
+  });
+
+  it('图片 base64 不计入 prompt 注入体积', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      mockFetchResponse(buildMockResumeResponse(validLayoutTree, validData)),
+    );
+
+    const readPromptChars = async (size: number): Promise<number> => {
+      clearAiMetrics();
+      const blob = new Blob(['x'.repeat(size)], { type: 'image/png' });
+      await parseResumeFile(new File([blob], 'r.png', { type: 'image/png' }));
+      return getAiMetrics().filter((e): e is AiRoundEvent => e.kind === 'round')[0].promptChars;
+    };
+
+    // 图片体积相差 100 倍，记录的注入体积应完全一致
+    expect(await readPromptChars(100_000)).toBe(await readPromptChars(1_000));
+  });
+
+  it('JSON 修正重试记为第二轮（retryIndex=1）', async () => {
+    clearAiMetrics();
+    vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(mockFetchResponse({
+        choices: [{ message: { content: '{ broken json ///' } }],
+      }))
+      .mockResolvedValueOnce(mockFetchResponse({
+        choices: [{ message: { content: JSON.stringify({ layoutTree: validLayoutTree, data: validData }) } }],
+      }));
+
+    const blob = new Blob(['fake'], { type: 'image/png' });
+    await parseResumeFile(new File([blob], 'r.png', { type: 'image/png' }));
+
+    const rounds = getAiMetrics().filter((e): e is AiRoundEvent => e.kind === 'round');
+    expect(rounds).toHaveLength(2);
+    expect(rounds[0]).toMatchObject({ retryIndex: 0, ok: true });
+    expect(rounds[1]).toMatchObject({ retryIndex: 1, ok: true });
   });
 });
 

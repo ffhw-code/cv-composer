@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest';
-import { translateApiError } from './aiApi';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { callSmartFill, translateApiError } from './aiApi';
+import { clearAiMetrics, getAiMetrics, type AiRoundEvent } from '../../utils/aiMetrics';
 
 describe('translateApiError', () => {
   const model = 'qwen-max';
@@ -77,5 +78,107 @@ describe('translateApiError', () => {
   it('handles non-JSON response body gracefully', () => {
     const result = translateApiError(500, 'Internal Server Error', model);
     expect(result).toContain('暂时不可用');
+  });
+});
+
+describe('AI 请求埋点', () => {
+  function createStorage(): Storage {
+    const store = new Map<string, string>();
+    return {
+      get length() { return store.size; },
+      clear: () => { store.clear(); },
+      getItem: (k: string) => store.get(k) ?? null,
+      key: (i: number) => Array.from(store.keys())[i] ?? null,
+      removeItem: (k: string) => { store.delete(k); },
+      setItem: (k: string, v: string) => { store.set(k, v); },
+    } as Storage;
+  }
+
+  function jsonResponse(body: unknown, status = 200): Response {
+    return new Response(JSON.stringify(body), {
+      status,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  function roundEvents(): AiRoundEvent[] {
+    return getAiMetrics().filter((e): e is AiRoundEvent => e.kind === 'round');
+  }
+
+  beforeEach(() => {
+    const storage = createStorage();
+    Object.defineProperty(globalThis, 'localStorage', { value: storage, configurable: true, writable: true });
+    Object.defineProperty(globalThis, 'sessionStorage', { value: storage, configurable: true, writable: true });
+    sessionStorage.setItem('resume_ai_config', JSON.stringify({
+      provider: 'dashscope',
+      apiKey: 'sk-test',
+      baseUrl: '',
+      model: 'qwen-plus',
+      visionModel: 'qwen-vl-max',
+    }));
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    clearAiMetrics();
+    Reflect.deleteProperty(globalThis, 'localStorage');
+    Reflect.deleteProperty(globalThis, 'sessionStorage');
+  });
+
+  it('成功请求记录渠道、模型、注入体积与 token 用量', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({
+      choices: [{ message: { content: '优化后的文本' } }],
+      usage: { prompt_tokens: 120, completion_tokens: 30, total_tokens: 150 },
+    })));
+
+    await expect(callSmartFill('系统提示', '用户输入')).resolves.toBe('优化后的文本');
+
+    const rounds = roundEvents();
+    expect(rounds).toHaveLength(1);
+    expect(rounds[0]).toMatchObject({
+      channel: 'smart-fill',
+      ok: true,
+      model: 'qwen-plus',
+      provider: 'dashscope',
+      retryIndex: 0,
+    });
+    expect(rounds[0].promptChars).toBeGreaterThan(0);
+    expect(rounds[0].promptTokensEst).toBeGreaterThan(0);
+    expect(rounds[0].latencyMs).toBeGreaterThanOrEqual(0);
+    expect(rounds[0].usage).toEqual({ promptTokens: 120, completionTokens: 30, totalTokens: 150 });
+  });
+
+  it('HTTP 错误记录状态码，并保留调用方原有的错误文案', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('{"error":{"message":"boom"}}', { status: 403 })));
+
+    await expect(callSmartFill('系统提示', '用户输入')).rejects.toThrow('smart-fill API 请求失败: 403');
+
+    expect(roundEvents()[0]).toMatchObject({ ok: false, httpStatus: 403, errorKind: 'http', channel: 'smart-fill' });
+  });
+
+  it('网络异常记录 network，并给出可读提示', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('Failed to fetch'); }));
+
+    await expect(callSmartFill('系统提示', '用户输入')).rejects.toThrow('无法连接到 AI 服务');
+
+    expect(roundEvents()[0]).toMatchObject({ ok: false, errorKind: 'network' });
+  });
+
+  it('响应体不是 JSON 时记录失败', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('<html>502</html>', { status: 200 })));
+
+    await expect(callSmartFill('系统提示', '用户输入')).rejects.toThrow();
+
+    expect(roundEvents()[0]).toMatchObject({ ok: false, errorKind: 'http', channel: 'smart-fill' });
+  });
+
+  it('没有 usage 字段时不写入 token 数据', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({
+      choices: [{ message: { content: 'hi' } }],
+    })));
+
+    await callSmartFill('系统提示', '用户输入');
+
+    expect(roundEvents()[0].usage).toBeUndefined();
   });
 });
