@@ -26,7 +26,9 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { useAiChat } from '../src/components/AI/useAiChat';
 import { useResumeStore } from '../src/store/useResumeStore';
-import { PROVIDER_PRESETS, saveApiConfig } from '../src/utils/aiConfig';
+import { PROVIDER_PRESETS, getAiRequestTimeoutMs, resolveBaseUrl, saveApiConfig } from '../src/utils/aiConfig';
+import { aiTools } from '../src/engine/aiPrompt';
+import { describeFetchError, describeHttpError } from '../src/components/AI/aiApi';
 import {
   clearAiMetrics,
   formatAiMetricsSummary,
@@ -52,6 +54,9 @@ const PROVIDER = process.env.AI_BASELINE_PROVIDER || 'aliyun';
 const PRESET = PROVIDER_PRESETS[PROVIDER] ?? PROVIDER_PRESETS.custom;
 const MODEL = process.env.AI_BASELINE_MODEL || PRESET.model || 'qwen-plus';
 const BASE_URL = process.env.AI_BASELINE_BASE_URL ?? PRESET.baseUrl;
+const PREFLIGHT_ENABLED = process.env.AI_BASELINE_PREFLIGHT !== '0';
+/** 传输层失败占比超过该值就认为这次采集被网络污染，不能用于正式对比 */
+const SUSPECT_TRANSPORT_RATIO = 0.2;
 
 // ==================== 场景定义 ====================
 
@@ -306,6 +311,9 @@ interface BaselineReport {
   runId: string;
   generatedAt: string;
   finished: boolean;
+  /** 传输层失败占比过高时为 true：本次数据受网络污染，不要用于正式对比 */
+  suspect: boolean;
+  suspectReason?: string;
   git: { commit: string; dirty: boolean | null };
   request: { provider: string; model: string; baseUrl: string };
   plan: { scenarios: string[]; iterationsPerScenario: number; plannedTurns: number; completedTurns: number };
@@ -317,12 +325,21 @@ interface BaselineReport {
 function buildReport(finished: boolean): BaselineReport {
   const commit = gitInfo();
   const allEvents = allTurns.flatMap((t) => t.events);
+  const overall = summarizeAiMetrics(allEvents);
+  const roundEvents = allEvents.filter((e): e is AiRoundEvent => e.kind === 'round');
+  const transportFailures = roundEvents.filter((r) => !r.ok && (r.errorKind === 'network' || r.errorKind === 'timeout')).length;
+  const transportRatio = roundEvents.length === 0 ? 0 : transportFailures / roundEvents.length;
+  const suspect = roundEvents.length > 0 && transportRatio > SUSPECT_TRANSPORT_RATIO;
   return {
     harness: 'ai-baseline',
     version: 1,
     runId: RUN_ID,
     generatedAt: new Date().toISOString(),
     finished,
+    suspect,
+    ...(suspect
+      ? { suspectReason: `传输层失败 ${transportFailures}/${roundEvents.length}（${Math.round(transportRatio * 100)}%）超过 ${SUSPECT_TRANSPORT_RATIO * 100}%，本次数据不适合作为正式对比基线` }
+      : {}),
     git: commit,
     request: { provider: PROVIDER, model: MODEL, baseUrl: BASE_URL || '(服务商默认)' },
     plan: {
@@ -331,7 +348,7 @@ function buildReport(finished: boolean): BaselineReport {
       plannedTurns: SCENARIOS.length * ITERATIONS_PER_SCENARIO,
       completedTurns: allTurns.length,
     },
-    overall: summarizeAiMetrics(allEvents),
+    overall,
     perScenario: SCENARIOS.map((s) => buildScenarioStats(s, allTurns.filter((t) => t.scenario === s.id))),
     turns: allTurns,
   };
@@ -359,6 +376,9 @@ function buildSummaryMarkdown(report: BaselineReport): string {
   lines.push(`- 代码版本：\`${report.git.commit}\`${dirtyNote}`);
   lines.push(`- 服务商/模型：${report.request.provider} / ${report.request.model}（baseUrl: ${report.request.baseUrl}）`);
   lines.push(`- 规模：${report.perScenario.length} 类场景 × ${report.plan.iterationsPerScenario} 次 = 计划 ${report.plan.plannedTurns} 轮，实际完成 ${report.plan.completedTurns} 轮`);
+  if (report.suspect) {
+    lines.push(`- ⚠️ **本次数据受网络污染，不能作为正式对比基线**：${report.suspectReason}`);
+  }
   lines.push('');
   lines.push('### 总体');
   lines.push('```');
@@ -371,7 +391,9 @@ function buildSummaryMarkdown(report: BaselineReport): string {
   return lines.join('\n');
 }
 
-function flush(finished: boolean): { jsonPath: string; summaryPath: string } {
+function flush(finished: boolean): { jsonPath: string; summaryPath: string } | null {
+  // 一轮都没采到（预检失败、模型 400 全废、被中断）时不落盘，避免污染 metrics/
+  if (allTurns.length === 0) return null;
   const outDir = resolve(process.cwd(), OUT_DIR);
   mkdirSync(outDir, { recursive: true });
   const report = buildReport(finished);
@@ -383,15 +405,71 @@ function flush(finished: boolean): { jsonPath: string; summaryPath: string } {
   return { jsonPath, summaryPath };
 }
 
+/**
+ * 预检：先发一个最小请求验证「网络通 + 模型名有效 + 该模型接受 tools 参数」。
+ * 目的是让坏配置在几秒内失败，而不是白跑 25 轮、留下一个看着像基线的脏数据文件。
+ */
+async function preflight(): Promise<void> {
+  const controller = new AbortController();
+  const timeoutMs = getAiRequestTimeoutMs();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const startedAt = Date.now();
+  try {
+    const response = await fetch(`${resolveBaseUrl(BASE_URL)}/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${API_KEY}` },
+      body: JSON.stringify({
+        model: MODEL,
+        messages: [{ role: 'user', content: 'ping' }],
+        tools: aiTools,
+        tool_choice: 'auto',
+        max_tokens: 16,
+        temperature: 0.1,
+      }),
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      const info = describeHttpError(response.status, await response.text());
+      throw new Error(
+        `[preflight] 失败：HTTP ${response.status} ${info.errorCode ?? ''} ${info.errorDetail ?? ''}\n` +
+        `  模型 "${MODEL}" 可能不存在/不可用，或该模型不接受当前请求形态（例如 thinking 模型对 tools/temperature 有限制）。\n` +
+        '  本次采集未开始，也没有写入 metrics/。',
+      );
+    }
+    console.log(`[preflight] OK：${MODEL} 在 ${Date.now() - startedAt} ms 内返回 HTTP 200（含 tools schema）`);
+  } catch (err) {
+    if (err instanceof Error && err.name === 'AbortError') {
+      throw new Error(
+        `[preflight] 超时：${timeoutMs} ms 内没有响应，网络很可能不可用。\n` +
+        '  本次采集未开始，也没有写入 metrics/。请换稳定网络后重跑。',
+        { cause: err },
+      );
+    }
+    if (err instanceof Error && err.message.startsWith('[preflight]')) throw err;
+    const info = describeFetchError(err);
+    throw new Error(
+      `[preflight] 网络失败：${info.errorCode ?? 'unknown'} ${info.errorDetail ?? ''}\n` +
+      '  本次采集未开始，也没有写入 metrics/。请换稳定网络后重跑。',
+      { cause: err },
+    );
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 // ==================== 执行 ====================
 
-beforeAll(() => {
+beforeAll(async () => {
   if (!API_KEY) {
     throw new Error(
       '未设置 AI_BASELINE_KEY。请在终端执行：AI_BASELINE_KEY=<你的 Key> npm run ai-baseline',
     );
   }
   saveApiConfig({ provider: PROVIDER, apiKey: API_KEY, baseUrl: BASE_URL, model: MODEL, visionModel: PRESET.visionModel || MODEL });
+  if (PREFLIGHT_ENABLED) {
+    await preflight();
+  }
+  console.log(`[plan] ${SCENARIOS.length} 类场景 × ${ITERATIONS_PER_SCENARIO} 次 = ${SCENARIOS.length * ITERATIONS_PER_SCENARIO} 轮，模型 ${MODEL}`);
 });
 
 for (const scenario of SCENARIOS) {
@@ -424,9 +502,13 @@ for (const scenario of SCENARIOS) {
 }
 
 afterAll(() => {
-  const { jsonPath, summaryPath } = flush(true);
+  const paths = flush(true);
+  if (!paths) {
+    console.log('本次没有采集到任何数据（预检失败或全部轮次未完成），未写入 metrics/。');
+    return;
+  }
   console.log('');
   console.log(buildSummaryMarkdown(buildReport(true)));
-  console.log(`原始数据：${jsonPath}`);
-  console.log(`文本摘要：${summaryPath}`);
+  console.log(`原始数据：${paths.jsonPath}`);
+  console.log(`文本摘要：${paths.summaryPath}`);
 });
