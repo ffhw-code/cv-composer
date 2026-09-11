@@ -190,7 +190,11 @@
 
 ### 8.3 关键发现
 
-1. **参数解析失败占 53.1%，且全部集中在「参数含嵌套对象」的工具上**：`set_style` 28/28、`execute_skill` 23/23 的 `arguments` 无法解析；而参数为扁平字符串的 `add_module` 24/24、`remove_module` 17/17、`set_content` 3/3 全部解析正常（45 + 51 = 96）。`repairTruncatedJson` 一次都没救回来（`argsRepaired = 0`），说明失败**不是截断**，更像模型输出了非严格 JSON（未加引号的键 / 单引号 / 尾逗号）——需要原始 args 原文确认。
+1. **参数解析失败占 53.1%，全部集中在「参数含嵌套对象」的工具上，根因是模型把原生参数标记写进了 `arguments`**：`set_style` 28/28、`execute_skill` 23/23 无法解析；而参数为扁平字符串的 `add_module` 24/24、`remove_module` 17/17、`set_content` 3/3 全部正常（45 + 51 = 96）。取到原始 args 原文后，坏样本只有两类（同一形态反复出现）：
+   - 嵌套对象的值直接缺失：`{"name": "generate-resume", "params": }`、`{"id": "seed-text-exp", "style": }`；
+   - 值的位置写成 Qwen 原生参数标记：`"params": <parameter=template>\nsimple`、`"style": <parameter=fontSize>15px, "color": "#334155</color></style>"`，严重时整段工具调用被写进值里（`"style": <parameter=name>set_style, "parameters": "{\"id\": ...}"`）。
+
+   **排除项**：这既不是截断（`repairTruncatedJson` 对「括号平衡但缺值」无能为力，`argsRepaired = 0` 正是这个原因），也不是「引号/尾逗号」问题（**`JSON5` 同样解析不了缺值**，用真实样本验证过）。结论是**模型侧原生工具调用格式与 OpenAI 兼容接口的 JSON 约定不一致**——属于模型/服务商问题，链路侧只能「打捞 + 明确报错」，真正的解法是换模型档位（见 8.5 P0-B）。
 2. **主路径被打穿**：`generate-resume` 场景 5/5 都调用了 `execute_skill`，但 23 次调用全部因参数不可解析退化成 `未知技能: undefined`（`unknown_skill`），该场景轮次成功率 0%（用户视角就是「让 AI 预设一份简历」5 次全失败）。
 3. **重试没有自愈能力**：39/74 次请求（52.7%）是重试，平均 1.36 次/轮，但**参数修复成功次数为 0**。当前回传给模型的是固定文案「请修正错误并重试。」，没有把「解析失败 + 原始 args 片段」带回去，模型大概率重复同一个错误。
 4. **`add_module` 场景出现 add→remove 抖动**：17 次 `remove_module`（其中 5 次 handler_error）；唯一一次跑满 `MAX_TOOL_ROUNDS = 8` 的是该场景第 1 轮（35.7 s、51.5k tokens）。
@@ -198,6 +202,8 @@
 6. **成本结构**：平均 14,680 tokens/轮，prompt 占 97.2%（5169 vs 149 completion）；每轮固定注入工具 schema 9,387 字符，是最大的一笔固定开销。
 7. **「轮次成功率」会被「只回文本」虚高**：`set_content` 有 3 轮完全没调用工具、仅文本回复，却因无工具报错被记为 `success`（这也是该场景命中率只有 2/5 的原因）。所以判定 AI 链路必须同时看命中率与工具成功率，不能只看轮次成功率。
 8. **失败场景被掩盖**：本应触发 `MODULE_NOT_FOUND` 结构化错误的 `tool-error-retry` 场景，实际没验到——`set_style` 在参数解析阶段就失败了。真正走到「结构化错误 → 提示重试」链路的只有 `remove_module` 的 5 次 handler_error，且 5 次均未自愈。
+9. **除参数外还有三类「静默假成功」**（同一次日志里可见）：把工具调用 JSON 当文本回复（`set_style` 2/5，正文直接是 `{"id":...,"style":{...}}`）；**幻觉式成功**（`set_content` 3/5 没调工具却回复「已完成修改」）；思维链泄漏（`add_module`、`tool-error-retry` 的正文出现 `</think>` 与英文推理段落）。用户会以为改动生效，实际画布没变——比直接报错更危险，需要在提示词与前端两侧共同约束。
+10. **harness 侧小问题**：`add_module` 场景有一次模型调用 `export_pdf`，jsdom 未实现 `window.alert`（打印 `Not implemented: Window's alert()`）；不影响指标，但说明该场景会顺带触发导出流程。
 
 ### 8.4 对比口径
 
@@ -206,17 +212,21 @@
 
 ### 8.5 后续修复计划（按性价比排序）
 
-| 优先级 | 改动 | 为什么 | 验收（用同一 harness 复跑） |
-|---|---|---|---|
-| P0 | 参数解析加容错：`JSON.parse` → `repairTruncatedJson` → **`JSON5.parse`**（`json5` 已是依赖，`skillExecutor.ts` 已在用）→ 仍失败才记 `invalid_args` | 直接对着 51/96 的失败面 | `argsInvalid` 从 53.1% 降到 <5%，工具成功率 40.6% → >80% |
-| P0 | 解析失败时把「失败原因 + 原始 args 前 200 字符」作为 tool result 回传，替换固定文案「请修正错误并重试。」 | 39 次重试 0 次自愈，反馈信息不足 | 同场景重试后参数合法率上升，`retries.avgPerTurn` 下降 |
-| P1 | 单请求超时可配置并下调（如 120 s → 45 s），且 timeout 不占满重试额度 | 5 次卡死吃掉 69% 墙钟；成功请求 P95 仅 11.5 s | 采集总时长下降；timeout 不再拖满 2 次重试 |
-| P1 | 模型对照：用 `qwen-plus` / `qwen-max` 跑同一 harness | 判定「模型档位」与「链路」各占多少责任 | 输出两份摘要，与 flash 档并列记录 |
-| P1 | 重复调用治理：`add_module` 增加同名模块守卫，返回结构化 redundant 提示（对齐已有的 `createdIds_` 守卫） | add→remove 抖动白烧 17 次调用，单轮最高 51.5k tokens | `add_module` 场景工具调用次数与 tokens 下降 |
-| P2 | 工具 schema 瘦身（`execute_skill` 的 description 内嵌长参数说明，schema 共 9,387 字符/请求） | 固定 prompt 开销，占 tokens 绝对大头 | 每轮 prompt tokens 下降 |
-| P2 | schema 收敛：给 `style` / `params` 定义明确 `properties`，或用扁平参数（`[{key, value}]`）替代嵌套对象 | 若发现 1 成立，嵌套深度就是模型出错的诱因 | 参数不可用率进一步下降 |
+| 优先级 | 改动 | 状态 | 为什么 | 验收（用同一 harness 复跑） |
+|---|---|---|---|---|
+| P0-A | **参数打捞**：新增 `src/utils/toolArgsParser.ts`，按根对象逐键扫描，只保留「值本身是合法 JSON」的键，坏键记录原因；必填键（取自 tool schema）缺失时判 `invalid` 并**跳过 handler**，不再用 `{}` 硬跑 | ✅ 已实现（含 18 个真实样本测试） | 直接对着 51/96 的失败面 | `argsInvalid` 明显下降；`generate-resume`（params 可缺省）恢复正常 |
+| P0-A2 | **空参数守卫**：`set_style` 空 style → `EMPTY_STYLE`；`set_content` 缺 content → `MISSING_CONTENT` | ✅ 已实现 | 防止「打捞成 `{}` 后静默空操作」这种更隐蔽的假成功 | 失败仍失败，但报错明确 |
+| P0-B | **换模型档位**：用 `qwen-plus` / `qwen-max` / `gpt-4o` 跑同一 harness | ⏳ 待执行 | 原始 args 已证明是模型侧格式错乱，链路侧打捞救不回 `set_style` | 输出并列摘要，量化模型档位的贡献 |
+| P0-C | 重试回传具体原因（含原始 args 片段）+ 明确禁止 `<parameter=xxx>` 标记 | ✅ 已实现 | 39 次重试 0 次自愈，反馈信息不足 | `retries.avgPerTurn` 下降 |
+| P1 | 单请求超时可配置并下调（如 120 s → 45 s），且 timeout 不占满重试额度 | ⏳ 待做 | 5 次卡死吃掉 69% 墙钟；成功请求 P95 仅 11.5 s | 采集总时长下降 |
+| P1 | 重复调用治理：`add_module` 增加同名模块守卫，返回结构化 redundant 提示 | ⏳ 待做 | add→remove 抖动白烧 17 次调用，单轮最高 51.5k tokens | 工具调用次数与 tokens 下降 |
+| P1 | 防「静默假成功」：无工具调用却声称已修改时给出明确提示（对齐已有的「不支持 Function Calling」检测） | ⏳ 待做 | 幻觉式成功比报错更危险（见发现 9） | 该场景轮次成功率不再虚高 |
+| P2 | 工具 schema 瘦身（`execute_skill` 的 description 内嵌长参数说明，schema 共 9,387 字符/请求） | ⏳ 待做 | 固定 prompt 开销，占 tokens 绝对大头 | 每轮 prompt tokens 下降 |
+| P2 | schema 收敛：给 `style` / `params` 定义明确 `properties`，或用扁平参数替代嵌套对象 | ⏳ 待做 | 嵌套对象正是模型出错的触发点 | 参数不可用率进一步下降 |
 
-**P0 前置（先取证）**：取一份模型原始 args 原文——终端里 `[Tool Call] 参数 JSON 不合法且无法修复: …` 后面就是原文前 200 字符（`npm run ai-baseline` 的 verbose reporter 会打印；也可用 `AI_BASELINE_ITERATIONS=1` 单场景复跑抓一行）。
+**已放弃的方案**：原先 P0 打算用 `JSON5.parse` 兜底，被真实样本证伪——缺值（`"style": }`）在 JSON5 里同样非法，XML 标记更是无法解析。改成的方案是「打捞 + 必填校验 + 跳过执行」，并且不引入新依赖。
+
+**下一步**：用同一 harness、同一模型复跑一次（`AI_BASELINE_KEY=*** npm run ai-baseline`），得到 P0-A/A2/C 的 after 数据；再换 `qwen-plus` 跑对照组（P0-B），判定模型档位与链路的责任划分。
 
 ## 九、后续待办
 
