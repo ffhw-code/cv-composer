@@ -506,6 +506,7 @@ export function useAiChat() {
     toolStatus,
     toast,
     handleKeyDown,
+    handleSend,
     handleExportLayout,
     handleExportMetrics,
     applySuggestion,
