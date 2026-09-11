@@ -3,7 +3,7 @@
 import { useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { useResumeStore } from '../../store/useResumeStore';
 import type { ResumeModule } from '../../types/resume';
-import { buildSystemPrompt, aiTools, toolHandlerMap } from '../../engine/aiPrompt';
+import { buildSystemPrompt, aiTools, toolHandlerMap, getRequiredToolArgs } from '../../engine/aiPrompt';
 import { getFixedConstraints } from '../../engine/ruleBase';
 import { executeSkill } from '../../engine/skillExecutor';
 import { exportLayoutTree, getCanvasStateSummary } from '../../utils/moduleUtils';
@@ -13,7 +13,7 @@ import {
   getProviderQuirks,
   resolveBaseUrl,
 } from '../../utils/aiConfig';
-import { repairTruncatedJson } from '../../utils/jsonRepair';
+import { parseToolArguments } from '../../utils/toolArgsParser';
 import {
   estimateTokens,
   exportAiMetricsJson,
@@ -206,31 +206,26 @@ export function useAiChat() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const toolResults: any[] = [];
     let hasError = false;
+    /** 最近一次「参数不可用」的具体原因，回传给模型帮助它自纠正 */
+    let argsErrorDetail = '';
     const createdIds_ = createdIds || new Set<string>();
 
     for (const toolCall of msg.tool_calls) {
       const fnName = toolCall.function.name;
+      const parsedArgs = parseToolArguments(toolCall.function.arguments, getRequiredToolArgs(fnName));
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let args: any = {};
-      let argsStatus: AiArgsStatus = 'ok';
-      try {
-        args = JSON.parse(toolCall.function.arguments || '{}');
-      } catch {
-        const raw = toolCall.function.arguments || '{}';
-        const repaired = repairTruncatedJson(raw);
-        try {
-          args = JSON.parse(repaired);
-          argsStatus = 'repaired';
-          console.warn('[Tool Call] JSON 已修复，原参数不完整:', raw.slice(0, 100));
-        } catch {
-          argsStatus = 'invalid';
-          console.error(`[Tool Call] 参数 JSON 不合法且无法修复: ${raw.slice(0, 200)}`);
-        }
+      const args: any = parsedArgs.args;
+      const argsStatus: AiArgsStatus = parsedArgs.status;
+      if (argsStatus === 'repaired') {
+        console.warn('[Tool Call] 参数已打捞/补齐:', parsedArgs.detail ?? '');
+      } else if (argsStatus === 'invalid') {
+        console.error(`[Tool Call] 参数不可用: ${parsedArgs.detail ?? ''}`);
       }
 
       // 参数解析失败时即便工具「没抛错」也不算成功
       let toolOk = argsStatus !== 'invalid';
       let toolErrorKind: AiErrorKind | undefined = argsStatus === 'invalid' ? 'invalid_args' : undefined;
+      if (argsStatus === 'invalid') argsErrorDetail = parsedArgs.detail ?? '';
 
       const recordTool = (ok: boolean, errorKind?: AiErrorKind): void => {
         recordAiMetrics({
@@ -248,7 +243,18 @@ export function useAiChat() {
 
       let resultContent: string;
       try {
-        if (fnName === 'execute_skill') {
+        if (argsStatus === 'invalid') {
+          // 参数不可用时不执行 handler：避免用 {} 或残缺参数产生误导性报错 / 空操作
+          hasError = true;
+          toolOk = false;
+          toolErrorKind = 'invalid_args';
+          setToolStatus(`${fnName} ✗ 参数不可用`);
+          resultContent = JSON.stringify({
+            error: 'INVALID_ARGS',
+            message: `${fnName} 的参数无法解析：${argsErrorDetail}`,
+            fix: '请重新调用该工具，arguments 必须是一个合法 JSON 对象：键和字符串值都要用双引号、不能省略嵌套对象的值、不要输出 <parameter=xxx> 之类的标记。',
+          });
+        } else if (fnName === 'execute_skill') {
           const skillResult = await executeSkill(args.name, args.params || {}, {
             get modules() { return useResumeStore.getState().modules; },
             importModules: (mods: ResumeModule[]) => useResumeStore.getState().importModules(mods),
@@ -342,7 +348,11 @@ export function useAiChat() {
 
     const trailingUserMsg = {
       role: 'user',
-      content: hasError ? '请修正错误并重试。' : '工具已执行完毕，请根据结果继续回复用户。',
+      content: hasError
+        ? (argsErrorDetail
+            ? `请修正错误并重试。注意：工具参数必须是合法 JSON 对象（键与字符串值加双引号、嵌套对象的值不能省略），禁止使用 <parameter=xxx> 这类标记。失败详情：${argsErrorDetail}`
+            : '请修正错误并重试。')
+        : '工具已执行完毕，请根据结果继续回复用户。',
     };
 
     if (hasError && retryCount < 2) {

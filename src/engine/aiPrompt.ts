@@ -623,6 +623,13 @@ export const toolHandlerMap: Record<string, RegisteredToolRunner> = Object.fromE
   aiTools.flatMap((tool) => (tool.run ? [[tool.function.name, tool.run]] : [])),
 ) as Record<string, RegisteredToolRunner>;
 
+/** 某工具的必填参数名（取自 schema），用于校验模型返回的参数是否完整 */
+export function getRequiredToolArgs(name: string): readonly string[] {
+  const schema = aiTools.find((tool) => tool.function.name === name)?.function.parameters;
+  const required = (schema as { required?: unknown } | undefined)?.required;
+  return Array.isArray(required) ? required.filter((key): key is string => typeof key === 'string') : [];
+}
+
 // ==================== System Prompt ====================
 
 function generateAvailableModules(): string {
