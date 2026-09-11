@@ -18,6 +18,13 @@
  *   AI_BASELINE_BASE_URL   选填，默认取服务商预设
  *   AI_BASELINE_ITERATIONS 选填，每个场景重复次数，默认 5
  *   AI_BASELINE_OUT_DIR    选填，产物目录，默认 metrics
+ *   AI_BASELINE_SCENARIOS  选填，逗号分隔的场景 id，只跑指定场景（默认 5 类全跑）
+ *   AI_BASELINE_MAX_TURN_TOKENS 选填，单轮 token 上限，超过即自动终止，默认 30000
+ *
+ * 自动终止与落盘：单轮 token 超过上限、或该轮出现网络类失败（`errorKind = network`）
+ * 时立即停止后续采集，并把已完成的轮次落盘（报告里 `aborted = true`）。
+ * 注意守卫是**跑完一轮之后**判定，无法中断进行中的单轮，该轮自身消耗的 token 仍会花掉；
+ * 若服务商不返回 usage，则 token 守卫无从判定（`totalTokens` 恒为 0）。
  */
 import { afterAll, beforeAll, describe, it } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
@@ -57,6 +64,16 @@ const BASE_URL = process.env.AI_BASELINE_BASE_URL ?? PRESET.baseUrl;
 const PREFLIGHT_ENABLED = process.env.AI_BASELINE_PREFLIGHT !== '0';
 /** 传输层失败占比超过该值就认为这次采集被网络污染，不能用于正式对比 */
 const SUSPECT_TRANSPORT_RATIO = 0.2;
+/** 逗号分隔的场景 id 白名单；为空表示 5 类场景全跑 */
+const SCENARIOS_FILTER = (process.env.AI_BASELINE_SCENARIOS ?? '')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
+/** 单轮 token 上限：超过就自动终止，避免在被网络/坏场景卡住时白烧额度 */
+const MAX_TURN_TOKENS = ((): number => {
+  const raw = Number(process.env.AI_BASELINE_MAX_TURN_TOKENS || 30000);
+  return Number.isFinite(raw) && raw > 0 ? raw : 30000;
+})();
 
 // ==================== 场景定义 ====================
 
@@ -70,7 +87,7 @@ interface Scenario {
   expectToolError?: boolean;
 }
 
-const SCENARIOS: Scenario[] = [
+const ALL_SCENARIOS: Scenario[] = [
   {
     id: 'generate-resume',
     title: '整份生成（execute_skill → generate-resume）',
@@ -108,6 +125,21 @@ const SCENARIOS: Scenario[] = [
     expectToolError: true,
   },
 ];
+
+/** 实际要跑的场景：按 `AI_BASELINE_SCENARIOS` 过滤，未设置时等于全量 */
+const SCENARIOS: Scenario[] = SCENARIOS_FILTER.length === 0
+  ? ALL_SCENARIOS
+  : ALL_SCENARIOS.filter((s) => SCENARIOS_FILTER.includes(s.id));
+
+// 场景名校验必须在模块顶层做：写在 beforeAll 里的话，场景全写错时一个 describe 都注册不上，
+// vitest 只会报一句 "No test suite found"，看不出真正原因
+const UNKNOWN_SCENARIOS = SCENARIOS_FILTER.filter((id) => !ALL_SCENARIOS.some((s) => s.id === id));
+if (UNKNOWN_SCENARIOS.length > 0) {
+  throw new Error(
+    `AI_BASELINE_SCENARIOS 含未知场景：${UNKNOWN_SCENARIOS.join('、')}\n` +
+    `  可选值：${ALL_SCENARIOS.map((s) => s.id).join('、')}`,
+  );
+}
 
 // ==================== 画布种子 ====================
 
@@ -204,6 +236,42 @@ async function runTurn(scenario: Scenario, iteration: number): Promise<TurnRecor
     roundsWithUsage: usedRounds.length,
     events,
   };
+}
+
+// ==================== 自动终止守卫 ====================
+
+/**
+ * 触发即终止的错误类型。只列 `network`（连不上 / 连接被重置 / 连接超时）：
+ * 继续跑只会重复白烧额度。
+ *
+ * 刻意**不列 `timeout`**：`set_style` 这类场景按设计就会以单请求超时收尾，
+ * 把它也算进来会让这些场景永远采不到数据。
+ */
+const ABORT_ON_ERROR_KINDS = ['network'];
+
+interface AbortState {
+  reason: 'network' | 'token_budget';
+  detail: string;
+}
+
+let abortState: AbortState | null = null;
+
+/** 跑完一轮后判定是否要终止本次采集；返回非 null 表示需立即终止并落盘 */
+function checkAbort(record: TurnRecord): AbortState | null {
+  const netKind = record.errorKinds.find((k) => ABORT_ON_ERROR_KINDS.includes(k));
+  if (netKind) {
+    return {
+      reason: 'network',
+      detail: `${record.scenario} 第 ${record.iteration} 轮出现 ${netKind} 失败，判定链路不可用，停止后续采集以保护额度`,
+    };
+  }
+  if (record.totalTokens > MAX_TURN_TOKENS) {
+    return {
+      reason: 'token_budget',
+      detail: `${record.scenario} 第 ${record.iteration} 轮消耗 ${record.totalTokens} tokens，超过单轮上限 ${MAX_TURN_TOKENS}，停止后续采集以保护额度`,
+    };
+  }
+  return null;
 }
 
 // ==================== 汇总与报告 ====================
@@ -311,6 +379,10 @@ interface BaselineReport {
   runId: string;
   generatedAt: string;
   finished: boolean;
+  /** 触发自动终止条件时为 true：计划没跑满，数据不完整 */
+  aborted: boolean;
+  abortReason?: string;
+  abortDetail?: string;
   /** 传输层失败占比过高时为 true：本次数据受网络污染，不要用于正式对比 */
   suspect: boolean;
   suspectReason?: string;
@@ -336,6 +408,8 @@ function buildReport(finished: boolean): BaselineReport {
     runId: RUN_ID,
     generatedAt: new Date().toISOString(),
     finished,
+    aborted: abortState !== null,
+    ...(abortState ? { abortReason: abortState.reason, abortDetail: abortState.detail } : {}),
     suspect,
     ...(suspect
       ? { suspectReason: `传输层失败 ${transportFailures}/${roundEvents.length}（${Math.round(transportRatio * 100)}%）超过 ${SUSPECT_TRANSPORT_RATIO * 100}%，本次数据不适合作为正式对比基线` }
@@ -376,6 +450,10 @@ function buildSummaryMarkdown(report: BaselineReport): string {
   lines.push(`- 代码版本：\`${report.git.commit}\`${dirtyNote}`);
   lines.push(`- 服务商/模型：${report.request.provider} / ${report.request.model}（baseUrl: ${report.request.baseUrl}）`);
   lines.push(`- 规模：${report.perScenario.length} 类场景 × ${report.plan.iterationsPerScenario} 次 = 计划 ${report.plan.plannedTurns} 轮，实际完成 ${report.plan.completedTurns} 轮`);
+  if (report.aborted) {
+    lines.push(`- ⛔ **本次采集被自动终止（${report.abortReason}）**：${report.abortDetail}`);
+    lines.push('  后续场景未采集，本文件只包含已完成轮次的数据。');
+  }
   if (report.suspect) {
     lines.push(`- ⚠️ **本次数据受网络污染，不能作为正式对比基线**：${report.suspectReason}`);
   }
@@ -477,6 +555,10 @@ for (const scenario of SCENARIOS) {
     it(
       scenario.title,
       async () => {
+        if (abortState) {
+          console.log(`[${scenario.id}] 跳过：本次采集已终止（${abortState.reason}）`);
+          return;
+        }
         for (let i = 1; i <= ITERATIONS_PER_SCENARIO; i += 1) {
           const record = await runTurn(scenario, i);
           allTurns.push(record);
@@ -493,6 +575,16 @@ for (const scenario of SCENARIOS) {
             record.httpStatuses.length > 0 ? `http=[${record.httpStatuses.join(',')}]` : '',
           ].filter(Boolean);
           console.log(parts.join(' '));
+
+          // 触到守卫就立刻收手：把已经跑完的轮次落盘，不再消耗剩余额度
+          const violation = checkAbort(record);
+          if (violation) {
+            abortState = violation;
+            const paths = flush(false);
+            console.log(`[abort] 触发终止条件（${violation.reason}）：${violation.detail}`);
+            console.log(`[abort] 已停止采集，落盘 ${allTurns.length} 轮${paths ? `：${paths.jsonPath}` : ''}`);
+            return;
+          }
         }
         // 每个场景结束就落盘一次，便于中途 Ctrl+C 也保留已采集数据
         flush(false);
@@ -502,13 +594,15 @@ for (const scenario of SCENARIOS) {
 }
 
 afterAll(() => {
-  const paths = flush(true);
+  // 被守卫终止时不算「跑完」：finished 保持 false，避免下游把它当完整基线
+  const completed = abortState === null;
+  const paths = flush(completed);
   if (!paths) {
     console.log('本次没有采集到任何数据（预检失败或全部轮次未完成），未写入 metrics/。');
     return;
   }
   console.log('');
-  console.log(buildSummaryMarkdown(buildReport(true)));
+  console.log(buildSummaryMarkdown(buildReport(completed)));
   console.log(`原始数据：${paths.jsonPath}`);
   console.log(`文本摘要：${paths.summaryPath}`);
 });
