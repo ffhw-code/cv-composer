@@ -33,3 +33,6 @@ dist-ssr
 保存的简历/
 固有问题.md
 总执行方案.md
+
+# AI 基线采集产物（原始 JSON 本地归档，结论写入 METRICS.md）
+metrics/

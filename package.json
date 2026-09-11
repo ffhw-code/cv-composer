@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "bench": "vitest bench",
+    "ai-baseline": "tsc -p tsconfig.baseline.json && vitest run --config vitest.ai-baseline.config.ts",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest"
