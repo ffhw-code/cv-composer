@@ -244,6 +244,22 @@ describe('handleSetContent', () => {
     const err = expectError(handleSetContent({ id: 'nonexistent', content: 'x' }, []));
     expect(err.code).toBe('MODULE_NOT_FOUND');
   });
+
+  it('content 缺失返回结构化错误，不做静默修改', () => {
+    const initial = expectSuccess(handleAddText({ content: '旧内容' }, []));
+    const id = initial[0]!.id;
+
+    const err = expectError(handleSetContent({ id, content: undefined! }, initial));
+    expect(err.code).toBe('MISSING_CONTENT');
+  });
+
+  it('content 为空字符串是合法的清空操作', () => {
+    const initial = expectSuccess(handleAddText({ content: '旧内容' }, []));
+    const id = initial[0]!.id;
+
+    const result = expectSuccess(handleSetContent({ id, content: '' }, initial));
+    expect(result[0]!.content).toBe('');
+  });
 });
 
 describe('handleSetStyle', () => {
@@ -258,6 +274,22 @@ describe('handleSetStyle', () => {
 
     expect(result[0]!.style!.fontSize).toBe('24px');
     expect(result[0]!.style!.color).toBe('#ff0000');
+  });
+
+  it('style 为空对象返回结构化错误，避免静默空操作', () => {
+    const initial = expectSuccess(handleAddText({ content: 'x' }, []));
+    const id = initial[0]!.id;
+
+    const err = expectError(handleSetStyle({ id, style: {} }, initial));
+    expect(err.code).toBe('EMPTY_STYLE');
+  });
+
+  it('style 缺失返回结构化错误', () => {
+    const initial = expectSuccess(handleAddText({ content: 'x' }, []));
+    const id = initial[0]!.id;
+
+    const err = expectError(handleSetStyle({ id, style: undefined! }, initial));
+    expect(err.code).toBe('EMPTY_STYLE');
   });
 });
 

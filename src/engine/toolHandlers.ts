@@ -520,6 +520,15 @@ export function handleAddModule(params: AddModuleParams, modules: ResumeModule[]
 }
 
 export function handleSetContent(params: SetContentParams, modules: ResumeModule[]): ToolResult {
+  if (typeof params?.content !== 'string') {
+    return {
+      success: false,
+      code: 'MISSING_CONTENT',
+      message: 'set_content 缺少 content 参数，未做任何修改。',
+      fix: '请提供 content 字符串（想清空内容就显式传空字符串 ""），例如 {"id":"模块id","content":"<p>新内容</p>"}。',
+      originalModules: modules,
+    };
+  }
   const cmd: Command = {
     action: 'setContent',
     params: { id: params.id, content: params.content },
@@ -528,6 +537,16 @@ export function handleSetContent(params: SetContentParams, modules: ResumeModule
 }
 
 export function handleSetStyle(params: SetStyleParams, modules: ResumeModule[]): ToolResult {
+  const style = params?.style as Record<string, string> | null | undefined;
+  if (!style || typeof style !== 'object' || Array.isArray(style) || Object.keys(style).length === 0) {
+    return {
+      success: false,
+      code: 'EMPTY_STYLE',
+      message: 'set_style 的 style 参数为空，没有可应用的样式，未做任何修改。',
+      fix: 'style 必须是「属性名 → 值」的合法 JSON 对象，至少包含一个属性，例如 {"fontSize":"15px","color":"#334155"}。只改单个属性请用 set_property。',
+      originalModules: modules,
+    };
+  }
   const cmd: Command = {
     action: 'setStyle',
     params: { id: params.id, style: params.style },
