@@ -8,6 +8,7 @@ import { getFixedConstraints } from '../../engine/ruleBase';
 import { executeSkill } from '../../engine/skillExecutor';
 import { exportLayoutTree, getCanvasStateSummary } from '../../utils/moduleUtils';
 import {
+  getAiRequestTimeoutMs,
   getApiConfig,
   getUploadedFile,
   getProviderQuirks,
@@ -34,11 +35,12 @@ import {
   callAiForPolish,
   callAiForEvaluate,
   callSmartFill,
+  describeFetchError,
+  describeHttpError,
 } from './aiApi';
 import { useFileImport } from './useFileImport';
 
 const MAX_TOOL_ROUNDS = 8;
-const AI_REQUEST_TIMEOUT_MS = 120_000;
 
 /** 单轮用户对话的埋点累加器（贯穿多轮 function-calling 与重试） */
 interface TurnAccumulator {
@@ -129,8 +131,9 @@ export function useAiChat() {
       turn.retries = Math.max(turn.retries, retryCount);
     };
 
+    const requestTimeoutMs = getAiRequestTimeoutMs();
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), AI_REQUEST_TIMEOUT_MS);
+    const timeoutId = setTimeout(() => controller.abort(), requestTimeoutMs);
 
     let response: Response;
     try {
@@ -151,7 +154,10 @@ export function useAiChat() {
       });
     } catch (err: unknown) {
       const isTimeout = err instanceof Error && err.name === 'AbortError';
-      recordRound(false, { errorKind: isTimeout ? 'timeout' : 'network' });
+      recordRound(false, {
+        errorKind: isTimeout ? 'timeout' : 'network',
+        ...(isTimeout ? { errorCode: 'TIMEOUT', errorDetail: `超过 ${requestTimeoutMs} ms 未响应` } : describeFetchError(err)),
+      });
       if (isTimeout) {
         throw new Error('请求超时，请稍后重试。', { cause: err });
       }
@@ -164,7 +170,7 @@ export function useAiChat() {
     if (!response.ok) {
       const errText = await response.text();
       console.error('[AI Request] API 报错详情:', response.status, errText);
-      recordRound(false, { httpStatus: response.status, errorKind: 'http' });
+      recordRound(false, { httpStatus: response.status, errorKind: 'http', ...describeHttpError(response.status, errText) });
       throw new Error(translateApiError(response.status, errText, model));
     }
 
@@ -172,7 +178,7 @@ export function useAiChat() {
     try {
       data = await response.json();
     } catch (err) {
-      recordRound(false, { httpStatus: response.status, errorKind: 'http' });
+      recordRound(false, { httpStatus: response.status, errorKind: 'http', errorCode: 'INVALID_JSON_RESPONSE' });
       throw err;
     }
     const msg = data.choices?.[0]?.message;

@@ -88,6 +88,31 @@ export function saveApiConfig(config: ApiConfig): void {
   sessionStorage.setItem(STORAGE_KEY, JSON.stringify(config));
 }
 
+// ---- 请求超时 ----
+
+/**
+ * 单次 AI 请求的默认超时（毫秒）。
+ * 改前基线里成功请求的 P95 只有 14.3 s，120 s 只会把「网络挂死」拖成两分钟等待，
+ * 因此默认调到 45 s；需要更宽松时用 localStorage 覆盖（见 getAiRequestTimeoutMs）。
+ */
+export const DEFAULT_AI_REQUEST_TIMEOUT_MS = 45_000;
+
+/** localStorage 覆盖键：便于临时调整或测试，无需改代码 */
+export const AI_REQUEST_TIMEOUT_KEY = 'resume_ai_request_timeout_ms';
+
+const MIN_TIMEOUT_MS = 5_000;
+const MAX_TIMEOUT_MS = 600_000;
+
+/** 读取单次请求超时：localStorage 覆盖（5s~600s 内视为有效）> 默认 45s */
+export function getAiRequestTimeoutMs(): number {
+  try {
+    const raw = typeof localStorage === 'undefined' ? null : localStorage.getItem(AI_REQUEST_TIMEOUT_KEY);
+    const value = raw ? Number(raw) : NaN;
+    if (Number.isFinite(value) && value >= MIN_TIMEOUT_MS && value <= MAX_TIMEOUT_MS) return value;
+  } catch { /* 存储不可用时退回默认值 */ }
+  return DEFAULT_AI_REQUEST_TIMEOUT_MS;
+}
+
 export const MAX_FILE_SIZE = 5 * 1024 * 1024;
 export const MAX_BASE64_SIZE = 6.8 * 1024 * 1024;
 

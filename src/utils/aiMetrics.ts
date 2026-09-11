@@ -51,6 +51,10 @@ export interface AiRoundEvent {
   latencyMs: number;
   httpStatus?: number;
   errorKind?: AiErrorKind;
+  /** 失败原因的机器可读码（如 ECONNRESET、EAI_AGAIN、AllocationQuota.FreeTierOnly、HTTP_400） */
+  errorCode?: string;
+  /** 失败原因的可读说明（已截断，不含简历内容与 Key） */
+  errorDetail?: string;
   /** 同一轮对话内的重试序号，0 表示首次请求 */
   retryIndex: number;
   toolRound: number;
@@ -206,6 +210,8 @@ export interface AiMetricsSummary {
   roundsOk: number;
   roundSuccessRate: number;
   roundErrors: Record<string, number>;
+  /** 失败原因码 → 次数（诊断链路问题时最关键的一列） */
+  roundErrorCodes: Record<string, number>;
   channels: Record<string, number>;
   tools: {
     calls: number;
@@ -250,10 +256,13 @@ export function summarizeAiMetrics(events: AiMetricEvent[] = getAiMetrics()): Ai
 
   const okRounds = rounds.filter(r => r.ok);
   const roundErrors: Record<string, number> = {};
+  const roundErrorCodes: Record<string, number> = {};
   for (const r of rounds) {
     if (r.ok) continue;
     const key = r.errorKind || 'unknown';
     roundErrors[key] = (roundErrors[key] || 0) + 1;
+    const codeKey = r.errorCode || key;
+    roundErrorCodes[codeKey] = (roundErrorCodes[codeKey] || 0) + 1;
   }
 
   const channels: Record<string, number> = {};
@@ -296,6 +305,7 @@ export function summarizeAiMetrics(events: AiMetricEvent[] = getAiMetrics()): Ai
     roundsOk: okRounds.length,
     roundSuccessRate: rounds.length === 0 ? 0 : okRounds.length / rounds.length,
     roundErrors,
+    roundErrorCodes,
     channels,
     tools: {
       calls: tools.length,
@@ -356,7 +366,12 @@ export function formatAiMetricsSummary(summary: AiMetricsSummary): string {
   const roundErrDetail = Object.entries(summary.roundErrors)
     .map(([kind, count]) => `${kind} ${count}`)
     .join('、');
+  const errorCodeDetail = Object.entries(summary.roundErrorCodes)
+    .sort((a, b) => b[1] - a[1])
+    .map(([code, count]) => `${code} ${count}`)
+    .join('、');
   lines.push(`- 请求：${summary.rounds} 次，成功率 ${pct(summary.roundSuccessRate)}${roundErrDetail ? `（失败：${roundErrDetail}）` : ''}`);
+  if (errorCodeDetail) lines.push(`- 失败原因码：${errorCodeDetail}`);
 
   const t = summary.tools;
   if (t.calls > 0) {

@@ -2,7 +2,7 @@
 //
 // 所有请求都经由 postChatCompletions 统一发出，顺带记录 AI 指标埋点
 // （渠道、耗时、HTTP 状态、token 用量、注入体积），供 AI 链路回归对比使用。
-import { getApiConfig, resolveBaseUrl, type ApiConfig } from '../../utils/aiConfig';
+import { getAiRequestTimeoutMs, getApiConfig, resolveBaseUrl, type ApiConfig } from '../../utils/aiConfig';
 import {
   estimateTokens,
   nowMs,
@@ -12,12 +12,71 @@ import {
   type AiRoundEvent,
 } from '../../utils/aiMetrics';
 
-export function translateApiError(status: number, body: string, model: string): string {
-  let detail = '';
+/** 从服务商错误响应体里提取可读信息（兼容 OpenAI / 百炼的 error.message、error.code） */
+export function extractApiErrorDetail(body: string): string {
   try {
     const parsed = JSON.parse(body);
-    detail = parsed.error?.message || parsed.error?.code || parsed.message || '';
-  } catch { /* ignore parse errors */ }
+    return parsed.error?.message || parsed.error?.code || parsed.message || '';
+  } catch {
+    return '';
+  }
+}
+
+export interface AiErrorInfo {
+  /** 机器可读的失败原因，用于聚合统计（如 ECONNRESET、AllocationQuota.FreeTierOnly） */
+  errorCode?: string;
+  /** 可读说明（截断到 200 字符，不含简历内容与 Key） */
+  errorDetail?: string;
+}
+
+const MAX_DETAIL = 200;
+
+function trimDetail(text: string): string | undefined {
+  const oneLine = text.replace(/\s+/g, ' ').trim();
+  if (!oneLine) return undefined;
+  return oneLine.length > MAX_DETAIL ? `${oneLine.slice(0, MAX_DETAIL)}…` : oneLine;
+}
+
+/**
+ * 归纳网络层失败原因：`fetch failed` 真正的信息藏在 err.cause 里
+ * （ECONNRESET / EAI_AGAIN / ETIMEDOUT / UND_ERR_*），不取出来就只能记一个笼统的 network。
+ */
+export function describeFetchError(err: unknown): AiErrorInfo {
+  const codes: string[] = [];
+  // 越深越具体：上层的 "fetch failed" 没有信息量，真正的原因在 cause 链末端
+  let detail = '';
+  let current: unknown = err;
+  for (let depth = 0; depth < 4 && current instanceof Error; depth += 1) {
+    const withCode = current as Error & { code?: unknown };
+    if (typeof withCode.code === 'string' && withCode.code) codes.push(withCode.code);
+    if (current.message) detail = current.message;
+    current = (current as Error & { cause?: unknown }).cause;
+  }
+  const errorCode = codes[0];
+  return {
+    ...(errorCode ? { errorCode } : {}),
+    ...(trimDetail(detail) ? { errorDetail: trimDetail(detail) } : {}),
+  };
+}
+
+/** 归纳 HTTP 错误原因：优先用服务商给的 error.code，否则退回 error.message */
+export function describeHttpError(status: number, body: string): AiErrorInfo {
+  let code = '';
+  try {
+    const parsed = JSON.parse(body);
+    const rawCode = parsed?.error?.code ?? parsed?.code;
+    code = typeof rawCode === 'string' ? rawCode : '';
+    if (!code && typeof parsed?.error?.type === 'string') code = parsed.error.type;
+  } catch { /* 非 JSON 响应体，退回状态码 */ }
+  const detail = extractApiErrorDetail(body) || body;
+  return {
+    errorCode: code || `HTTP_${status}`,
+    ...(trimDetail(detail) ? { errorDetail: trimDetail(detail) } : {}),
+  };
+}
+
+export function translateApiError(status: number, body: string, model: string): string {
+  const detail = extractApiErrorDetail(body);
 
   const lowerDetail = detail.toLowerCase();
 
@@ -118,10 +177,10 @@ export async function postChatCompletions(options: ChatCallOptions): Promise<AiR
     });
   };
 
-  const controller = timeoutMs === undefined ? null : new AbortController();
-  const timeoutId = controller !== null && timeoutMs !== undefined
-    ? setTimeout(() => controller.abort(), timeoutMs)
-    : null;
+  // 未显式传超时就走统一默认值：宁可失败得快，也不要挂死
+  const requestTimeoutMs = timeoutMs ?? getAiRequestTimeoutMs();
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), requestTimeoutMs);
 
   let response: Response;
   try {
@@ -129,20 +188,23 @@ export async function postChatCompletions(options: ChatCallOptions): Promise<AiR
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.apiKey}` },
       body: JSON.stringify({ model, messages, temperature: 0.1 }),
-      ...(controller ? { signal: controller.signal } : {}),
+      signal: controller.signal,
     });
   } catch (err: unknown) {
     const isTimeout = err instanceof Error && err.name === 'AbortError';
-    record(false, { errorKind: isTimeout ? 'timeout' : 'network' });
+    record(false, {
+      errorKind: isTimeout ? 'timeout' : 'network',
+      ...(isTimeout ? { errorCode: 'TIMEOUT', errorDetail: `超过 ${requestTimeoutMs} ms 未响应` } : describeFetchError(err)),
+    });
     if (isTimeout) throw new Error('请求超时，请稍后重试。', { cause: err });
     throw new Error('无法连接到 AI 服务，请检查网络连接或 Base URL 是否正确。', { cause: err });
   } finally {
-    if (timeoutId !== null) clearTimeout(timeoutId);
+    clearTimeout(timeoutId);
   }
 
   if (!response.ok) {
     const errText = await response.text();
-    record(false, { httpStatus: response.status, errorKind: 'http' });
+    record(false, { httpStatus: response.status, errorKind: 'http', ...describeHttpError(response.status, errText) });
     throw new Error(buildHttpError(response.status, errText));
   }
 

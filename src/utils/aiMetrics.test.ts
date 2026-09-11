@@ -161,6 +161,25 @@ describe('summarizeAiMetrics', () => {
     expect(summary.roundErrors).toEqual({ http: 1 });
   });
 
+  it('按失败原因码聚合（区分网络重置与超时）', () => {
+    const summary = summarizeAiMetrics([
+      roundEvent(),
+      roundEvent({ ok: false, errorKind: 'network', errorCode: 'ECONNRESET' }),
+      roundEvent({ ok: false, errorKind: 'network', errorCode: 'ECONNRESET' }),
+      roundEvent({ ok: false, errorKind: 'network', errorCode: 'EAI_AGAIN' }),
+      roundEvent({ ok: false, errorKind: 'timeout', errorCode: 'TIMEOUT' }),
+      roundEvent({ ok: false, errorKind: 'http', errorCode: 'AllocationQuota.FreeTierOnly' }),
+    ]);
+    expect(summary.roundErrorCodes).toEqual({
+      ECONNRESET: 2,
+      EAI_AGAIN: 1,
+      TIMEOUT: 1,
+      'AllocationQuota.FreeTierOnly': 1,
+    });
+    // 没有 errorCode 的旧事件退回用 errorKind 计数
+    expect(summarizeAiMetrics([roundEvent({ ok: false, errorKind: 'network' })]).roundErrorCodes).toEqual({ network: 1 });
+  });
+
   it('统计工具调用成功率与参数解析比例', () => {
     const summary = summarizeAiMetrics([
       toolEvent(),
@@ -280,6 +299,16 @@ describe('输出', () => {
     expect(text).toContain('P50 1.20s');
     expect(text).toContain('累计 120');
     expect(text).toContain('按渠道：chat 1');
+  });
+
+  it('文本摘要列出失败原因码', () => {
+    const text = formatAiMetricsSummary(summarizeAiMetrics([
+      roundEvent({ ok: false, errorKind: 'network', errorCode: 'ECONNRESET' }),
+      roundEvent({ ok: false, errorKind: 'timeout', errorCode: 'TIMEOUT' }),
+    ]));
+    expect(text).toContain('失败原因码：');
+    expect(text).toContain('ECONNRESET 1');
+    expect(text).toContain('TIMEOUT 1');
   });
 
   it('导出的 JSON 同时包含原始事件与摘要', () => {

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { callSmartFill, translateApiError } from './aiApi';
+import { callSmartFill, describeFetchError, describeHttpError, translateApiError } from './aiApi';
 import { clearAiMetrics, getAiMetrics, type AiRoundEvent } from '../../utils/aiMetrics';
+import { DEFAULT_AI_REQUEST_TIMEOUT_MS } from '../../utils/aiConfig';
 
 describe('translateApiError', () => {
   const model = 'qwen-max';
@@ -119,6 +120,7 @@ describe('AI 请求埋点', () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
     clearAiMetrics();
     Reflect.deleteProperty(globalThis, 'localStorage');
@@ -164,6 +166,71 @@ describe('AI 请求埋点', () => {
     expect(roundEvents()[0]).toMatchObject({ ok: false, errorKind: 'network' });
   });
 
+  it('网络异常记录 cause 里的错误码，便于判断是限流还是本机网络', async () => {
+    const cause = Object.assign(new Error('socket hang up'), { code: 'ECONNRESET' });
+    const err = Object.assign(new TypeError('fetch failed'), { cause });
+    vi.stubGlobal('fetch', vi.fn(async () => { throw err; }));
+
+    await expect(callSmartFill('系统提示', '用户输入')).rejects.toThrow('无法连接到 AI 服务');
+
+    expect(roundEvents()[0]).toMatchObject({
+      ok: false,
+      errorKind: 'network',
+      errorCode: 'ECONNRESET',
+      errorDetail: 'socket hang up',
+    });
+  });
+
+  it('HTTP 错误记录服务商错误码与说明（如额度用尽）', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(
+      JSON.stringify({ error: { message: 'Free quota exhausted', code: 'AllocationQuota.FreeTierOnly' } }),
+      { status: 403 },
+    )));
+
+    await expect(callSmartFill('系统提示', '用户输入')).rejects.toThrow();
+
+    expect(roundEvents()[0]).toMatchObject({
+      ok: false,
+      httpStatus: 403,
+      errorKind: 'http',
+      errorCode: 'AllocationQuota.FreeTierOnly',
+    });
+    expect(roundEvents()[0].errorDetail).toContain('Free quota exhausted');
+  });
+
+  it('未显式传超时时按默认值中止请求，并记录 TIMEOUT', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('fetch', vi.fn((_url: string, init?: RequestInit) => new Promise((_resolve, reject) => {
+      init?.signal?.addEventListener('abort', () => {
+        reject(Object.assign(new Error('aborted'), { name: 'AbortError' }));
+      });
+    })));
+
+    const promise = callSmartFill('系统提示', '用户输入');
+    const assertion = expect(promise).rejects.toThrow('请求超时');
+    await vi.advanceTimersByTimeAsync(DEFAULT_AI_REQUEST_TIMEOUT_MS);
+    await assertion;
+
+    expect(roundEvents()[0]).toMatchObject({ ok: false, errorKind: 'timeout', errorCode: 'TIMEOUT' });
+  });
+
+  it('localStorage 覆盖超时后按覆盖值中止', async () => {
+    localStorage.setItem('resume_ai_request_timeout_ms', '9000');
+    vi.useFakeTimers();
+    vi.stubGlobal('fetch', vi.fn((_url: string, init?: RequestInit) => new Promise((_resolve, reject) => {
+      init?.signal?.addEventListener('abort', () => {
+        reject(Object.assign(new Error('aborted'), { name: 'AbortError' }));
+      });
+    })));
+
+    const promise = callSmartFill('系统提示', '用户输入');
+    const assertion = expect(promise).rejects.toThrow('请求超时');
+    await vi.advanceTimersByTimeAsync(9000);
+    await assertion;
+
+    expect(roundEvents()[0]).toMatchObject({ errorKind: 'timeout' });
+  });
+
   it('响应体不是 JSON 时记录失败', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response('<html>502</html>', { status: 200 })));
 
@@ -180,5 +247,39 @@ describe('AI 请求埋点', () => {
     await callSmartFill('系统提示', '用户输入');
 
     expect(roundEvents()[0].usage).toBeUndefined();
+  });
+});
+
+describe('失败原因归纳', () => {
+  it('describeFetchError 沿 cause 链取错误码', () => {
+    const cause = Object.assign(new Error('getaddrinfo EAI_AGAIN'), { code: 'EAI_AGAIN' });
+    const err = Object.assign(new TypeError('fetch failed'), { cause });
+    expect(describeFetchError(err)).toEqual({
+      errorCode: 'EAI_AGAIN',
+      errorDetail: 'getaddrinfo EAI_AGAIN',
+    });
+  });
+
+  it('describeFetchError 对没有 cause 的普通错误只给 message', () => {
+    expect(describeFetchError(new Error('boom'))).toEqual({ errorDetail: 'boom' });
+  });
+
+  it('describeHttpError 优先取 error.code，没有 code 时退回 error.type 或状态码', () => {
+    expect(describeHttpError(400, JSON.stringify({ error: { code: 'invalid_parameter', message: 'bad' } }))).toMatchObject({
+      errorCode: 'invalid_parameter',
+      errorDetail: 'bad',
+    });
+    expect(describeHttpError(400, JSON.stringify({ error: { type: 'ModelNotFound', message: 'no such model' } }))).toMatchObject({
+      errorCode: 'ModelNotFound',
+    });
+    expect(describeHttpError(502, '<html>bad gateway</html>')).toMatchObject({
+      errorCode: 'HTTP_502',
+      errorDetail: '<html>bad gateway</html>',
+    });
+  });
+
+  it('describeHttpError 截断超长说明', () => {
+    const info = describeHttpError(500, JSON.stringify({ error: { message: 'x'.repeat(500) } }));
+    expect(info.errorDetail!.length).toBeLessThanOrEqual(201);
   });
 });
