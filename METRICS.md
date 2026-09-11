@@ -216,9 +216,11 @@
 |---|---|---|---|---|
 | P0-A | **参数打捞**：新增 `src/utils/toolArgsParser.ts`，按根对象逐键扫描，只保留「值本身是合法 JSON」的键，坏键记录原因；必填键（取自 tool schema）缺失时判 `invalid` 并**跳过 handler**，不再用 `{}` 硬跑 | ✅ 已实现（含 18 个真实样本测试） | 直接对着 51/96 的失败面 | `argsInvalid` 明显下降；`generate-resume`（params 可缺省）恢复正常 |
 | P0-A2 | **空参数守卫**：`set_style` 空 style → `EMPTY_STYLE`；`set_content` 缺 content → `MISSING_CONTENT` | ✅ 已实现 | 防止「打捞成 `{}` 后静默空操作」这种更隐蔽的假成功 | 失败仍失败，但报错明确 |
+| P0-1a | **失败归因埋点**：`AiRoundEvent` 记 `errorCode` / `errorDetail`（`ECONNRESET`、`EAI_AGAIN`、`TIMEOUT`、服务商 `error.code`），摘要按原因码聚合 | ✅ 已实现 | 上次只能看到笼统的 `network 16`，无法判断是限流还是本机网络 | 下次看摘要即可定位 |
+| P0-1b | **单请求超时**：120 s → 默认 45 s，且所有渠道（含 polish / evaluate / smart-fill）统一生效；可用 `localStorage.resume_ai_request_timeout_ms` 覆盖（5s~600s） | ✅ 已实现 | 成功请求 P95 仅 14.3 s；挂死连接白等 2 分钟 | 采集总时长下降 |
+| P0-1c | **harness 预检 + 污染标记**：开跑前发一个最小请求（含 tools schema）验证网络与模型名；传输失败占比 >20% 时报告标记 `suspect`；0 轮运行不落盘 | ✅ 已实现 | 07:46 / 07:50 两次因模型名无效白跑 50 轮；07:27 那轮被网络抖动污染却产出了正常模样的摘要 | 坏配置几秒内失败且不留脏文件 |
 | P0-B | **换模型档位**：用 `qwen-plus` / `qwen-max` / `gpt-4o` 跑同一 harness | ⏳ 待执行 | 原始 args 已证明是模型侧格式错乱，链路侧打捞救不回 `set_style` | 输出并列摘要，量化模型档位的贡献 |
 | P0-C | 重试回传具体原因（含原始 args 片段）+ 明确禁止 `<parameter=xxx>` 标记 | ✅ 已实现 | 39 次重试 0 次自愈，反馈信息不足 | `retries.avgPerTurn` 下降 |
-| P1 | 单请求超时可配置并下调（如 120 s → 45 s），且 timeout 不占满重试额度 | ⏳ 待做 | 5 次卡死吃掉 69% 墙钟；成功请求 P95 仅 11.5 s | 采集总时长下降 |
 | P1 | 重复调用治理：`add_module` 增加同名模块守卫，返回结构化 redundant 提示 | ⏳ 待做 | add→remove 抖动白烧 17 次调用，单轮最高 51.5k tokens | 工具调用次数与 tokens 下降 |
 | P1 | 防「静默假成功」：无工具调用却声称已修改时给出明确提示（对齐已有的「不支持 Function Calling」检测） | ⏳ 待做 | 幻觉式成功比报错更危险（见发现 9） | 该场景轮次成功率不再虚高 |
 | P2 | 工具 schema 瘦身（`execute_skill` 的 description 内嵌长参数说明，schema 共 9,387 字符/请求） | ⏳ 待做 | 固定 prompt 开销，占 tokens 绝对大头 | 每轮 prompt tokens 下降 |
@@ -226,7 +228,9 @@
 
 **已放弃的方案**：原先 P0 打算用 `JSON5.parse` 兜底，被真实样本证伪——缺值（`"style": }`）在 JSON5 里同样非法，XML 标记更是无法解析。改成的方案是「打捞 + 必填校验 + 跳过执行」，并且不引入新依赖。
 
-**下一步**：用同一 harness、同一模型复跑一次（`AI_BASELINE_KEY=*** npm run ai-baseline`），得到 P0-A/A2/C 的 after 数据；再换 `qwen-plus` 跑对照组（P0-B），判定模型档位与链路的责任划分。
+**中间数据（不作为 after）**：`2026-09-11T07-27-11-880Z`（qwen3.7-flash）参数层明显好转——工具成功率 40.6% → 82.1%、参数打捞 64.1%、不可用 53.1% → 15.4%、重试 1.36 → 0.16，`execute_skill` 从 23/23 失败变成 24/24 成功。但该轮 44 次请求只成功 21 次（`network` 16 + `timeout` 7，后者各占 120 s，合计占整轮墙钟 79%），且 `set_content` / `set_style` 10 轮全部在首个请求就断线，**`set_style` 仍无有效 after 数据**。已确认是本机网络抖动：紧随其后的两次 400（模型名无效）与 deepseek 那轮 24/24 HTTP 200 都拿到了正常响应。该轮数字仅作参考，不写进第五节。
+
+**下一步**：在稳定网络下先单场景补测（`set_style` + `qwen-plus`），确认打捞能否救回 `set_style`、以及强模型下打捞率是否趋近 0；再同模型复跑全量得到正式 after 数据（`AI_BASELINE_KEY=*** npm run ai-baseline`，预检会在网络/模型不可用时直接终止）。
 
 ## 九、后续待办
 
