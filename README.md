@@ -92,9 +92,9 @@ npm install
 npm run dev        # 启动开发服务器 (http://localhost:5173)
 npm run build      # 生产构建
 npm run preview    # 预览生产构建
-npm test           # 运行单元测试 (230 tests)
+npm test           # 运行单元测试 (304 tests)
 npm run lint       # 代码规范检查
-npx tsc --noEmit   # 类型检查
+npx tsc -b         # 类型检查
 ```
 
 不配 AI 模型也能使用所有手动编辑功能。要使用 AI 聊天或图片复现，需要配置模型 API Key。
@@ -200,7 +200,7 @@ src/
 ## 测试
 
 ```bash
-npm test           # 运行全部测试 (230 个)
+npm test           # 运行全部测试 (304 个)
 npm run test:watch # watch 模式
 ```
 
