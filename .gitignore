@@ -28,6 +28,9 @@ dist-ssr
 # Codex internal
 .agents/
 .codex/
+# 角色 prompt 与协作规则（本地使用，不进公开仓库）
+系统prompt/
+/AGENTS.md
 
 # Local data & internal docs
 保存的简历/
