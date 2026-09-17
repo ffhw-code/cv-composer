@@ -131,3 +131,77 @@ ENG：“我的理解是：把 `tool_choice` 从写死改为**按服务商 quirk
       `isUpload` 恒为真（system prompt 自带 `[上传文件]` 字面量），且这**完全解释了老板最初那次 400**（非上传轮次发的其实是 `required`）
 需要对方做什么：裁决方案 A（本卡按 quirks 层验收 + isUpload 恒真另开 P0 卡）还是方案 B（本卡扩权修 `useAiChat.ts:141`，需改写验收标准 2 并评估采集口径）
 需要老板拍板：有 —— ① 选 A 还是 B；② 是否同意「恒 required」这一既有形状的变更涉及 AI 采集口径（影响 TASK-003-B / TASK-008-I 可比性），归 PM/老板决定
+
+----
+## [2026-09-17] TASK-015 交付汇报（第 2 次 · 方案 B）
+提交：sha=6435a60，commit message=[TASK-015] fix: 修正 isUpload 恒真与视觉能力判定（方案 B）
+  （本卡第一轮提交 d057664 已在库内，本轮为其上的方案 B 修订）
+改动文件清单：
+  - src/components/AI/useAiChat.ts（白名单内；新增纯函数 `isUploadTurn`，判定只认 `role === 'user'` 的消息）
+  - src/utils/aiConfig.ts（白名单内；新增 `isVisionCapableModel`「显式配置优先」判定）
+  - src/utils/resumeParser.ts（白名单内「附条件授权」；两处 `isVisionModel` 调用改为 `isVisionCapableModel`，其余未动）
+  - src/components/AI/useAiChat.test.ts（白名单内；10 → 13 个用例）
+  - src/utils/aiConfig.test.ts（白名单内；6 → 10 个用例）
+  - 未新建其它文件；未动 `baseline/**`、`src/engine/aiPrompt.ts`、`RECOMMENDED_MODELS`、`resumeParser.test.ts`
+全绿汇报（原文粘贴，不许改写数字）：
+  - 类型检查：npx tsc -b → 退出码 0
+  - lint：npx eslint . --max-warnings 0 → 退出码 0，0 告警
+  - 测试：npm test → Test Files  18 passed (18) / Tests  324 passed (324)（基线 317 → 324，+7）
+  - 构建：npm run build → ✓ built in 897ms；入口 dist/assets/index-BfKqI_Gq.js 850,192 B（gzip 268.30 kB）、
+    resumeParser-CuT6CSdA.js 11,879 B（单次采样，按协议不得作对比依据）
+验收标准逐条对照：
+  1. **请求形状** ✅ 纯函数用例断言字段出现/缺席 + 集成用例断言真实请求体：
+     DeepSeek 非上传 → 无 `tool_choice`、无 `thinking`；上传 → `tool_choice:'required'` + `thinking:{type:'disabled'}`（见下方逐字段表）。
+  2. **`isUpload` 判定修正** ✅ 新增用例「system 消息含 `[上传文件]` 字面量时，普通用户指令仍判为非上传」，
+     改前失败 / 改后通过的实测原文：
+       · 改前（临时把 `isUploadTurn` 换回旧的角色无关匹配后复现，未用 stash/checkout/restore，复现后已还原）：
+         `Tests  1 failed | 12 skipped (13)`，断言位置 useAiChat.test.ts:77
+         `- Expected: false` / `+ Received: true`
+       · 改后：`Tests  1 passed | 12 skipped (13)`
+  3. **阿里云 / OpenAI / 自定义逐字段差异** ✅ 见下表（差异**只**来自 isUpload 语义修正；字段集合与顺序不变，未新增字段）。
+  4. **视觉能力判定** ✅ 改为「显式配置优先」：档位等于服务商预设声明的视觉档位时直接采信预设，名称正则只作兜底；
+     新增用例断言「DeepSeek 预设的视觉档位可通过图片上传的前置校验」（同文件同时断言 `isVisionModel('deepseek-flash') === false`，
+     证明不是靠扩正则）。既有用例「视觉模型不支持图片解析时抛出提示」（自填 `qwen-plus` 应当被拒）仍通过 —— 未放松任何既有测试。
+  5. **用例数** ✅ 317 → 324，不低于入库值 317。
+  6. **四项全绿** ✅ 见上。
+  7. **报告写明差异与 400 成因** ✅ 见下。
+
+改前 / 改后请求体逐字段差异（阿里云 / OpenAI / 自定义 三类预设相同；`thinking` 一律不发）：
+
+| 字段 | 非上传·改前 | 非上传·改后 | 上传·改前 | 上传·改后 |
+|---|---|---|---|---|
+| model | 有 | 有（不变） | 有 | 有（不变） |
+| messages | 有 | 有（不变） | 有 | 有（不变） |
+| tools | 有 | 有（不变） | 有 | 有（不变） |
+| tool_choice | `'required'`（因 isUpload 恒真） | `'auto'`（回到设计意图） | `'required'` | `'required'`（不变） |
+| temperature | 0.1 | 0.1（不变） | 0.1 | 0.1（不变） |
+
+字段顺序改前后一致：model → messages → tools → tool_choice → temperature（`tool_choice` 插入位置未变）；
+DeepSeek 预设为新增，无「改前」：非上传 = 上述字段去掉 `tool_choice`；上传 = `tool_choice:'required'` + 追加 `thinking:{type:'disabled'}`。
+原 400 成因：**已完全解释** —— 判定恒为真时非上传轮次发的也是 `'required'`（探针唯一不可用的组合），本卡已消除该形状。
+
+技术汇报（≤10 行）：
+  - `isUploadTurn`：只匹配用户消息的字符串 content，避免把 system prompt 正文里的流程说明当成上传标记；数组 content（图片消息）与缺字段的旧消息都安全返回 false。
+  - `isVisionCapableModel(provider, model)`：档位与预设视觉档位一致 → 直接采信（人工维护的权威数据）；否则退回名称正则，保持既有语义。
+  - 为什么这样切：预设档位是项目维护的显式配置，比「按名字猜能力」可靠；而自填档位若一律采信，会让既有用例
+    「自填 `qwen-plus` 作为视觉模型应当被拒」失效（该用例不在白名单、不许放松），故保留正则兜底。
+  - 残余风险 1：自填的、正则认不出的新档位仍会被拒（例如把非预设的视觉模型名填进 visionModel），需扩预设或另议。
+  - 残余风险 2：按 PM 口径，本卡交付即 AI 采集口径切换点；`TASK-003-B` / `TASK-008-I` 排在其后，历史「恒 required」数据不可与新数据直接对比。
+  - 真调模型复验（非上传轮次真实请求 200）由 `TASK-016-I` 冒烟承担，本卡未消耗任何额度。
+发现但未处理（可选）：
+  1. `resumeParser.test.ts` 不在本卡白名单，故「图片上传前置校验」的断言落在 `aiConfig.test.ts` 的 `isVisionCapableModel` 上（前置校验已全量改为调用它）；
+     若 PM 要求端到端断言（构造 `File` 调 `parseResumeFile`），需授权该测试文件或另开卡。
+  2. `RECOMMENDED_MODELS` 里的 `deepseek-chat` 按 PM 指示**未动**。
+自查五项：
+  ① 全绿汇报的数字是本次实测原文，未改写
+  ② 零越界：改动文件全部在任务卡白名单内（`resumeParser.ts` 属附条件授权，仅改两处调用点）
+  ③ 未删改、跳过、放松任何既有测试（324 ≥ 317，无删除；`resumeParser.test.ts` 原样通过）
+  ④ 未运行 ai-baseline、未消耗任何 API 额度
+  ⑤ 未改任务卡要求外的文档（本轮未改 README；`TASK_ENG.md` 的未提交改动是 PM 自己的文件，未碰）
+【传话块】
+收件人：PM
+结论：TASK-015 已交付（sha=6435a60，四项全绿，18 files / 324 tests，≥ 基线 317）—— quirks 层 + isUpload 修正 + 视觉能力判定三件都已落地，
+      原 400 成因已完全解释并在应用里消除；阿里云 / OpenAI / 自定义的请求体差异只有「非上传轮次的 tool_choice 由恒真的 required 回到 auto」一项
+需要对方做什么：按验收标准 1~7 复核（重点：isUpload 改前失败/改后通过的原文、逐字段差异表、`resumeParser.ts` 两处调用点），并确认视觉判定的口径
+      （PRESET 档位为权威、用户自填档位仍走正则 —— 这是为了不放松既有 `qwen-plus` 用例）；确认后下发 TASK-015-T
+需要老板拍板：无
