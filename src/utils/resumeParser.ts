@@ -1,5 +1,5 @@
 // src/utils/resumeParser.ts
-import { getApiConfig, isVisionModel, type ApiConfig } from './aiConfig';
+import { getApiConfig, isVisionCapableModel, type ApiConfig } from './aiConfig';
 import { postChatCompletions, type AiResponseData } from '../components/AI/aiApi';
 
 // ==================== 类型定义 ====================
@@ -365,14 +365,14 @@ export async function parseResumeFile(file: File): Promise<ParsedResume> {
   let model = config.visionModel || config.model;
   const isImage = file.type.startsWith('image/');
 
-  if (isImage && (!model || !isVisionModel(model))) {
+  if (isImage && (!model || !isVisionCapableModel(config.provider, model))) {
     throw new Error(`当前视觉模型「${model || '未设置'}」不支持图片解析。请在 API 设置中配置视觉模型（如 qwen-vl-max），与 FC 模型（如 qwen-max）分开设置。`);
   }
   if (!model) {
     model = 'qwen-vl-max';
   }
 
-  const visionModel = isVisionModel(model);
+  const visionModel = isVisionCapableModel(config.provider, model);
   const fileType = file.type;
 
   let messages: ChatMessage[];

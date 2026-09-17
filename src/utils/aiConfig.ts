@@ -189,3 +189,17 @@ export function isRecommendedModel(model: string): boolean {
 export function isVisionModel(model: string): boolean {
   return /(vl|vision|claude-3|gemini-pro-vision|ocr|gpt-4o)/i.test(model);
 }
+
+/**
+ * 判断某个档位能否用于图片解析：**显式配置优先，名称正则只作兜底**。
+ * - 该档位等于服务商预设声明的视觉档位时，直接采信预设（人工维护的权威数据），不再用正则猜名字 ——
+ *   正则猜名正是 `deepseek-flash`（探针实测支持图片输入）被误判为不支持的原因；
+ * - 其余情况（用户自填的视觉档位、只有 FC 模型可用）仍走名称正则，保持既有语义。
+ */
+export function isVisionCapableModel(provider: string, model: string): boolean {
+  const candidate = model.trim();
+  if (!candidate) return false;
+  const presetVision = (PROVIDER_PRESETS[provider]?.visionModel || '').trim();
+  if (presetVision && candidate === presetVision) return true;
+  return isVisionModel(candidate);
+}

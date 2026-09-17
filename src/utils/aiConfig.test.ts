@@ -4,6 +4,8 @@ import {
   DEFAULT_AI_REQUEST_TIMEOUT_MS,
   getProviderQuirks,
   getAiRequestTimeoutMs,
+  isVisionCapableModel,
+  isVisionModel,
   PROVIDER_PRESETS,
 } from './aiConfig';
 
@@ -68,5 +70,26 @@ describe('DeepSeek 预设与 ProviderQuirks 开关', () => {
       expect(quirks.omitAutoToolChoice).toBe(false);
       expect(quirks.disableThinkingWithRequiredToolChoice).toBe(false);
     }
+  });
+});
+
+describe('isVisionCapableModel：显式配置优先，名称正则只作兜底', () => {
+  it('DeepSeek 预设的视觉档位可通过图片上传的前置校验（单靠正则认不出 deepseek-flash）', () => {
+    const { visionModel } = PROVIDER_PRESETS.deepseek;
+    expect(isVisionModel(visionModel)).toBe(false); // 改前：正则判定为「不支持图片」
+    expect(isVisionCapableModel('deepseek', visionModel)).toBe(true);
+  });
+
+  it('预设档位在「回退到 FC 模型」的路径上同样被采信', () => {
+    expect(isVisionCapableModel('aliyun', 'qwen-vl-max')).toBe(true);
+    expect(isVisionCapableModel('openai', 'gpt-4o')).toBe(true);
+  });
+
+  it('用户自填的非视觉档位仍被拒绝（既有语义不变）', () => {
+    expect(isVisionCapableModel('aliyun', 'qwen-plus')).toBe(false);
+  });
+
+  it('档位为空时返回 false', () => {
+    expect(isVisionCapableModel('custom', '')).toBe(false);
   });
 });

@@ -5,7 +5,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { buildChatRequestBody, useAiChat, type ChatRequestBodyOptions } from './useAiChat';
+import { buildChatRequestBody, isUploadTurn, useAiChat, type ChatRequestBodyOptions } from './useAiChat';
 import { PROVIDER_PRESETS, getProviderQuirks, saveApiConfig, type ApiConfig } from '../../utils/aiConfig';
 import { buildSystemPrompt } from '../../engine/aiPrompt';
 
@@ -64,18 +64,34 @@ describe('buildChatRequestBody：形状', () => {
   });
 });
 
-// ==================== 集成：请求体真的接进了 fetch ====================
+// ==================== 上传轮次判定（isUpload 恒真的修正） ====================
 
-describe('根因记录：isUpload 恒为真（本卡不修，已按阻塞报 PM）', () => {
-  it('system prompt 正文自带 "[上传文件]" 字面量，而 system 消息每轮都发', () => {
-    // useAiChat 用 `msgs.some(m => m.content.includes('[上传文件]'))` 判定上传轮次，
-    // 于是只要请求里带 system 消息（每轮都带），该判定就为真 —— 所有请求都会走「上传」分支。
-    // 这是改前既有行为，修它需要改 aiPrompt 的措辞或放宽判定语义，且会改变全部服务商的
-    // tool_choice 行为，超出 TASK-015 白名单与授权，故仅在此记录、未处理。
-    expect(buildSystemPrompt()).toContain('[上传文件]');
+describe('isUploadTurn：判定只认用户消息', () => {
+  it('system 消息含 "[上传文件]" 字面量时，普通用户指令仍判为非上传', () => {
+    // 改前判定是 `msgs.some(m => m.content?.includes('[上传文件]'))`（不区分角色），
+    // 而 system prompt 正文自带该字面量 ⇒ isUpload 恒为真。本用例在改前失败、改后通过。
+    const systemMsg = { role: 'system', content: buildSystemPrompt() };
+    const userMsg = { role: 'user', content: '帮我删除工作经历模块' };
+
+    expect(systemMsg.content).toContain('[上传文件]'); // 前提：字面量确实在 system 正文里
+    expect(isUploadTurn([systemMsg, userMsg])).toBe(false);
+  });
+
+  it('用户消息带 [上传文件] 标记时判为上传轮次', () => {
+    const systemMsg = { role: 'system', content: buildSystemPrompt() };
+    const uploadMsg = { role: 'user', content: '[上传文件] 文件名: a.txt, 类型: text/plain, 请导入此简历' };
+
+    expect(isUploadTurn([systemMsg, uploadMsg])).toBe(true);
+  });
+
+  it('内容为数组（图片消息）或缺失内容的用户消息不会误判，也不会抛错', () => {
+    expect(isUploadTurn([{ role: 'user', content: [{ type: 'text', text: '[上传文件]' }] }])).toBe(false);
+    expect(isUploadTurn([{ role: 'user' }])).toBe(false);
+    expect(isUploadTurn([])).toBe(false);
   });
 });
 
+// ==================== 集成：请求体真的接进了 fetch ====================
 function deepseekConfig(): ApiConfig {
   const preset = PROVIDER_PRESETS.deepseek;
   return {
@@ -141,15 +157,15 @@ describe('useAiChat 请求体（集成）', () => {
     sessionStorage.clear();
   });
 
-  it('DeepSeek 真实非上传指令：因 isUpload 恒真，实际走 required + 关闭思考（意图形状见上方纯函数用例）', async () => {
+  it('DeepSeek 非上传轮次（老板报错的那条指令）：请求体不含 tool_choice，URL 不带 /v1', async () => {
     saveApiConfig(deepseekConfig());
     const fetchMock = stubFetchOk();
 
     await act(async () => { await hook.handleSend('帮我删除工作经历模块'); });
 
     const body = sentRequestBody(fetchMock);
-    expect(body.tool_choice).toBe('required');
-    expect(body.thinking).toEqual({ type: 'disabled' });
+    expect('tool_choice' in body).toBe(false);
+    expect('thinking' in body).toBe(false);
     expect(body).toMatchObject({ model: 'deepseek-flash', temperature: 0.1 });
     expect(sentUrl(fetchMock)).toBe('https://api.deepseek.com/chat/completions');
   });
@@ -165,7 +181,7 @@ describe('useAiChat 请求体（集成）', () => {
     expect(body.thinking).toEqual({ type: 'disabled' });
   });
 
-  it('阿里云回归：字段集合与改前一致，未新增 thinking 字段', async () => {
+  it('阿里云非上传轮次：由恒真的 required 回到 auto，且未新增 thinking 字段', async () => {
     const preset = PROVIDER_PRESETS.aliyun;
     saveApiConfig({
       provider: 'aliyun',
@@ -179,15 +195,32 @@ describe('useAiChat 请求体（集成）', () => {
     await act(async () => { await hook.handleSend('帮我删除工作经历模块'); });
 
     const body = sentRequestBody(fetchMock);
-    // 取值是 'required' 而非 'auto'：isUpload 恒为真（见上方根因用例），这是改前既有行为，本卡未改。
-    expect(body.tool_choice).toBe('required');
+    expect(body.tool_choice).toBe('auto');
     expect('thinking' in body).toBe(false);
     expect(JSON.stringify(body)).toBe(JSON.stringify({
       model: 'qwen-max',
       messages: (body as { messages: unknown }).messages,
       tools: (body as { tools: unknown }).tools,
-      tool_choice: 'required',
+      tool_choice: 'auto',
       temperature: 0.1,
     }));
+  });
+
+  it('阿里云上传轮次：仍发 required（未受 isUpload 修正影响）', async () => {
+    const preset = PROVIDER_PRESETS.aliyun;
+    saveApiConfig({
+      provider: 'aliyun',
+      apiKey: 'test-key',
+      baseUrl: preset.baseUrl,
+      model: preset.model,
+      visionModel: preset.visionModel,
+    });
+    const fetchMock = stubFetchOk();
+
+    await act(async () => { await hook.handleSend('[上传文件] 文件名: a.txt, 类型: text/plain, 请导入此简历'); });
+
+    const body = sentRequestBody(fetchMock);
+    expect(body.tool_choice).toBe('required');
+    expect('thinking' in body).toBe(false);
   });
 });

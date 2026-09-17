@@ -53,6 +53,17 @@ export interface ChatRequestBodyOptions {
 }
 
 /**
+ * 判定本轮是否属于「上传轮次」：只认**用户消息**里的 `[上传文件]` 标记。
+ * 不能对全部消息做字符串匹配 —— system 消息正文（`buildSystemPrompt()`）本身也含 `[上传文件]` 字面量，
+ * 而它每轮都在请求里，按旧写法 `isUpload` 恒为真（DeepSeek 官端因此每轮都发 'required' 并撞上 400）。
+ */
+export function isUploadTurn(msgs: Array<{ role?: string; content?: unknown }>): boolean {
+  return msgs.some(m => m.role === 'user'
+    && typeof m.content === 'string'
+    && m.content.includes('[上传文件]'));
+}
+
+/**
  * 组装 /chat/completions 的请求体。
  * 抽成纯函数是为了让「某个字段发不发」可以被单元测试直接断言 —— 各服务商对 tool_choice / thinking
  * 的接受度不同（DeepSeek 官方端点思考模式下拒绝显式 tool_choice），这些差异只能由 quirks 决定。
@@ -138,7 +149,7 @@ export function useAiChat() {
     const baseUrl = resolveBaseUrl(config.baseUrl);
     const model = config.model || 'qwen-plus';
 
-    const isUpload = msgs.some((m: { content?: string }) => m.content?.includes('[上传文件]'));
+    const isUpload = isUploadTurn(msgs);
     const quirks = getProviderQuirks(config.provider);
 
     const promptChars = JSON.stringify(msgs).length;
