@@ -46,7 +46,9 @@
 
 现场事实（PM 于 2026-09-17 复跑实测，非引用他人汇报）：
 
-- HEAD = `6435a60`（`TASK-015` 第二轮）；未提交改动只有协作文件（`TASK_ENG.md`、`ENG_REPORT.md`），属正常现象。
+- HEAD = `73ac9e2`（`TASK-015` 复核收口归档）；工作区干净。
+- 根目录 `PM工作交接*.md` 是 **PM 会话本地交接文件**（老板指定创建，不入库）：它在 `git status` 里显示为未跟踪属正常现象，
+  任何会话**不得** `git add`、不得删除、不视为「他人改动」。
 - `npx tsc -b` 退出码 0。
 - `npx eslint . --max-warnings 0` 退出码 0，0 问题。
 - `npm test`：`Test Files 18 passed (18)`、`Tests 324 passed (324)`（**用例数动态基线已由 304 抬到 324**）。
