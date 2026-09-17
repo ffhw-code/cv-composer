@@ -13,6 +13,7 @@ import {
   getUploadedFile,
   getProviderQuirks,
   resolveBaseUrl,
+  type ProviderQuirks,
 } from '../../utils/aiConfig';
 import { parseToolArguments } from '../../utils/toolArgsParser';
 import {
@@ -41,6 +42,40 @@ import {
 import { useFileImport } from './useFileImport';
 
 const MAX_TOOL_ROUNDS = 8;
+
+export interface ChatRequestBodyOptions {
+  model: string;
+  messages: unknown[];
+  tools: unknown[];
+  /** 上传轮次需要强制模型调用工具（tool_choice:'required'） */
+  isUpload: boolean;
+  quirks: ProviderQuirks;
+}
+
+/**
+ * 组装 /chat/completions 的请求体。
+ * 抽成纯函数是为了让「某个字段发不发」可以被单元测试直接断言 —— 各服务商对 tool_choice / thinking
+ * 的接受度不同（DeepSeek 官方端点思考模式下拒绝显式 tool_choice），这些差异只能由 quirks 决定。
+ * 字段顺序固定为 model → messages → tools → tool_choice → temperature：阿里云 / OpenAI 的请求体
+ * 必须与改造前逐字节相同，随意调整插入位置会让「行为不变」无法逐字节核对。
+ */
+export function buildChatRequestBody({
+  model,
+  messages,
+  tools,
+  isUpload,
+  quirks,
+}: ChatRequestBodyOptions): Record<string, unknown> {
+  const body: Record<string, unknown> = { model, messages, tools };
+  if (isUpload) {
+    body.tool_choice = 'required';
+    if (quirks.disableThinkingWithRequiredToolChoice) body.thinking = { type: 'disabled' };
+  } else if (!quirks.omitAutoToolChoice) {
+    body.tool_choice = 'auto';
+  }
+  body.temperature = 0.1;
+  return body;
+}
 
 /** 单轮用户对话的埋点累加器（贯穿多轮 function-calling 与重试） */
 interface TurnAccumulator {
@@ -104,6 +139,7 @@ export function useAiChat() {
     const model = config.model || 'qwen-plus';
 
     const isUpload = msgs.some((m: { content?: string }) => m.content?.includes('[上传文件]'));
+    const quirks = getProviderQuirks(config.provider);
 
     const promptChars = JSON.stringify(msgs).length;
     const toolSchemaChars = JSON.stringify(aiTools).length;
@@ -143,13 +179,13 @@ export function useAiChat() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${config.apiKey}`,
         },
-        body: JSON.stringify({
+        body: JSON.stringify(buildChatRequestBody({
           model,
           messages: msgs,
           tools: aiTools,
-          tool_choice: isUpload ? 'required' : 'auto',
-          temperature: 0.1,
-        }),
+          isUpload,
+          quirks,
+        })),
         signal: controller.signal,
       });
     } catch (err: unknown) {
@@ -204,7 +240,6 @@ export function useAiChat() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     console.log('[AI] 收到工具调用:', msg.tool_calls.map((tc: any) => tc.function.name));
 
-    const quirks = getProviderQuirks(config.provider);
     if (quirks.nullContentOnToolCalls) {
       delete msg.content;
     }

@@ -14,6 +14,18 @@ export interface ProviderQuirks {
   visionReusesFcModel: boolean;
   /** 错误响应中 message 字段路径 */
   errorMessagePath: string;
+  /**
+   * 非上传轮次整体**不发** tool_choice 字段（DeepSeek 官方端点）。
+   * 该端点拒绝显式发送的 tool_choice；而「不发」在 OpenAI 兼容语义里等价于 'auto'，
+   * 因此用「省略字段」替代「显式发 'auto'」，保持默认语义的同时规避被拒的分支。
+   */
+  omitAutoToolChoice: boolean;
+  /**
+   * 发 tool_choice:'required' 时必须同时发 thinking:{type:'disabled'}（DeepSeek 官方端点）。
+   * 该端点思考模式下只拒绝「显式 tool_choice + 思考开启」这一种组合（实测 400
+   * `Thinking mode does not support this tool_choice`），关闭思考后 'required' 可用。
+   */
+  disableThinkingWithRequiredToolChoice: boolean;
 }
 
 const STORAGE_KEY = 'resume_ai_config';
@@ -36,6 +48,8 @@ export const PROVIDER_PRESETS: Record<string, ProviderPreset> = {
       nullContentOnToolCalls: true,
       visionReusesFcModel: false,
       errorMessagePath: 'error.message',
+      omitAutoToolChoice: false,
+      disableThinkingWithRequiredToolChoice: false,
     },
   },
   openai: {
@@ -47,6 +61,21 @@ export const PROVIDER_PRESETS: Record<string, ProviderPreset> = {
       nullContentOnToolCalls: false,
       visionReusesFcModel: true,
       errorMessagePath: 'error.message',
+      omitAutoToolChoice: false,
+      disableThinkingWithRequiredToolChoice: false,
+    },
+  },
+  deepseek: {
+    label: 'DeepSeek',
+    baseUrl: 'https://api.deepseek.com',
+    model: 'deepseek-flash',
+    visionModel: 'deepseek-flash',
+    quirks: {
+      nullContentOnToolCalls: false,
+      visionReusesFcModel: true,
+      errorMessagePath: 'error.message',
+      omitAutoToolChoice: true,
+      disableThinkingWithRequiredToolChoice: true,
     },
   },
   custom: {
@@ -58,6 +87,8 @@ export const PROVIDER_PRESETS: Record<string, ProviderPreset> = {
       nullContentOnToolCalls: false,
       visionReusesFcModel: false,
       errorMessagePath: 'error.message',
+      omitAutoToolChoice: false,
+      disableThinkingWithRequiredToolChoice: false,
     },
   },
 };

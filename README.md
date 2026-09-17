@@ -113,6 +113,7 @@ npx tsc -b         # 类型检查
 |---|---|---|---|
 | 阿里云百炼（推荐） | `qwen-max` / `qwen-plus` | `qwen-vl-max` | Base URL 自动填写 |
 | OpenAI | `gpt-4o` / `gpt-4o-mini` | `gpt-4o` | Base URL 自动填写 |
+| DeepSeek | `deepseek-flash` | `deepseek-flash` | Base URL 自动填写；思考模式对 `tool_choice` 有限制，已按服务商适配 |
 | 自定义接口 | 自行输入 | 自行输入 | 需手动输入 Base URL |
 
 API Key 只存在浏览器当前会话里，关闭标签页就清除。视觉模型用于解析简历图片，如果没有配置，上传时会给出提示。

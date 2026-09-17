@@ -2,7 +2,9 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   AI_REQUEST_TIMEOUT_KEY,
   DEFAULT_AI_REQUEST_TIMEOUT_MS,
+  getProviderQuirks,
   getAiRequestTimeoutMs,
+  PROVIDER_PRESETS,
 } from './aiConfig';
 
 /** 最小可用的 localStorage 替身 */
@@ -44,5 +46,27 @@ describe('getAiRequestTimeoutMs', () => {
     expect(getAiRequestTimeoutMs()).toBe(45_000);
     localStorage.setItem(AI_REQUEST_TIMEOUT_KEY, 'abc');
     expect(getAiRequestTimeoutMs()).toBe(45_000);
+  });
+});
+
+describe('DeepSeek 预设与 ProviderQuirks 开关', () => {
+  it('DeepSeek 预设：官方端点不加 /v1，档位 deepseek-flash（探针实测可用且支持图片输入）', () => {
+    expect(PROVIDER_PRESETS.deepseek.baseUrl).toBe('https://api.deepseek.com');
+    expect(PROVIDER_PRESETS.deepseek.model).toBe('deepseek-flash');
+    expect(PROVIDER_PRESETS.deepseek.visionModel).toBe('deepseek-flash');
+  });
+
+  it('DeepSeek 开关打开：非上传不发 tool_choice、required 时关闭思考', () => {
+    const quirks = getProviderQuirks('deepseek');
+    expect(quirks.omitAutoToolChoice).toBe(true);
+    expect(quirks.disableThinkingWithRequiredToolChoice).toBe(true);
+  });
+
+  it('阿里云 / OpenAI / 自定义 / 未知服务商：两个开关均为关，行为保持改前', () => {
+    for (const provider of ['aliyun', 'openai', 'custom', 'unknown-provider']) {
+      const quirks = getProviderQuirks(provider);
+      expect(quirks.omitAutoToolChoice).toBe(false);
+      expect(quirks.disableThinkingWithRequiredToolChoice).toBe(false);
+    }
   });
 });
