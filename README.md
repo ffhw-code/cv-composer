@@ -103,7 +103,7 @@ npx tsc -b         # 类型检查
 
 项目已配置 GitHub Actions 自动部署。推送 `main` 分支后自动构建并部署到 GitHub Pages。你只需要在仓库 Settings → Pages 中将 Source 设为 `GitHub Actions`。
 
-完整的部署前提、更新、回滚与监控说明见 [DEPLOYMENT.md](DEPLOYMENT.md)。
+完整的部署前提、更新、回滚与监控说明见 [docs/engineering/DEPLOYMENT.md](docs/engineering/DEPLOYMENT.md)。
 
 ### AI 模型配置
 

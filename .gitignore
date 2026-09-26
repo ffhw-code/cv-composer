@@ -28,15 +28,18 @@ dist-ssr
 # Codex internal
 .agents/
 .codex/
-# 角色 prompt 与协作规则（本地使用，不进公开仓库）
+
+# 角色 prompt 与协作规则（本地使用，不进公开仓库；AGENTS.md 放回仓库根后同样不入库）
 系统prompt/
 /AGENTS.md
 
-# Local data & internal docs
+# 本地资料与内部文档
 保存的简历/
+# 固有问题台账（现役位置 docs/testing/固有问题.md；这条同时挡住它）
 固有问题.md
-总执行方案.md
-工作交接与后续方案设计.md
 
-# AI 基线采集产物（原始 JSON 本地归档，结论写入 METRICS.md）
+# AI 基线采集产物（原始 JSON 本地归档；结论写入 docs/quality/**）
 metrics/
+
+# 历史档案（不再使用的文档：三会话时期协作文件、旧 prompt、旧指标文件、已归档的方案与设计稿；本地保留、不入库）
+历史文档/
