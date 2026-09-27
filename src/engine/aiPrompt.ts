@@ -183,12 +183,12 @@ export const aiTools: ChatToolEntry[] = [
     type: 'function' as const,
     function: {
       name: 'add_text',
-      description: '添加一个文本框到画布。用于添加段落、说明文字等。',
+      description: '添加一个文本框（段落、说明文字等）。',
       parameters: {
         type: 'object',
         properties: {
-          content: { type: 'string', description: '文本内容，支持 HTML 标签（<p>、<strong>、<br/> 等）' },
-          style: { type: 'object', description: '可选的 CSS 样式对象，如 {"fontSize":"15px","color":"#334155"}' },
+          content: { type: 'string', description: '文本内容，支持 HTML 标签' },
+          style: { type: 'object', description: 'CSS 样式对象，如 {"fontSize":"15px","color":"#334155"}' },
         },
         required: ['content'],
       },
@@ -199,12 +199,12 @@ export const aiTools: ChatToolEntry[] = [
     type: 'function' as const,
     function: {
       name: 'add_heading',
-      description: '添加一个标题到画布。用于模块标题、姓名等。',
+      description: '添加一个标题（模块标题、姓名等）。',
       parameters: {
         type: 'object',
         properties: {
-          content: { type: 'string', description: '标题文字，支持 HTML 标签' },
-          style: { type: 'object', description: '可选的 CSS 样式对象' },
+          content: { type: 'string', description: '标题文字，支持 HTML' },
+          style: { type: 'object', description: 'CSS 样式对象' },
         },
         required: ['content'],
       },
@@ -215,11 +215,11 @@ export const aiTools: ChatToolEntry[] = [
     type: 'function' as const,
     function: {
       name: 'add_list',
-      description: '添加一个列表到画布。用于技能列表、项目要点等。',
+      description: '添加一个列表（技能列表、项目要点等）。',
       parameters: {
         type: 'object',
         properties: {
-          content: { type: 'string', description: '列表内容，用 <ul><li>...</li></ul> 或 <ol><li>...</li></ol> 格式' },
+          content: { type: 'string', description: '列表内容，用 <ul><li>…</li></ul> 或 <ol><li>…</li></ol> 格式' },
           style: { type: 'object', description: '可选的 CSS 样式对象' },
         },
         required: ['content'],
@@ -231,12 +231,12 @@ export const aiTools: ChatToolEntry[] = [
     type: 'function' as const,
     function: {
       name: 'add_image',
-      description: '添加一个图片到画布。用于照片、图标等。',
+      description: '添加一张图片（照片、图标等）。',
       parameters: {
         type: 'object',
         properties: {
           content: { type: 'string', description: '图片的 base64 数据或 URL' },
-          style: { type: 'object', description: '可选的 CSS 样式对象，建议设置 width、height、borderRadius 等' },
+          style: { type: 'object', description: 'CSS 样式对象（常设 width、height、borderRadius）' },
         },
         required: [],
       },
@@ -247,7 +247,7 @@ export const aiTools: ChatToolEntry[] = [
     type: 'function' as const,
     function: {
       name: 'add_flex',
-      description: '创建一个弹性容器，将已有模块包装为水平或垂直排列。children 必须是当前画布中已存在的模块 id。如需创建新子模块并同时包装，请使用 add_flex_inline。',
+      description: '用弹性容器包装**已有**模块（children 须是当前画布里的 id）；要同时创建子控件请用 add_flex_inline。',
       parameters: {
         type: 'object',
         properties: {
@@ -265,7 +265,7 @@ export const aiTools: ChatToolEntry[] = [
     type: 'function' as const,
     function: {
       name: 'add_grid',
-      description: '创建一个网格容器，将已有模块按列排列。children 必须是当前画布中已存在的模块 id。如需创建新子模块并同时包装，请使用 add_grid_inline。',
+      description: '用网格容器按列包装**已有**模块（children 须是当前画布里的 id）；要同时创建子控件请用 add_grid_inline。',
       parameters: {
         type: 'object',
         properties: {
@@ -283,7 +283,7 @@ export const aiTools: ChatToolEntry[] = [
     type: 'function' as const,
     function: {
       name: 'add_flex_inline',
-      description: '创建弹性容器并内联定义子控件。一次调用同时创建容器和所有子控件，无需提前创建子模块。',
+      description: '创建弹性容器并内联定义子控件（容器与子控件一次调用同时创建，无需先建子模块）。',
       parameters: {
         type: 'object',
         properties: {
@@ -292,14 +292,14 @@ export const aiTools: ChatToolEntry[] = [
             items: {
               type: 'object',
               properties: {
-                type: { type: 'string', enum: ['text', 'heading', 'list', 'image'], description: '子控件类型' },
-                content: { type: 'string', description: '子控件内容' },
-                ref: { type: 'string', description: '引用 data 中的字段名（简历导入场景使用）' },
-                style: { type: 'object', description: '子控件的 CSS 样式' },
+                type: { type: 'string', enum: ['text', 'heading', 'list', 'image'] },
+                content: { type: 'string' },
+                ref: { type: 'string', description: '引用 data 字段名（简历导入用）' },
+                style: { type: 'object' },
               },
               required: ['type'],
             },
-            description: '内联子控件定义列表',
+            description: '内联子控件列表',
           },
           direction: { type: 'string', enum: ['row', 'column'], description: '排列方向，默认 column' },
           gap: { type: 'string', description: '子元素间距' },
@@ -314,7 +314,7 @@ export const aiTools: ChatToolEntry[] = [
     type: 'function' as const,
     function: {
       name: 'add_grid_inline',
-      description: '创建网格容器并内联定义子控件。一次调用同时创建容器和所有子控件。',
+      description: '创建网格容器并内联定义子控件（一次调用同时创建容器与子控件）。',
       parameters: {
         type: 'object',
         properties: {
@@ -330,7 +330,7 @@ export const aiTools: ChatToolEntry[] = [
               },
               required: ['type'],
             },
-            description: '内联子控件定义列表',
+            description: '内联子控件列表',
           },
           columns: { type: 'number', description: '列数，默认 2' },
           gap: { type: 'string', description: '子元素间距' },
@@ -345,7 +345,7 @@ export const aiTools: ChatToolEntry[] = [
     type: 'function' as const,
     function: {
       name: 'add_header',
-      description: '添加一个简历头。只需指定样式 ID，照片和姓名等信息子控件由前端自动生成。使用前请查看可用模块类型了解支持的 header 样式。',
+      description: '添加简历头（只需指定 styleId，子控件由前端自动生成；可用样式见上方「可用模块类型」）。',
       parameters: {
         type: 'object',
         properties: {
@@ -360,11 +360,11 @@ export const aiTools: ChatToolEntry[] = [
     type: 'function' as const,
     function: {
       name: 'add_module',
-      description: '添加一个内容模块（如教育背景、工作经历）。标题和内容子控件由前端自动生成，无需手动创建 heading 和 text。',
+      description: '添加内容模块（如教育背景、工作经历）；heading 与 text 子控件由前端自动生成。',
       parameters: {
         type: 'object',
         properties: {
-          styleId: { type: 'string', description: '模块样式 ID，如 module-card、module-timeline、module-list、module-plain' },
+          styleId: { type: 'string', description: '模块样式 ID，如 module-card、module-timeline' },
           title: { type: 'string', description: '模块标题，如 "教育背景"' },
           content: { type: 'string', description: '模块内容，支持 HTML 标签' },
         },
@@ -393,7 +393,7 @@ export const aiTools: ChatToolEntry[] = [
     type: 'function' as const,
     function: {
       name: 'set_style',
-      description: '修改已有模块的多个 CSS 样式属性。id 必须来自当前画布。支持的属性见上方「样式属性键名及可选值」完整列表。',
+      description: '修改已有模块的多个 CSS 属性（id 须来自当前画布；属性见上方「样式属性键名及可选值」）。',
       parameters: {
         type: 'object',
         properties: {
@@ -426,13 +426,13 @@ export const aiTools: ChatToolEntry[] = [
     type: 'function' as const,
     function: {
       name: 'set_style_by_type',
-      description: '按模块类型批量修改样式。适合“所有文本改成蓝色”“除标题外统一白色背景”等批量操作。比逐个调用 set_style 效率高得多。',
+      description: '按模块类型批量改样式（如「所有文本改蓝」「除标题外统一白底」），比逐个 set_style 高效。',
       parameters: {
         type: 'object',
         properties: {
-          type: { type: 'array', items: { type: 'string' }, description: '限定修改的模块类型，如 ["text","list","flex"]。不传则匹配所有类型。' },
-          except: { type: 'array', items: { type: 'string' }, description: '排除的模块类型，如 ["heading","image"]。配合 type 或单独使用。' },
-          style: { type: 'object', description: 'CSS 样式键值对，如 {"backgroundColor":"#ffffff","fontSize":"16px"}', required: ['style'] },
+          type: { type: 'array', items: { type: 'string' }, description: '限定模块类型，如 ["text","list"]；不传则匹配全部' },
+          except: { type: 'array', items: { type: 'string' }, description: '排除的模块类型，如 ["heading","image"]' },
+          style: { type: 'object', description: 'CSS 样式键值对，如 {"backgroundColor":"#ffffff","fontSize":"16px"}' },
         },
         required: ['style'],
       },
@@ -443,12 +443,12 @@ export const aiTools: ChatToolEntry[] = [
     type: 'function' as const,
     function: {
       name: 'set_field',
-      description: '修改模块的非样式元数据字段。可设置的字段：name（姓名）、jobTitle（求职意向）、birth（出生年月）、phone（电话）、email（邮箱）、title（模块标题）。注意：这不同于 set_content（改 HTML 正文）和 set_style（改 CSS 样式）。',
+      description: '改模块的非样式元数据字段（姓名/电话/邮箱等，见 field 取值）。注意它不同于 set_content（改 HTML 正文）与 set_style（改 CSS）。',
       parameters: {
         type: 'object',
         properties: {
           id: { type: 'string', description: '目标模块 id' },
-          field: { type: 'string', description: '字段名：name、jobTitle、birth、phone、email、title' },
+          field: { type: 'string', enum: ['name', 'jobTitle', 'birth', 'phone', 'email', 'title'], description: '字段名' },
           value: { type: 'string', description: '字段值，纯文本' },
         },
         required: ['id', 'field', 'value'],
@@ -460,7 +460,7 @@ export const aiTools: ChatToolEntry[] = [
     type: 'function' as const,
     function: {
       name: 'remove_module',
-      description: '删除指定模块及其所有子模块。',
+      description: '删除模块及其所有子模块。',
       parameters: {
         type: 'object',
         properties: {
@@ -475,7 +475,7 @@ export const aiTools: ChatToolEntry[] = [
     type: 'function' as const,
     function: {
       name: 'move_module',
-      description: '移动模块到新的父容器或调整在同级中的位置。',
+      description: '移动模块到新父容器，或调整同级顺序。',
       parameters: {
         type: 'object',
         properties: {
@@ -492,7 +492,7 @@ export const aiTools: ChatToolEntry[] = [
     type: 'function' as const,
     function: {
       name: 'duplicate_module',
-      description: '复制指定模块，生成一个包含相同内容和样式的副本。',
+      description: '复制模块（内容与样式一致的副本）。',
       parameters: {
         type: 'object',
         properties: {
@@ -507,7 +507,7 @@ export const aiTools: ChatToolEntry[] = [
     type: 'function' as const,
     function: {
       name: 'copy_style',
-      description: '模块格式刷：复制源模块的样式到目标模块。规则：同类型模块或两个都是控件(text/heading/list之间)→复制全部属性及元数据；其余跨类型→仅复制共有布局属性(padding/margin/背景/圆角/阴影/宽高等)和基本字段(name/title)。',
+      description: '模块格式刷：复制源模块样式到目标。同类型（或 text/heading/list 之间）复制全部属性与元数据；跨类型只复制共有布局属性（padding/margin/背景/圆角/阴影/宽高等）。',
       parameters: {
         type: 'object',
         properties: {
@@ -523,7 +523,7 @@ export const aiTools: ChatToolEntry[] = [
     type: 'function' as const,
     function: {
       name: 'copy_text_style',
-      description: '文字样式复制：将源模块的文字排版属性复制到目标模块。自动从 module.style 和 HTML 内联样式(&lt;span style="..."&gt;) 中提取字体/字号/颜色等，写入目标 module.style 并清除目标 HTML 中冲突的內联样式，使 module.style 生效。适合"让这些字和那些字长得一样"的需求。',
+      description: '文字样式复制：把源模块的文字排版属性（字体/字号/颜色等）复制到目标 module.style，并清除目标 HTML 里冲突的内联样式。',
       parameters: {
         type: 'object',
         properties: {
@@ -539,7 +539,7 @@ export const aiTools: ChatToolEntry[] = [
     type: 'function' as const,
     function: {
       name: 'apply_template',
-      description: '应用预设简历模板，清空画布并生成模板结构。',
+      description: '应用预设模板（会清空画布再生成模板结构）。',
       parameters: {
         type: 'object',
         properties: {
@@ -554,7 +554,7 @@ export const aiTools: ChatToolEntry[] = [
     type: 'function' as const,
     function: {
       name: 'delete_modules',
-      description: '批量删除多个模块。ids 必须来自当前画布上的模块 ID。比逐个调用 remove_module 效率高得多。',
+      description: '批量删除模块（ids 须来自当前画布），比逐个 remove_module 高效。',
       parameters: {
         type: 'object',
         properties: {
@@ -569,7 +569,7 @@ export const aiTools: ChatToolEntry[] = [
     type: 'function' as const,
     function: {
       name: 'clear_canvas',
-      description: '清空画布，删除所有模块。慎用——不可撤销。',
+      description: '清空画布（删除所有模块，不可撤销）。',
       parameters: {
         type: 'object',
         properties: {},
@@ -581,7 +581,7 @@ export const aiTools: ChatToolEntry[] = [
     type: 'function' as const,
     function: {
       name: 'export_pdf',
-      description: '导出当前简历为 PDF 并触发浏览器打印。',
+      description: '导出为 PDF（触发浏览器打印）。',
       parameters: {
         type: 'object',
         properties: {},
@@ -594,7 +594,7 @@ export const aiTools: ChatToolEntry[] = [
     type: 'function' as const,
     function: {
       name: 'get_uploaded_file',
-      description: '获取用户上传的简历文件信息（base64 编码）。上传文件后必须先调用此工具获取文件数据，再调用 execute_skill 技能 import-resume 进行解析。',
+      description: '获取用户上传文件的 base64 信息。上传后必须先调它，再调 execute_skill 的 import-resume 解析。',
       parameters: {
         type: 'object',
         properties: {},
@@ -605,7 +605,7 @@ export const aiTools: ChatToolEntry[] = [
     type: 'function' as const,
     function: {
       name: 'execute_skill',
-      description: '执行高级技能。可用技能：generate-resume（生成简历，参数 {"template":"simple"|"classic"}）、polish-text（润色文本，参数 {"moduleId":"模块ID"}）、evaluate-resume（评估简历）、smart-fill（智能填充，参数 {"info":"用户背景"}）、import-resume（导入上传的简历文件，无参数）。',
+      description: '执行高级技能。generate-resume{"template":"simple"|"classic"}、polish-text{"moduleId"}、evaluate-resume、smart-fill{"info"}、import-resume（无参数）。',
       parameters: {
         type: 'object',
         properties: {
@@ -617,6 +617,14 @@ export const aiTools: ChatToolEntry[] = [
     },
   },
 ];
+
+/**
+ * 工具 schema 版本 —— **请求形状冻结点**（`docs/plan/阶段方案-P0.2-链路守卫与请求形状冻结.md` 第五节）。
+ * 冻结范围：`aiTools`（工具 schema）、`getFixedConstraints()`（约束块）、`MAX_TOOL_ROUNDS`（轮次上限语义）。
+ * 任何改动这三者的行为都必须先走解冻流程（说明改了什么 → 重跑 `P0.3` 同场景对照 → 旧数据标「不可比、需重采」）。
+ * 配套锁：`src/engine/aiPrompt.schema.test.ts`（工具数 / 名单 / 字符数 / 结构哈希 / 全量哈希）。
+ */
+export const TOOL_SCHEMA_VERSION = 'p0.2-frozen-1';
 
 /** 兼容层：按工具名查找可执行 runner（execute_skill / get_uploaded_file 由 ChatPanel 按技能上下文单独处理） */
 export const toolHandlerMap: Record<string, RegisteredToolRunner> = Object.fromEntries(
