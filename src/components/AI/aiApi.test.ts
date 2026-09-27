@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { callSmartFill, describeFetchError, describeHttpError, translateApiError } from './aiApi';
+import { callSmartFill, classifyAuthError, describeFetchError, describeHttpError, translateApiError } from './aiApi';
 import { clearAiMetrics, getAiMetrics, type AiRoundEvent } from '../../utils/aiMetrics';
 import { DEFAULT_AI_REQUEST_TIMEOUT_MS } from '../../utils/aiConfig';
 
@@ -281,5 +281,52 @@ describe('失败原因归纳', () => {
   it('describeHttpError 截断超长说明', () => {
     const info = describeHttpError(500, JSON.stringify({ error: { message: 'x'.repeat(500) } }));
     expect(info.errorDetail!.length).toBeLessThanOrEqual(201);
+  });
+});
+
+// ==================== P0.2 第 4 项：403 按 error.code 归因分流 ====================
+describe('403 归因分流', () => {
+  it('额度耗尽（AllocationQuota.FreeTierOnly）→ 说额度，不再说「没有访问权限」', () => {
+    const body = JSON.stringify({
+      error: { code: 'AllocationQuota.FreeTierOnly', message: 'Free allocated quota exceeded' },
+    });
+    const result = translateApiError(403, body, 'qwen-max');
+    expect(result).toContain('额度已用尽');
+    expect(result).not.toContain('没有访问权限');
+    // 默认档位提示必须给出可落地的替代档位（免费额度账号调用 qwen-max 开箱即 403）
+    expect(result).toContain('qwen3.7-flash');
+  });
+
+  it('额度耗尽（insufficient_quota / 余额不足）也归到额度', () => {
+    expect(translateApiError(403, JSON.stringify({ error: { code: 'insufficient_quota' } }), 'gpt-4o'))
+      .toContain('额度已用尽');
+    expect(translateApiError(403, JSON.stringify({ error: { message: '账户余额不足' } }), 'gpt-4o'))
+      .toContain('额度已用尽');
+  });
+
+  it('Key 无效类 403 → 说 Key 无效', () => {
+    const body = JSON.stringify({ error: { code: 'InvalidApiKey', message: 'invalid api key' } });
+    const result = translateApiError(403, body, 'gpt-4o');
+    expect(result).toContain('API Key 无效');
+    expect(result).not.toContain('额度已用尽');
+  });
+
+  it('真的是权限问题的 403 → 保留权限措辞，并附服务商原文', () => {
+    const body = JSON.stringify({ error: { code: 'ModelAccessDenied', message: 'model not enabled for this key' } });
+    const result = translateApiError(403, body, 'gpt-4o');
+    expect(result).toContain('没有访问权限');
+    expect(result).toContain('model not enabled for this key');
+  });
+
+  it('401 带上服务商原文（便于区分「没填」与「填错」）', () => {
+    expect(translateApiError(401, JSON.stringify({ error: { message: 'Authentication Fails' } }), 'm'))
+      .toContain('Authentication Fails');
+  });
+
+  it('classifyAuthError 直接可用（预检/采集侧同一口径）', () => {
+    expect(classifyAuthError(403, JSON.stringify({ error: { code: 'AllocationQuota.FreeTierOnly' } }))).toBe('quota');
+    expect(classifyAuthError(403, JSON.stringify({ error: { code: 'invalid_api_key' } }))).toBe('invalid_key');
+    expect(classifyAuthError(403, '{}')).toBe('permission');
+    expect(classifyAuthError(401, '{}')).toBe('invalid_key');
   });
 });

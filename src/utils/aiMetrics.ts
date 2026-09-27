@@ -87,6 +87,8 @@ export interface AiTurnEvent {
   retries: number;
   toolCalls: number;
   toolErrors: number;
+  /** 本轮被同轮重复调用守卫拦下的次数（P0.2 第 2 项） */
+  redundantCalls: number;
   latencyMs: number;
 }
 

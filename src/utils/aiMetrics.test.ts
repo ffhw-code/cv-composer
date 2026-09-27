@@ -71,6 +71,7 @@ function turnEvent(overrides: Partial<AiTurnEvent> = {}): AiTurnEvent {
     retries: 0,
     toolCalls: 1,
     toolErrors: 0,
+    redundantCalls: 0,
     latencyMs: 1200,
     ...overrides,
   };

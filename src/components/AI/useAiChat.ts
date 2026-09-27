@@ -17,6 +17,15 @@ import {
 } from '../../utils/aiConfig';
 import { parseToolArguments } from '../../utils/toolArgsParser';
 import {
+  CORRECTION_INSTRUCTION,
+  FAKE_SUCCESS_NOTICE,
+  MAX_TOOL_ROUNDS,
+  TurnCallGuard,
+  inspectToolLessReply,
+  needsCorrectionRetry,
+  resolveTurnOutcome,
+} from '../../utils/aiGuards';
+import {
   estimateTokens,
   exportAiMetricsJson,
   formatAiMetricsSummary,
@@ -40,8 +49,6 @@ import {
   describeHttpError,
 } from './aiApi';
 import { useFileImport } from './useFileImport';
-
-const MAX_TOOL_ROUNDS = 8;
 
 export interface ChatRequestBodyOptions {
   model: string;
@@ -96,6 +103,12 @@ interface TurnAccumulator {
   retries: number;
   toolCalls: number;
   toolErrors: number;
+  /** 被同轮重复调用守卫拦下的次数（P0.2 第 2 项） */
+  redundantCalls: number;
+  /** 打满 MAX_TOOL_ROUNDS（改前会静默记成 success） */
+  hitRoundLimit: boolean;
+  /** 命中过静默假成功（P0.2 第 3 项） */
+  fakeSuccess: boolean;
 }
 
 export interface Suggestion {
@@ -128,12 +141,16 @@ export function useAiChat() {
     turn: TurnAccumulator,
     retryCount = 0,
     toolRoundCount = 0,
-    createdIds?: Set<string>,
+    createdIds: Set<string> | undefined,
+    guard: TurnCallGuard,
+    correctionCount = 0,
   ): Promise<string> => {
     const config = getApiConfig();
     if (!config || !config.apiKey) return '请先配置 API 服务。';
 
     if (toolRoundCount >= MAX_TOOL_ROUNDS) {
+      // 改前这里静默返回一段文本，turn.outcome 仍是 success —— 打满轮次必须记为 partial
+      turn.hitRoundLimit = true;
       return '工具调用次数已达上限，请简化请求后重试。';
     }
 
@@ -238,14 +255,32 @@ export function useAiChat() {
     if (!msg?.tool_calls) {
       console.log('[AI] 纯文本回复 (无工具调用)');
 
-      if (toolRoundCount === 0 && retryCount === 0) {
-        const content = msg?.content || '';
-        if (/"tool"\s*:\s*"add_/.test(content) || /"action"\s*:\s*"addModule"/.test(content)) {
-          throw new Error('该模型不支持 Function Calling，请更换为 qwen-max、qwen-plus-latest 或 gpt-4o。可在 API 设置中修改模型名称。');
-        }
+      // P0.2 第 3 项：三类静默假成功（声称已改却没调工具 / 把工具调用写成 JSON 文本 / </think> 泄漏）
+      const { text, findings } = inspectToolLessReply(msg?.content || '', { toolCallsInTurn: turn.toolCalls });
+
+      if (toolRoundCount === 0 && retryCount === 0 && findings.includes('TOOL_JSON_AS_TEXT')) {
+        throw new Error('该模型不支持 Function Calling，请更换为 qwen-max、qwen-plus-latest 或 gpt-4o。可在 API 设置中修改模型名称。');
       }
 
-      return msg?.content || '';
+      if (findings.length > 0) {
+        turn.fakeSuccess = true;
+        if (needsCorrectionRetry(findings) && correctionCount < 1) {
+          // 只纠正一次：给模型一次机会真正调用工具，避免无限空转烧额度
+          return callAiWithMessages(
+            [...msgs, { role: 'assistant', content: text }, { role: 'user', content: CORRECTION_INSTRUCTION }],
+            turn,
+            retryCount,
+            toolRoundCount + 1,
+            createdIds,
+            guard,
+            correctionCount + 1,
+          );
+        }
+        if (needsCorrectionRetry(findings)) {
+          return `${FAKE_SUCCESS_NOTICE}\n\n${text}`;
+        }
+      }
+      return text;
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -334,10 +369,28 @@ export function useAiChat() {
         } else {
           if ((fnName === 'set_style' || fnName === 'set_content') && createdIds_.has(args.id)) {
             hasError = true;
+            turn.redundantCalls += 1;
             resultContent = JSON.stringify({
               error: 'REDUNDANT_STYLE',
               message: `${fnName}: 模块 ${args.id} 刚刚创建，内容和样式已在创建时传入，无需再次修改。`,
               fix: `请删除此 ${fnName} 调用。add_text/add_heading/add_list 等创建工具已支持一次性传入 content 和 style。`,
+            });
+            toolResults.push({ role: 'tool', tool_call_id: toolCall.id, name: fnName, content: resultContent });
+            recordTool(false, 'redundant');
+            continue;
+          }
+
+          // P0.2 第 1 项：同轮重复调用守卫（同工具 + 等价参数；第二次不执行 handler）
+          const decision = guard.inspect(fnName, args);
+          if (decision.redundant) {
+            hasError = true;
+            turn.redundantCalls += 1;
+            setToolStatus(`${fnName} ✗ 重复调用`);
+            resultContent = JSON.stringify({
+              error: decision.code,
+              message: decision.message,
+              fix: decision.fix,
+              priorResult: decision.priorResult,
             });
             toolResults.push({ role: 'tool', tool_call_id: toolCall.id, name: fnName, content: resultContent });
             recordTool(false, 'redundant');
@@ -389,6 +442,9 @@ export function useAiChat() {
         resultContent = `工具调用失败: ${message}`;
       }
 
+      // 真正执行过的调用才记账（含结构化失败）：拦下「一字不差地重试」正是守卫的目标
+      guard.record(fnName, args, resultContent);
+
       toolResults.push({
         role: 'tool',
         tool_call_id: toolCall.id,
@@ -409,7 +465,7 @@ export function useAiChat() {
 
     if (hasError && retryCount < 2) {
       const newMsgs = [...msgs, msg, ...toolResults, trailingUserMsg];
-      return callAiWithMessages(newMsgs, turn, retryCount + 1, toolRoundCount + 1, createdIds_);
+      return callAiWithMessages(newMsgs, turn, retryCount + 1, toolRoundCount + 1, createdIds_, guard, correctionCount);
     }
 
     if (hasError) {
@@ -424,7 +480,7 @@ export function useAiChat() {
     }
 
     const newMsgs = [...msgs, msg, ...toolResults, trailingUserMsg];
-    return callAiWithMessages(newMsgs, turn, retryCount, toolRoundCount + 1, createdIds_);
+    return callAiWithMessages(newMsgs, turn, retryCount, toolRoundCount + 1, createdIds_, guard, correctionCount);
   };
 
   // ==================== 用户交互 ====================
@@ -451,7 +507,11 @@ export function useAiChat() {
       retries: 0,
       toolCalls: 0,
       toolErrors: 0,
+      redundantCalls: 0,
+      hitRoundLimit: false,
+      fakeSuccess: false,
     };
+    const guard = new TurnCallGuard();
     let outcome: AiTurnOutcome = 'success';
 
     const canvasSummary = getCanvasStateSummary(useResumeStore.getState().modules);
@@ -463,7 +523,7 @@ export function useAiChat() {
 
     try {
       console.log('[ChatPanel] 发送消息:', userMsg);
-      const aiReply = await callAiWithMessages([systemMsg, ...historyMsgs, currentMsg], turn);
+      const aiReply = await callAiWithMessages([systemMsg, ...historyMsgs, currentMsg], turn, 0, 0, undefined, guard);
       console.log('[ChatPanel] AI 回复:', JSON.stringify(aiReply).slice(0, 500));
 
       if (!aiReply) {
@@ -472,7 +532,9 @@ export function useAiChat() {
       } else {
         let suggestions: Suggestion[] | undefined;
         let displayText = aiReply;
+        // 假成功提示是给用户看的显式告警，绝不能被「建议 JSON」解析吞掉
         try {
+          if (aiReply.startsWith(FAKE_SUCCESS_NOTICE)) throw new Error('skip-json-parse');
           let jsonStr = aiReply.trim();
           const startIdx = jsonStr.indexOf('{');
           const endIdx = jsonStr.lastIndexOf('}');
@@ -495,7 +557,13 @@ export function useAiChat() {
       console.error('[ChatPanel] 请求失败:', chatErrMsg);
       setMessages(prev => [...prev, { role: 'ai', text: `出错了: ${chatErrMsg}` }]);
     } finally {
-      if (turn.toolErrors > 0 && outcome !== 'failed') outcome = 'partial';
+      // P0.2 第 2 项：打满轮次 / 工具错误 / 静默假成功都不得再记 success
+      outcome = resolveTurnOutcome({
+        failed: outcome === 'failed',
+        hitRoundLimit: turn.hitRoundLimit,
+        toolErrors: turn.toolErrors,
+        fakeSuccess: turn.fakeSuccess,
+      });
       recordAiMetrics({
         kind: 'turn',
         ts: Date.now(),
@@ -506,6 +574,7 @@ export function useAiChat() {
         retries: turn.retries,
         toolCalls: turn.toolCalls,
         toolErrors: turn.toolErrors,
+        redundantCalls: turn.redundantCalls,
         latencyMs: nowMs() - turn.startedAt,
       });
       setWaiting(false);

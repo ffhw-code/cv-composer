@@ -174,7 +174,10 @@ export interface RecommendedModel {
 }
 
 export const RECOMMENDED_MODELS: RecommendedModel[] = [
-  { model: 'qwen-max', provider: '阿里云百炼', note: '综合能力最强，function calling 稳定，首选推荐' },
+  // 注意：qwen-max 在**免费额度账号**上开箱即 403（AllocationQuota.FreeTierOnly），
+  // 不再是「首选推荐」；同一渠道已验证可用的档位是 qwen3.7-flash。
+  { model: 'qwen-max', provider: '阿里云百炼', note: '综合能力最强，但免费额度账号会 403；需已开通付费额度' },
+  { model: 'qwen3.7-flash', provider: '阿里云百炼', note: '免费额度账号可用（已验证），function calling 稳定，推荐首选' },
   { model: 'qwen-plus', provider: '阿里云百炼', note: '性价比高，function calling 可靠，日常使用推荐' },
   { model: 'gpt-4o', provider: 'OpenAI', note: 'function calling 最成熟，指令遵循极好' },
   { model: 'gpt-4o-mini', provider: 'OpenAI', note: '轻量高效，function calling 稳定，成本低' },

@@ -75,6 +75,35 @@ export function describeHttpError(status: number, body: string): AiErrorInfo {
   };
 }
 
+/** 服务商在 `error.code` / `error.message` 里给的线索，用于把 403 分成三类（额度 / 权限 / Key 无效） */
+const QUOTA_HINT = /quota|allocation|balance|arrears|insufficient|overdue|free.?tier|exhaust|欠费|余额|额度/i;
+const INVALID_KEY_HINT = /invalid.{0,12}(api.?)?key|api.?key.{0,12}invalid|unauthorized|authentication|no such key|not found in the key|密钥无效/i;
+
+export type AuthErrorAttribution = 'quota' | 'invalid_key' | 'permission';
+
+/**
+ * 403 / 401 的归因分流：**先看服务商给的 `error.code` / `error.message`**，再看状态码。
+ * 改前一律译成「API Key 没有访问权限」——但实测最常见的 403 是免费额度账号调用 `qwen-max`
+ * 时的 `AllocationQuota.FreeTierOnly`，用户按「权限」去排查只会白折腾。
+ */
+export function classifyAuthError(status: number, body: string): AuthErrorAttribution {
+  const haystack = `${describeHttpError(status, body).errorCode ?? ''} ${extractApiErrorDetail(body)}`;
+  if (QUOTA_HINT.test(haystack)) return 'quota';
+  if (INVALID_KEY_HINT.test(haystack)) return 'invalid_key';
+  if (status === 401) return 'invalid_key';
+  return 'permission';
+}
+
+/** 免费额度账号开箱即 403 的档位：提示里直接给出已验证可用的替代档位 */
+const FREE_TIER_BLOCKED_MODELS = ['qwen-max'];
+const VERIFIED_ALTERNATIVES = 'qwen3.7-flash、glm-5.2、deepseek-flash';
+
+function modelHint(model: string): string {
+  return FREE_TIER_BLOCKED_MODELS.includes(model.trim())
+    ? `（档位 ${model} 在免费额度账号上会被拒；已验证可用的替代档位：${VERIFIED_ALTERNATIVES}）`
+    : '';
+}
+
 export function translateApiError(status: number, body: string, model: string): string {
   const detail = extractApiErrorDetail(body);
 
@@ -90,9 +119,17 @@ export function translateApiError(status: number, body: string, model: string): 
       }
       return `请求格式错误${detail ? '：' + detail : '，请检查 API 设置中的模型名称和 Base URL。'}`;
     case 401:
-      return 'API Key 无效，请在 API 设置中重新填写。';
-    case 403:
-      return 'API Key 没有访问权限，请检查该 Key 是否已开通所需模型的调用权限。';
+      return `API Key 无效${detail ? '：' + detail : ''}，请在 API 设置中重新填写。`;
+    case 403: {
+      const attribution = classifyAuthError(status, body);
+      if (attribution === 'quota') {
+        return `该 Key 的额度已用尽或账户余额不足${detail ? '：' + detail : ''}。请为该渠道充值/续费后重试${modelHint(model)}。`;
+      }
+      if (attribution === 'invalid_key') {
+        return `API Key 无效${detail ? '：' + detail : ''}，请在 API 设置中重新填写。`;
+      }
+      return `API Key 没有访问权限，请检查该 Key 是否已开通所需模型的调用权限${detail ? '（服务商返回：' + detail + '）' : ''}${modelHint(model)}。`;
+    }
     case 404:
       return '接口地址不存在（404），模型名或 Base URL 可能填错了，请检查 API 设置。';
     case 429:
