@@ -107,6 +107,8 @@ interface Scenario {
   expectTools: string[];
   /** 期望在工具结果里出现的结构化错误码（命中任一即算命中；报告里另记实际观察到的码） */
   expectErrorCodes?: string[];
+  /** 期望同一轮内出现「同工具 + 等价参数」的重复调用（诱导场景；用于判 P0.2 第 1 项守卫） */
+  expectDuplicateCalls?: boolean;
 }
 
 const ALL_SCENARIOS: Scenario[] = [
@@ -149,6 +151,22 @@ const ALL_SCENARIOS: Scenario[] = [
       '这是一次异常参数联调测试：请调用 set_style，把 id 为 "seed-text-exp" 的模块的 style 参数传成字符串 "fontSize:15px"（故意传错类型，不要改成对象，也不要补全成合法样式）。请直接执行该调用，不要先询问我。',
     expectTools: ['set_style'],
     expectErrorCodes: ['EMPTY_STYLE'],
+  },
+  {
+    id: 'redundant-call',
+    title: '同轮重复调用（诱导：同一 add_module 连调两次）',
+    // `P0.2` 第 1 项（同轮重复调用守卫）的**诱导场景**：故意要求模型对同一模块、同一属性、
+    // 同一取值连续调用两次。改前（无守卫）两次都会真正执行；改后第 2 次应被拦下、handler 不执行
+    // 并记 `redundant` —— 这是目前唯一能给出「守卫真的拦下过」的真实链路证据的场景。
+    //
+    // 刻意用 `add_module` 而不是 `set_style`：既有的窄守卫只拦「`set_style` / `set_content`
+    // 针对同一 id 的重复」（`useAiChat.ts:335` 的 `REDUNDANT_STYLE`），用 `set_style` 做诱导
+    // 会**改前就已经被拦**，证明不了 `P0.2` 新增的通用指纹守卫；`add_module` 既不被窄守卫覆盖，
+    // 又是历史证据里最典型的重复调用面（`add_module` 单轮最高 14 次）。
+    prompt:
+      '这是接口联调测试，模拟用户在同一秒内误连点两次「添加模块」按钮：请**连续调用两次** add_module，两次参数必须一字不差（都是 title 为「专业技能」、styleId 为 "module-card"、content 为 "<p>Java、Python</p>"）。请两次都实际发起调用，不要合并成一次，也不要改动第二次的参数。',
+    expectTools: ['add_module'],
+    expectDuplicateCalls: true,
   },
 ];
 
@@ -197,24 +215,72 @@ function seedModules(): ResumeModule[] {
 
 // ==================== 单轮采集 ====================
 
-// ---------------- 结构化工具错误码观察 ----------------
+// ---------------- 请求体观察（错误码 + 重复调用指纹） ----------------
 
 /**
- * 结构化工具错误码（如 `EMPTY_STYLE` / `INVALID_ARGS`）只出现在「回传给模型的 tool 消息」
- * 里，埋点事件（`AiToolEvent`）没有这个字段；而 `P0.2` 第 8 项要求把 `expectToolError`
- * 细化为**期望错误码**。这里用一层 fetch 观察者把它捞出来：只读 `role: 'tool'` 消息 content
- * 里的 `error` 字段，**不保存 prompt、正文或 Key**，也不改动请求与响应。
+ * 有两类信息**只存在于请求体里**，埋点事件（`AiToolEvent`）拿不到：
+ *   1. 结构化工具错误码（如 `EMPTY_STYLE`）—— 在「回传给模型的 tool 消息」里（`P0.2` 第 8 项）；
+ *   2. 工具调用参数 —— 在历史 assistant 消息的 `tool_calls[].function.arguments` 里，
+ *      而「同轮内同工具 + 等价参数第二次出现」正是 `P0.2` 第 1 项守卫的判定对象。
+ * 这两类都靠一层 fetch 观察者从**请求体**里读，观察者不改动请求与响应。
+ *
+ * 脱敏：**只保留错误码与「指纹哈希」**，不落盘参数内容、prompt 或 Key（指纹＝
+ * 工具名 + 规范化参数的 FNV-1a 哈希，仅用于判「是否等价」，不可反推）。
  */
 const observedToolErrorCodes: string[] = [];
+/** tool_call_id → 指纹哈希（按 id 去重，避免后续请求重复携带历史轮次造成重复计数） */
+const observedToolCallFingerprints = new Map<string, string>();
 
-function collectToolErrorCodes(body: unknown): void {
+/** 规范化 JSON：键名排序、剔除 `undefined`、数组保序（与 `P0.2` 第 1 项的指纹口径一致） */
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
+  if (value && typeof value === 'object') {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .filter(([, v]) => v !== undefined)
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+    return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${stableJson(v)}`).join(',')}}`;
+  }
+  return JSON.stringify(value) ?? 'null';
+}
+
+/** FNV-1a：把「工具名 + 规范化参数」压成短哈希，便于判等价又不留参数内容 */
+function hashFingerprint(input: string): string {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < input.length; i += 1) {
+    hash ^= input.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(16);
+}
+
+function toolCallFingerprint(name: string, rawArgs: unknown): string {
+  if (typeof rawArgs !== 'string') return hashFingerprint(`${name}:<no-args>`);
+  try {
+    return hashFingerprint(`${name}:${stableJson(JSON.parse(rawArgs))}`);
+  } catch {
+    // 参数不是合法 JSON（自纠错前的老问题）：按原始字符串兜底，仍能判「一字不差」
+    return hashFingerprint(`${name}:raw:${rawArgs}`);
+  }
+}
+
+function observeRequestBody(body: unknown): void {
   if (typeof body !== 'string') return;
   let parsed: unknown;
   try { parsed = JSON.parse(body); } catch { return; }
   const messages = (parsed as { messages?: unknown }).messages;
   if (!Array.isArray(messages)) return;
   for (const message of messages) {
-    const msg = message as { role?: unknown; content?: unknown };
+    const msg = message as { role?: unknown; content?: unknown; tool_calls?: unknown };
+    if (msg.role === 'assistant' && Array.isArray(msg.tool_calls)) {
+      for (const call of msg.tool_calls) {
+        const c = call as { id?: unknown; function?: { name?: unknown; arguments?: unknown } };
+        const name = c.function?.name;
+        if (typeof name !== 'string') continue;
+        const id = typeof c.id === 'string' && c.id ? c.id : `${name}:${String(msg.tool_calls.length)}`;
+        observedToolCallFingerprints.set(id, toolCallFingerprint(name, c.function?.arguments));
+      }
+      continue;
+    }
     if (msg.role !== 'tool' || typeof msg.content !== 'string') continue;
     try {
       const result = JSON.parse(msg.content) as { error?: unknown };
@@ -229,7 +295,7 @@ function installFetchObserver(): void {
   const original = globalThis.fetch;
   if (typeof original !== 'function') return;
   const patched = ((input: Parameters<typeof original>[0], init?: Parameters<typeof original>[1]) => {
-    collectToolErrorCodes(init?.body);
+    observeRequestBody(init?.body);
     return original(input, init);
   }) as typeof original;
   globalThis.fetch = patched;
@@ -247,6 +313,10 @@ interface TurnRecord {
   toolErrorCodes: string[];
   /** 是否命中 `scenario.expectErrorCodes` 中的至少一个码 */
   hitExpectedError: boolean;
+  /** 该轮出现过的工具调用数（按 tool_call_id 去重） */
+  toolCallFingerprints: number;
+  /** 该轮「同工具 + 等价参数」重复出现（第二次及以后）的调用次数 */
+  duplicateToolCalls: number;
   rounds: number;
   retries: number;
   toolCalls: string[];
@@ -268,6 +338,7 @@ async function runTurn(scenario: Scenario, iteration: number): Promise<TurnRecor
   useResumeStore.getState().importModules(seedModules());
   clearAiMetrics();
   observedToolErrorCodes.length = 0;
+  observedToolCallFingerprints.clear();
 
   const { result, unmount } = renderHook(useAiChat);
   try {
@@ -289,6 +360,8 @@ async function runTurn(scenario: Scenario, iteration: number): Promise<TurnRecor
   const totalTokens = usedRounds.reduce((sum, r) => sum + (r.usage?.totalTokens ?? 0), 0);
   const toolErrorCodes = [...observedToolErrorCodes];
   const expectErrorCodes = scenario.expectErrorCodes ?? [];
+  const fingerprints = [...observedToolCallFingerprints.values()];
+  const duplicateToolCalls = fingerprints.length - new Set(fingerprints).size;
 
   return {
     scenario: scenario.id,
@@ -299,6 +372,8 @@ async function runTurn(scenario: Scenario, iteration: number): Promise<TurnRecor
     hit: scenario.expectTools.every((name) => toolCalls.includes(name)),
     toolErrorCodes,
     hitExpectedError: expectErrorCodes.length > 0 && expectErrorCodes.some((code) => toolErrorCodes.includes(code)),
+    toolCallFingerprints: fingerprints.length,
+    duplicateToolCalls,
     rounds: turn?.rounds ?? roundEvents.length,
     retries: turn?.retries ?? 0,
     toolCalls,
@@ -383,6 +458,12 @@ interface ScenarioStats {
   errorCodeHits: number;
   /** 实际观察到的结构化错误码（去重） */
   observedErrorCodes: string[];
+  /** 是否声明「期望出现同轮重复调用」（诱导场景） */
+  expectDuplicateCalls: boolean;
+  /** 出现「同工具 + 等价参数」重复调用的轮次数 */
+  turnsWithDuplicate: number;
+  /** 重复调用次数合计（同轮内第二次及以后） */
+  duplicateCalls: number;
   /** 有效轮数为 0 或没跑满计划轮次 ⇒ 该场景数据不完整 */
   incomplete: boolean;
   latencyP50: number;
@@ -435,6 +516,9 @@ function buildScenarioStats(scenario: Scenario, turns: TurnRecord[]): ScenarioSt
     expectErrorCodes,
     errorCodeHits: expectErrorCodes.length === 0 ? 0 : turns.filter((t) => t.hitExpectedError).length,
     observedErrorCodes: [...new Set(turns.flatMap((t) => t.toolErrorCodes))],
+    expectDuplicateCalls: scenario.expectDuplicateCalls === true,
+    turnsWithDuplicate: turns.filter((t) => t.duplicateToolCalls > 0).length,
+    duplicateCalls: turns.reduce((sum, t) => sum + t.duplicateToolCalls, 0),
     incomplete: runs < ITERATIONS_PER_SCENARIO || validTurns === 0,
     latencyP50: Math.round(percentile(okRoundLatencies, 0.5)),
     latencyP95: Math.round(percentile(okRoundLatencies, 0.95)),
@@ -616,6 +700,19 @@ function buildSummaryMarkdown(report: BaselineReport): string {
     }
     lines.push('');
   }
+  const withDuplicate = report.perScenario.filter((s) => s.expectDuplicateCalls);
+  if (withDuplicate.length > 0) {
+    lines.push('### 同轮重复调用（诱导场景 · 判 `P0.2` 第 1 项守卫）');
+    lines.push('');
+    lines.push('| 场景 | 出现重复的轮次 | 重复调用次数合计 | 说明 |');
+    lines.push('|---|---|---|---|');
+    for (const s of withDuplicate) {
+      lines.push(
+        `| ${s.id} | ${s.turnsWithDuplicate}/${s.runs} | ${s.duplicateCalls} | 改前应 > 0（重复调用确实被模型发出）；改后应同样 > 0 且伴随 \`redundant\` 拦截 |`,
+      );
+    }
+    lines.push('');
+  }
   return lines.join('\n');
 }
 
@@ -763,6 +860,7 @@ for (const scenario of SCENARIOS) {
             `latency=${record.latencyMs}ms`,
             `tokens=${record.totalTokens}`,
             record.toolErrorCodes.length > 0 ? `toolErrorsCodes=[${record.toolErrorCodes.join(',')}]` : '',
+            `dup=${record.duplicateToolCalls}/${record.toolCallFingerprints}`,
             record.errorKinds.length > 0 ? `errors=[${record.errorKinds.join(',')}]` : '',
             record.httpStatuses.length > 0 ? `http=[${record.httpStatuses.join(',')}]` : '',
           ].filter(Boolean);
