@@ -201,9 +201,11 @@ export function normalizeLayoutTree(tree: LayoutTree, data?: ResumeData): Normal
 
 // ==================== LayoutTree 层级溢出压缩 ====================
 
-const A4_HEIGHT_PX = 1123;
+/** A4 页高（px）——导出供不变量测试使用（`src/engine/layoutInvariants.test.ts`） */
+export const A4_HEIGHT_PX = 1123;
 
-function estimateNodeHeight(node: NormalizedNode): number {
+/** 估算单个节点的渲染高度（px）——导出供不变量测试使用（同上） */
+export function estimateNodeHeight(node: NormalizedNode): number {
   const s = node.style;
   let h = 0;
 
