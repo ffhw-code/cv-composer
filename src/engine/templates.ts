@@ -1,4 +1,6 @@
 // src/engine/templates.ts
+import { HEADER_STYLE, MODULE_STYLE } from '../styles/stylePresets';
+
 export interface TemplateModule {
   tempId: string;
   type: string;
@@ -25,7 +27,7 @@ const classic: ResumeTemplate = {
     {
       tempId: 'header',
       type: 'header',
-      styleId: 'header-classic',
+      styleId: HEADER_STYLE.classic.id,
       style: {
         display: 'flex', flexDirection: 'row', alignItems: 'flex-start', gap: '20px',
         padding: '28px', backgroundColor: '#f8fafc', borderRadius: '16px',
@@ -72,7 +74,7 @@ const classic: ResumeTemplate = {
     {
       tempId: 'edu',
       type: 'module',
-      styleId: 'module-timeline',
+      styleId: MODULE_STYLE.timeline.id,
       style: {
         display: 'flex', flexDirection: 'column', gap: '10px',
         padding: '16px 0 16px 24px', borderLeft: '4px solid #3b82f6',
@@ -97,7 +99,7 @@ const classic: ResumeTemplate = {
     {
       tempId: 'work',
       type: 'module',
-      styleId: 'module-card',
+      styleId: MODULE_STYLE.card.id,
       style: {
         display: 'flex', flexDirection: 'column', gap: '12px', padding: '20px',
         backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0',
@@ -130,7 +132,7 @@ export const templates: Record<string, ResumeTemplate> = {
       {
         tempId: 'header',
         type: 'header',
-        styleId: 'header-classic',
+        styleId: HEADER_STYLE.classic.id,
         style: {
           display: 'flex', flexDirection: 'row', alignItems: 'flex-start', gap: '20px',
           padding: '24px', backgroundColor: '#ffffff', borderRadius: '12px',
@@ -177,7 +179,7 @@ export const templates: Record<string, ResumeTemplate> = {
       {
         tempId: 'edu',
         type: 'module',
-        styleId: 'module-card',
+        styleId: MODULE_STYLE.card.id,
         style: {
           display: 'flex', flexDirection: 'column', gap: '12px', padding: '20px',
           backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0',
@@ -203,7 +205,7 @@ export const templates: Record<string, ResumeTemplate> = {
       {
         tempId: 'work',
         type: 'module',
-        styleId: 'module-card',
+        styleId: MODULE_STYLE.card.id,
         style: {
           display: 'flex', flexDirection: 'column', gap: '12px', padding: '20px',
           backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0',

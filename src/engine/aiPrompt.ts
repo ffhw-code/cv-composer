@@ -1,5 +1,6 @@
 // src/engine/aiPrompt.ts
 import { getStylesByType } from '../styles/styleRegistry';
+import { HEADER_STYLE_EXAMPLES, MODULE_STYLE_EXAMPLES } from '../styles/stylePresets';
 import { type ToolResult, handleAddText, handleAddHeading, handleAddList, handleAddImage, handleAddFlex, handleAddGrid, handleAddFlexInline, handleAddGridInline, handleAddHeader, handleAddModule, handleSetContent, handleSetStyle, handleSetStyleByType, handleSetProperty, handleSetField, handleRemoveModule, handleDeleteModules, handleClearCanvas, handleMoveModule, handleDuplicateModule, handleCopyStyle, handleCopyTextStyle, handleApplyTemplate, handleExportPdf } from './toolHandlers';
 import type { ResumeModule } from '../types/resume';
 
@@ -349,7 +350,7 @@ export const aiTools: ChatToolEntry[] = [
       parameters: {
         type: 'object',
         properties: {
-          styleId: { type: 'string', description: '简历头样式 ID，如 header-classic、header-gradient、header-business' },
+          styleId: { type: 'string', description: `简历头样式 ID，如 ${HEADER_STYLE_EXAMPLES.join('、')}` },
         },
         required: ['styleId'],
       },
@@ -364,7 +365,7 @@ export const aiTools: ChatToolEntry[] = [
       parameters: {
         type: 'object',
         properties: {
-          styleId: { type: 'string', description: '模块样式 ID，如 module-card、module-timeline' },
+          styleId: { type: 'string', description: `模块样式 ID，如 ${MODULE_STYLE_EXAMPLES.join('、')}` },
           title: { type: 'string', description: '模块标题，如 "教育背景"' },
           content: { type: 'string', description: '模块内容，支持 HTML 标签' },
         },

@@ -7,6 +7,7 @@ import { findModuleById } from '../utils/moduleUtils';
 import type { ParsedResume, LayoutTree, LayoutTreeNode } from '../utils/resumeParser';
 import { getUploadedFile } from '../utils/aiConfig';
 import { normalizeLayoutTree } from './layoutTreeNormalizer';
+import { MODULE_STYLE, MODULE_STYLE_CHOICES } from '../styles/stylePresets';
 
 export interface SkillContext {
   modules: ResumeModule[];
@@ -235,12 +236,7 @@ registerSkill('smart-fill', async (params, ctx) => {
   const userInfo = params.info as string;
   if (!userInfo) return '缺少用户信息参数 (info)';
 
-  const MODULE_STYLES = [
-    { id: 'module-card', label: '卡片样式（通用）' },
-    { id: 'module-timeline', label: '时间线样式（适合经历）' },
-    { id: 'module-list', label: '简洁列表（适合技能）' },
-    { id: 'module-plain', label: '简约无边框（适合简介）' },
-  ];
+  const MODULE_STYLES = MODULE_STYLE_CHOICES;
 
   // 遍历画布树，为每个可填充的叶子节点生成唯一路径
   interface PathEntry { path: string; id: string; type: string; currentContent: string }
@@ -342,7 +338,7 @@ ${userInfo}
    { "path": "简历头 > 张三", "content": "李四" }
 
 2. **创建新模块**: 当用户信息中没有已有模块能匹配时（如用户提到教育背景但画布无此模块）
-   { "action": "add_module", "title": "教育背景", "styleId": "module-card", "content": "<p>清华大学 · 计算机科学 · 2020年毕业</p>" }
+   { "action": "add_module", "title": "教育背景", "styleId": "${MODULE_STYLE.card.id}", "content": "<p>清华大学 · 计算机科学 · 2020年毕业</p>" }
 
 可用 styleId: ${MODULE_STYLES.map(s => s.id + '(' + s.label + ')').join(', ')}
 
@@ -402,7 +398,7 @@ ${userInfo}
         tempId: modTempId,
         params: {
           type: 'module',
-          styleId: item.styleId || 'module-card',
+          styleId: item.styleId || MODULE_STYLE.card.id,
           title: item.title,
           content: item.content || '',
           style: {

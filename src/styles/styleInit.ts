@@ -1,5 +1,6 @@
 // src/styles/styleInit.ts
 import { registerStyle } from './styleRegistry';
+import { HEADER_STYLE, MODULE_STYLE } from './stylePresets';
 import TextControl from '../components/Styles/TextControl';
 import HeadingControl from '../components/Styles/HeadingControl';
 import ListControl from '../components/Styles/ListControl';
@@ -28,8 +29,8 @@ export function initStyles() {
   // ===================== 新版简历头模板 =====================
   registerStyle({
     type: 'header',
-    style: 'header-classic',
-    label: '经典分栏',
+    style: HEADER_STYLE.classic.id,
+    label: HEADER_STYLE.classic.label,
     thumb: headerThumb1,
     component: MinimalContainer,  // 新增
     defaultStyle: {
@@ -65,8 +66,8 @@ export function initStyles() {
 
   registerStyle({
     type: 'header',
-    style: 'header-gradient',
-    label: '蓝色渐变',
+    style: HEADER_STYLE.gradient.id,
+    label: HEADER_STYLE.gradient.label,
     thumb: headerThumb2,
     component: MinimalContainer,  // 新增
     defaultStyle: {
@@ -102,8 +103,8 @@ export function initStyles() {
 
   registerStyle({
     type: 'header',
-    style: 'header-business',
-    label: '名片风格',
+    style: HEADER_STYLE.business.id,
+    label: HEADER_STYLE.business.label,
     thumb: headerThumb3,
     component: MinimalContainer,  // 新增
     defaultStyle: {
@@ -139,8 +140,8 @@ export function initStyles() {
   // ===================== 新版模块模板 =====================
   registerStyle({
     type: 'module',
-    style: 'module-card',
-    label: '卡片样式',
+    style: MODULE_STYLE.card.id,
+    label: MODULE_STYLE.card.label,
     thumb: moduleThumb1,
     component: MinimalContainer,  // 新增
     defaultStyle: {
@@ -156,8 +157,8 @@ export function initStyles() {
 
   registerStyle({
     type: 'module',
-    style: 'module-timeline',
-    label: '时间线样式',
+    style: MODULE_STYLE.timeline.id,
+    label: MODULE_STYLE.timeline.label,
     thumb: moduleThumb2,
     component: MinimalContainer,  // 新增
     defaultStyle: {
@@ -173,8 +174,8 @@ export function initStyles() {
 
   registerStyle({
     type: 'module',
-    style: 'module-list',
-    label: '简洁列表',
+    style: MODULE_STYLE.list.id,
+    label: MODULE_STYLE.list.label,
     thumb: moduleThumb3,
     component: MinimalContainer,  // 新增
     defaultStyle: {
@@ -188,8 +189,8 @@ export function initStyles() {
 
   registerStyle({
     type: 'module',
-    style: 'module-plain',
-    label: '简约无边框',
+    style: MODULE_STYLE.plain.id,
+    label: MODULE_STYLE.plain.label,
     thumb: moduleThumb4,
     component: MinimalContainer,  // 新增
     defaultStyle: {
