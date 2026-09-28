@@ -66,7 +66,10 @@ export class TurnCallGuard {
         fingerprint,
         priorResult: truncate(priorResult),
         message: `${toolName}: 本轮已经用完全相同的参数调用过，第二次不再执行（上一次结果见 priorResult）。`,
-        fix: '不要重复调用：改用 priorResult 里的结果继续，或换一个不同的参数；确实需要重做请先删除/清空相关模块。',
+        fix:
+          '不要重复调用：改用 priorResult 里的结果继续，或换一个不同的参数；确实需要重做请先删除/清空相关模块。' +
+          '若用户明确要求生成多份/多版本（例如「生成多个供选择」「再来两个版本」），那属正常行为：' +
+          '请用不同的参数（如加序号、改标题）或复制模块（duplicate_module）来完成，不要原样重复同一次调用。',
       };
     }
     const title = toolName === 'add_module' && typeof args.title === 'string' ? args.title : '';
@@ -78,7 +81,10 @@ export class TurnCallGuard {
         fingerprint,
         priorResult: truncate(priorTitleResult),
         message: `add_module: 本轮已经创建过标题为「${title}」的模块，不重复创建（上一次结果见 priorResult）。`,
-        fix: `如果要改这个模块，请直接对 priorResult 里返回的模块 id 调用 set_content / set_style；不要再次 add_module。`,
+        fix:
+          `如果要改这个模块，请直接对 priorResult 里返回的模块 id 调用 set_content / set_style；不要再次 add_module。` +
+          '若用户明确要求生成多份/多版本（例如「生成多个供选择」），那属正常行为：' +
+          '请用不同的参数（如加序号、改标题）或复制模块（duplicate_module）来完成，不要原样重复同一次调用。',
       };
     }
     return { redundant: false, fingerprint };

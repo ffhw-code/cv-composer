@@ -49,6 +49,27 @@ describe('TurnCallGuard：同轮重复调用', () => {
     expect(guard.inspect('set_style', { id: 'm2', style: { color: '#333' } }).redundant).toBe(false);
   });
 
+  it('P1 优化项 4：两种拦截的回传话术都写明「用户要求多份属正常行为」并给出正路', () => {
+    const guard = new TurnCallGuard();
+    guard.record('add_module', ADD_ARGS, '{"id":"mod-1"}');
+
+    const sameCall = guard.inspect('add_module', ADD_ARGS);
+    const sameTitle = guard.inspect('add_module', { ...ADD_ARGS, content: '<p>换内容</p>' });
+    if (!sameCall.redundant || !sameTitle.redundant) throw new Error('unreachable');
+    expect(sameCall.code).toBe('REDUNDANT_CALL');
+    expect(sameTitle.code).toBe('REDUNDANT_MODULE');
+
+    for (const decision of [sameCall, sameTitle]) {
+      // 被拦原因仍要说清（message），并保留原有的补救路径
+      expect(decision.message.length).toBeGreaterThan(0);
+      expect(decision.fix).toContain('多份');
+      expect(decision.fix).toContain('多版本');
+      expect(decision.fix).toContain('正常行为');
+      expect(decision.fix).toContain('不同的参数');
+      expect(decision.fix).toContain('复制模块');
+    }
+  });
+
   it('add_module 同名兜底：参数不同但标题相同 → REDUNDANT_MODULE', () => {
     const guard = new TurnCallGuard();
     guard.record('add_module', ADD_ARGS, '{"id":"mod-1"}');
