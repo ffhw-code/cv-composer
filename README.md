@@ -92,7 +92,7 @@ npm install
 npm run dev        # 启动开发服务器 (http://localhost:5173)
 npm run build      # 生产构建
 npm run preview    # 预览生产构建
-npm test           # 运行单元测试 (304 tests)
+npm test           # 运行单元测试 (372 tests)
 npm run lint       # 代码规范检查
 npx tsc -b         # 类型检查
 ```
@@ -164,7 +164,6 @@ src/
 ├── main.tsx                    # 入口
 ├── App.tsx                     # 根组件
 ├── index.css                   # 全局样式
-├── styleInit.ts                # 风格注册表初始化
 ├── assets/images/              # 模板缩略图
 ├── components/
 │   ├── AI/                     # 对话面板、API 调用、文件导入
@@ -186,7 +185,9 @@ src/
 │   └── toolHandlers.ts         # 工具处理函数
 ├── hooks/                      # 自定义 Hooks
 ├── store/
-│   ├── useResumeStore.ts       # Zustand 状态管理 (含 undo/redo)
+│   └── useResumeStore.ts       # Zustand 状态管理 (含 undo/redo)
+├── styles/
+│   ├── styleInit.ts            # 风格注册表初始化
 │   └── styleRegistry.ts        # 风格注册表
 ├── tiptap/                     # TipTap 编辑器扩展 (富文本编辑)
 └── utils/                      # 工具函数 (导出/解析/JSON修复/ID生成)
@@ -201,7 +202,7 @@ src/
 ## 测试
 
 ```bash
-npm test           # 运行全部测试 (304 个)
+npm test           # 运行全部测试 (372 个)
 npm run test:watch # watch 模式
 ```
 
