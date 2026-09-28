@@ -1,7 +1,7 @@
 // 基准测试：AI 输出 LayoutTree 的规范化与溢出压缩
 //
-// 注意：normalizeLayoutTree / applyOverflowCompression 都会就地修改输入，
-// 因此每次迭代在 callback 内重新构造一棵树，保证每次测到的都是「首次规范化」路径。
+// 注意：applyOverflowCompression 就地修改输入；normalizeLayoutTree 自 `P1` 起在入口深拷贝输入、
+// 不再改写传入的树（幂等性要求）。这里仍每次迭代重新构造一棵树，测的是「首次规范化」路径。
 // 构造开销单列一条对照项（「仅构造输入」），净耗时约为两者之差。
 import { bench, describe } from 'vitest';
 import { applyOverflowCompression, normalizeLayoutTree } from './layoutTreeNormalizer';

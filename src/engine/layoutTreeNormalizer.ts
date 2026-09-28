@@ -180,14 +180,20 @@ function mergeAdjacentLeafNodes(children: NormalizedNode[]): NormalizedNode[] {
 
 
 export function normalizeLayoutTree(tree: LayoutTree, data?: ResumeData): NormalizedTree {
+  // 入口先深拷贝输入：下面的 normalizeNode 会**原地改写**节点（补默认样式、写 `_hadCustomStyle`、
+  // 合并单子 flex、插空容器占位）。直接改写调用方那棵树，会让「同一棵树连调两次」得到不同结果 ——
+  // 第二次看到的 `style` 已被第一次补全，`_hadCustomStyle` 由 false 变 true，连压缩策略都跟着变。
+  // 首次调用的输出与改前逐字节相同（拷贝上做同样的改写），幂等性由
+  // `src/engine/layoutIdempotency.test.ts` 守着（标准 1 二档判定项 C）。
+  const source = JSON.parse(JSON.stringify(tree)) as LayoutTree;
   return {
-    header: normalizeNode(tree.header, data) || {
+    header: normalizeNode(source.header, data) || {
       type: 'flex',
       direction: 'column',
       style: STYLE_DEFAULTS.flex,
       children: [{ type: 'text', content: '', style: STYLE_DEFAULTS.text, _placeholder: true }] as NormalizedNode[],
     },
-    modules: (tree.modules || []).map(m => normalizeNode(m, data)).filter(Boolean) as NormalizedNode[],
+    modules: (source.modules || []).map(m => normalizeNode(m, data)).filter(Boolean) as NormalizedNode[],
   };
 }
 
